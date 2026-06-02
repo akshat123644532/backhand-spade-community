@@ -28,6 +28,16 @@ const Admin = {
         return rows[0];
     },
 
+    create: async (adminData) => {
+        const { name, email, password, contact_no, status } = adminData;
+        const query = `
+            INSERT INTO admins (name, email, password, contact_no, status)
+            VALUES (?, ?, ?, ?, ?)
+        `;
+        const [result] = await db.query(query, [name, email, password, contact_no, status]);
+        return result;
+    },
+
     incrementLoginCount: async (id) => {
         const query = `
             UPDATE admins 
