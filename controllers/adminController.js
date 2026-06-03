@@ -2,6 +2,7 @@ import Admin from '../models/adminModel.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
+import { db } from '../config/db.js';
 
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -29,31 +30,57 @@ export const searchEmail = async (req, res) => {
 
 export const loginAdmin = async (req, res) => {
     const { email, password } = req.body;
+
     try {
         const admin = await Admin.findByEmail(email);
+
         if (!admin) {
-            return res.status(404).json({ success: false, message: "Admin nahi mila!" });
+            return res.status(404).json({
+                success: false,
+                message: "Admin nahi mila!"
+            });
         }
+
         if (admin.status !== 'active') {
-            return res.status(403).json({ success: false, message: "Account inactive hai!" });
+            return res.status(403).json({
+                success: false,
+                message: "Account inactive hai!"
+            });
         }
-        const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) {
-            return res.status(401).json({ success: false, message: "Galat password!" });
-        }
-        
-        await Admin.incrementLoginCount(admin.id);
-        
-        const freshAdminData = await Admin.findByEmail(email);
-        const token = jwt.sign(
-            { id: freshAdminData.id, email: freshAdminData.email },
-            process.env.JWT_SECRET || 'fallback_secret_key_123_secured',
-            { expiresIn: '1d' }
+
+        const isMatch = await bcrypt.compare(
+            password,
+            admin.password
         );
+
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: "Galat password!"
+            });
+        }
+
+        await Admin.incrementLoginCount(admin.id);
+
+        const token = jwt.sign(
+            {
+                id: admin.id,
+                email: admin.email
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: '1d'
+            }
+        );
+
+        await Admin.updateToken(admin.id, token);
+
+        const freshAdminData = await Admin.findByEmail(email);
+
         res.status(200).json({
             success: true,
             message: "Login Successful!",
-            token: token,
+            token,
             admin: {
                 id: freshAdminData.id,
                 name: freshAdminData.name,
@@ -67,7 +94,12 @@ export const loginAdmin = async (req, res) => {
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
+
+        res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error_details: error.message
+        });
     }
 };
 

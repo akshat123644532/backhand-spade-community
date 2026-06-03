@@ -23,4 +23,5 @@ pool.getConnection((err, connection) => {
     }
 });
 
-export default pool.promise();
+// Sirf ye line replace karo
+export const db = pool.promise();

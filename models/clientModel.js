@@ -1,15 +1,16 @@
-import db from '../config/db.js';
+// Sirf ye line replace karo
+import { db } from '../config/db.js';
 
 const Client = {
     create: async (clientData) => {
-        const { name, email, country, contact_no, created_by } = clientData;
-        const query = `INSERT INTO PaperWardb.clients (name, email, country, contact_no, created_by) VALUES (?, ?, ?, ?, ?)`;
+        const { name, email, country, contact_no, admin_id } = clientData;
+        const query = `INSERT INTO PaperWardb.clients (name, email, country, contact_no, admin_id) VALUES (?, ?, ?, ?, ?)`;
         const [result] = await db.execute(query, [
             name || null,
             email || null,
             country || null,
             contact_no || null,
-            created_by || null
+            admin_id || null
         ]);
         return result;
     },
@@ -17,16 +18,11 @@ const Client = {
     getAll: async () => {
         const query = `
             SELECT 
-                c.id AS client_id, 
-                c.name AS client_name, 
-                c.email AS client_email, 
-                c.country, 
-                c.contact_no, 
-                c.created_at,
-                c.created_by AS admin_id,
+                c.id, c.name, c.email, c.country, c.contact_no, c.created_at,
+                c.admin_id, 
                 a.name AS admin_name
             FROM PaperWardb.clients c
-            LEFT JOIN PaperWardb.admins a ON c.created_by = a.id
+            LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
         `;
         const [rows] = await db.execute(query);
         return rows;
@@ -35,16 +31,11 @@ const Client = {
     getById: async (id) => {
         const query = `
             SELECT 
-                c.id AS client_id, 
-                c.name AS client_name, 
-                c.email AS client_email, 
-                c.country, 
-                c.contact_no, 
-                c.created_at,
-                c.created_by AS admin_id,
+                c.id, c.name, c.email, c.country, c.contact_no, c.created_at,
+                c.admin_id, 
                 a.name AS admin_name
             FROM PaperWardb.clients c
-            LEFT JOIN PaperWardb.admins a ON c.created_by = a.id
+            LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
             WHERE c.id = ?
         `;
         const [rows] = await db.execute(query, [id || null]);

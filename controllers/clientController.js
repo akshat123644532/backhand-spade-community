@@ -13,7 +13,8 @@ export const addClient = async (req, res) => {
             return res.status(400).json({ success: false, message: "Client email pehle se register hai!" });
         }
 
-        await Client.create({ name, email, country, contact_no, created_by: adminId });
+        // created_by ki jagah admin_id use kiya hai
+        await Client.create({ name, email, country, contact_no, admin_id: adminId });
         res.status(201).json({ success: true, message: "Client successfully add ho gaya!" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
