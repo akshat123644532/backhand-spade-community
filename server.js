@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import adminRoutes from './routes/adminRoutes.js';
-
+import clientRoutes from './routes/clientRoutes.js';
 dotenv.config();
 const app = express();
 
@@ -15,6 +15,7 @@ app.use('/uploads', express.static('uploads'));
 app.set("trust proxy", 2);
 
 app.use('/api/admin', adminRoutes);
+app.use('/api/clients', clientRoutes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
