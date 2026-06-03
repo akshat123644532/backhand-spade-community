@@ -1,8 +1,15 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { loginAdmin, signupAdmin } = require('../controllers/adminController');
+import { loginAdmin, signupAdmin, searchEmail, updateAdmin, deleteAdmin } from '../controllers/adminController.js';
+import verifyToken from '../middleware/authMiddleware.js';
+import upload from '../middleware/uploadMiddleware.js'; 
 
-router.post('/signup', signupAdmin);
+router.post('/signup', upload.single('image'), signupAdmin);
+router.post('/add-user', upload.single('image'), signupAdmin);
+
 router.post('/login', loginAdmin);
+router.post('/searchemail', searchEmail);
+router.put('/updateadmin/:id', verifyToken, updateAdmin);
+router.delete('/delete/:id', verifyToken, deleteAdmin);
 
-module.exports = router;
+export default router;
