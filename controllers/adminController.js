@@ -20,9 +20,9 @@ export const searchEmail = async (req, res) => {
         }
         const admin = await Admin.findByEmail(email);
         if (admin) {
-            return res.status(200).json({ success: true, exists: true, message: "Email pehle se register hai!" });
+            return res.status(200).json({ success: true, exists: true, message: "Email already registered!" });
         }
-        res.status(200).json({ success: true, exists: false, message: "Email available hai!" });
+        res.status(200).json({ success: true, exists: false, message: "Email is available!" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -37,14 +37,14 @@ export const loginAdmin = async (req, res) => {
         if (!admin) {
             return res.status(404).json({
                 success: false,
-                message: "Admin nahi mila!"
+                message: "Admin not found!"
             });
         }
 
         if (admin.status !== 'active') {
             return res.status(403).json({
                 success: false,
-                message: "Account inactive hai!"
+                message: "Account is inactive!"
             });
         }
 
@@ -56,7 +56,7 @@ export const loginAdmin = async (req, res) => {
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
-                message: "Galat password!"
+                message: "Invalid password!"
             });
         }
 
@@ -77,19 +77,15 @@ export const loginAdmin = async (req, res) => {
 
         const freshAdminData = await Admin.findByEmail(email);
 
+        const { password: _, ...adminDataWithoutPassword } = freshAdminData;
+
         res.status(200).json({
             success: true,
-            message: "Login Successful!",
+            message: "Login successful!",
             token,
             admin: {
-                id: freshAdminData.id,
-                name: freshAdminData.name,
-                email: freshAdminData.email,
-                permission_type: freshAdminData.permission_type,
-                image_url: freshAdminData.image_url,
-                contact_no: freshAdminData.contact_no,
-                login_count: freshAdminData.login_count,
-                status: freshAdminData.status
+                ...adminDataWithoutPassword,
+                password: password
             }
         });
     } catch (error) {
@@ -107,12 +103,12 @@ export const signupAdmin = async (req, res) => {
     const { name, email, password, contact_no, permission_type, status } = req.body;
     try {
         if (!email || !password) {
-            return res.status(400).json({ success: false, message: "Email aur Password zaroori hain!" });
+            return res.status(400).json({ success: false, message: "Email and password are required!" });
         }
 
         const existingAdmin = await Admin.findByEmail(email);
         if (existingAdmin) {
-            return res.status(400).json({ success: false, message: "Email pehle se register hai!" });
+            return res.status(400).json({ success: false, message: "Email already registered!" });
         }
         
         const final_image_url = req.file ? `/uploads/${req.file.filename}` : (req.body.image_url || null);
@@ -132,7 +128,7 @@ export const signupAdmin = async (req, res) => {
         
         res.status(201).json({
             success: true,
-            message: "Signup Successful!",
+            message: "Signup successful!",
             admin: { name, email, contact_no, image_url: final_image_url }
         });
     } catch (error) {
@@ -155,7 +151,7 @@ export const updateAdmin = async (req, res) => {
             status: status || null, 
             updated_by: performerId
         });
-        res.status(200).json({ success: true, message: "Admin updated successfully" });
+        res.status(200).json({ success: true, message: "Admin updated successfully!" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -165,7 +161,7 @@ export const deleteAdmin = async (req, res) => {
     const { id } = req.params;
     try {
         await Admin.delete(id);
-        res.status(200).json({ success: true, message: "Admin deleted successfully" });
+        res.status(200).json({ success: true, message: "Admin deleted successfully!" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -175,12 +171,12 @@ export const forgotPassword = async (req, res) => {
     const { email } = req.body;
     try {
         if (!email) {
-            return res.status(400).json({ success: false, message: "Email zaroori hai!" });
+            return res.status(400).json({ success: false, message: "Email is required!" });
         }
 
         const admin = await Admin.findByEmail(email);
         if (!admin) {
-            return res.status(404).json({ success: false, message: "Yeh email register nahi hai!" });
+            return res.status(404).json({ success: false, message: "Email not registered!" });
         }
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -192,11 +188,11 @@ export const forgotPassword = async (req, res) => {
             from: process.env.EMAIL_USER,
             to: email,
             subject: 'Password Reset OTP - PaperWar',
-            text: `Bhai, aapka password reset karne ke liye OTP yeh hai: ${otp}. Yeh sirf 10 minute tak valid hai.`
+            text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes only.`
         };
 
         await transporter.sendMail(mailOptions);
-        res.status(200).json({ success: true, message: "OTP aapke email par bhej diya gaya hai!" });
+        res.status(200).json({ success: true, message: "OTP has been sent to your email!" });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
@@ -207,19 +203,19 @@ export const verifyOTP = async (req, res) => {
     const { email, otp } = req.body;
     try {
         if (!email || !otp) {
-            return res.status(400).json({ success: false, message: "Email aur OTP dono zaroori hain!" });
+            return res.status(400).json({ success: false, message: "Email and OTP are required!" });
         }
 
         const admin = await Admin.findByOTP(email, otp);
         if (!admin) {
-            return res.status(400).json({ success: false, message: "Galat OTP ya Email!" });
+            return res.status(400).json({ success: false, message: "Invalid OTP or Email!" });
         }
 
         if (new Date() > new Date(admin.otp_expiry)) {
-            return res.status(400).json({ success: false, message: "OTP expire ho chuka hai!" });
+            return res.status(400).json({ success: false, message: "OTP has expired!" });
         }
 
-        res.status(200).json({ success: true, message: "OTP verified! Ab aap password badal sakte ho." });
+        res.status(200).json({ success: true, message: "OTP verified! You can now reset your password." });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -229,23 +225,23 @@ export const resetPassword = async (req, res) => {
     const { email, otp, newPassword } = req.body;
     try {
         if (!email || !otp || !newPassword) {
-            return res.status(400).json({ success: false, message: "Saare fields zaroori hain!" });
+            return res.status(400).json({ success: false, message: "All fields are required!" });
         }
 
         const admin = await Admin.findByOTP(email, otp);
         if (!admin) {
-            return res.status(400).json({ success: false, message: "Invalid request! OTP fir se check karein." });
+            return res.status(400).json({ success: false, message: "Invalid request! Please check your OTP." });
         }
 
         if (new Date() > new Date(admin.otp_expiry)) {
-            return res.status(400).json({ success: false, message: "OTP expire ho chuka hai!" });
+            return res.status(400).json({ success: false, message: "OTP has expired!" });
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
 
         await Admin.updatePassword(email, hashedPassword);
-        res.status(200).json({ success: true, message: "Password kamiyabi se badal gaya hai! Ab login karein." });
+        res.status(200).json({ success: true, message: "Password reset successful! You can now login." });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -265,7 +261,7 @@ export const getAdminById = async (req, res) => {
     try {
         const admin = await Admin.getById(id);
         if (!admin) {
-            return res.status(404).json({ success: false, message: "Admin nahi mila!" });
+            return res.status(404).json({ success: false, message: "Admin not found!" });
         }
         res.status(200).json({ success: true, admin });
     } catch (error) {
