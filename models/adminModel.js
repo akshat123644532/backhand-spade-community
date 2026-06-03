@@ -2,7 +2,7 @@ import db from '../config/db.js';
 
 const Admin = {
     findByEmail: async (email) => {
-        const query = `SELECT id, name, email, password, permission_type, image_url, status, contact_no, login_count FROM PaperWardb.admins WHERE email = ?`;
+        const query = `SELECT id, name, email, password, permission_type, image_url, status, contact_no, login_count, otp, otp_expiry FROM PaperWardb.admins WHERE email = ?`;
         const [rows] = await db.execute(query, [email || null]);
         return rows[0];
     },
@@ -46,6 +46,36 @@ const Admin = {
         const query = `UPDATE PaperWardb.admins SET login_count = login_count + 1 WHERE id = ?`;
         const [result] = await db.execute(query, [id || null]);
         return result.affectedRows > 0;
+    },
+
+    updateOTP: async (email, otp, expiry) => {
+        const query = `UPDATE PaperWardb.admins SET otp = ?, otp_expiry = ? WHERE email = ?`;
+        const [result] = await db.execute(query, [otp, expiry, email]);
+        return result;
+    },
+
+    findByOTP: async (email, otp) => {
+        const query = `SELECT id, email, otp, otp_expiry FROM PaperWardb.admins WHERE email = ? AND otp = ?`;
+        const [rows] = await db.execute(query, [email, otp]);
+        return rows[0];
+    },
+
+    updatePassword: async (email, hashedPassword) => {
+        const query = `UPDATE PaperWardb.admins SET password = ?, otp = NULL, otp_expiry = NULL WHERE email = ?`;
+        const [result] = await db.execute(query, [hashedPassword, email]);
+        return result;
+    },
+
+    getAll: async () => {
+        const query = `SELECT id, name, email, permission_type, image_url, status, contact_no, login_count FROM PaperWardb.admins`;
+        const [rows] = await db.execute(query);
+        return rows;
+    },
+
+    getById: async (id) => {
+        const query = `SELECT id, name, email, permission_type, image_url, status, contact_no, login_count FROM PaperWardb.admins WHERE id = ?`;
+        const [rows] = await db.execute(query, [id || null]);
+        return rows[0];
     }
 };
 
