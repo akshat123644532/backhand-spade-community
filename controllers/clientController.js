@@ -5,17 +5,16 @@ export const addClient = async (req, res) => {
     const adminId = req.user ? req.user.id : null; 
     try {
         if (!email || !name) {
-            return res.status(400).json({ success: false, message: "Name aur Email zaroori hain!" });
+            return res.status(400).json({ success: false, message: "Name and email are required" });
         }
 
         const existingClient = await Client.findByEmail(email);
         if (existingClient) {
-            return res.status(400).json({ success: false, message: "Client email pehle se register hai!" });
+            return res.status(400).json({ success: false, message: "Client email already register!" });
         }
 
-        // created_by ki jagah admin_id use kiya hai
         await Client.create({ name, email, country, contact_no, admin_id: adminId });
-        res.status(201).json({ success: true, message: "Client successfully add ho gaya!" });
+        res.status(201).json({ success: true, message: "Client added sucessfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -35,7 +34,7 @@ export const getClientById = async (req, res) => {
     try {
         const client = await Client.getById(id);
         if (!client) {
-            return res.status(404).json({ success: false, message: "Client nahi mila!" });
+            return res.status(404).json({ success: false, message: "Client not found!" });
         }
         res.status(200).json({ success: true, client });
     } catch (error) {

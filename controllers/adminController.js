@@ -103,22 +103,20 @@ export const loginAdmin = async (req, res) => {
         await Admin.updateToken(admin.id, token);
 
         const freshAdminData = await Admin.findByEmail(email);
+const {
+    password: adminPassword,
+    token: storedToken,
+    ...adminData
+} = freshAdminData;
 
-        const {
-            password: adminPassword,
-            otp,
-            otp_expiry,
-            token: storedToken,
-            ...adminData
-        } = freshAdminData;
-
-        return res.status(200).json({
-            success: true,
-            message: "Login successful!",
-            token,
-            admin: adminData
-        });
-
+return res.status(200).json({
+    success: true,
+    message: "Login successful!",
+    data: {
+        token,
+        admin: adminData
+    }
+});
     } catch (error) {
         console.error(error);
 
@@ -158,16 +156,18 @@ export const signupAdmin = async (req, res) => {
         
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         
-        res.status(201).json({
-            success: true,
-            message: "Signup successful!",
-            admin: { 
-                name, 
-                email, 
-                contact_no, 
-                image_url: final_image_url ? `${baseUrl}${final_image_url}` : null 
-            }
-        });
+       res.status(201).json({
+    success: true,
+    message: "Signup successful!",
+    data: {
+        name,
+        email,
+        contact_no,
+        image_url: final_image_url
+            ? `${baseUrl}${final_image_url}`
+            : null
+    }
+});
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
@@ -375,13 +375,28 @@ export const getAllAdmins = async (req, res) => {
 
 export const getAdminById = async (req, res) => {
     const { id } = req.params;
+
     try {
         const admin = await Admin.getById(id);
+
         if (!admin) {
-            return res.status(404).json({ success: false, message: "Admin not found!" });
+            return res.status(404).json({
+                success: false,
+                message: "Admin not found!"
+            });
         }
-        res.status(200).json({ success: true, admin });
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin fetched successfully",
+            data: admin
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
     }
 };

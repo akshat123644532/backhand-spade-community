@@ -1,11 +1,26 @@
 import { db } from '../config/db.js';
 
 const Admin = {
-    findByEmail: async (email) => {
-        const query = `SELECT id, name, email, password, permission_type, image_url, status, contact_no, login_count, otp, otp_expiry, token FROM admins WHERE email = ?`;
-        const [rows] = await db.execute(query, [email]);
-        return rows[0];
-    },
+findByEmail: async (email) => {
+    const query = `
+        SELECT
+            id,
+            name,
+            email,
+            password,
+            permission_type,
+            image_url,
+            status,
+            contact_no,
+            login_count,
+            token
+        FROM admins
+        WHERE email = ?
+    `;
+
+    const [rows] = await db.execute(query, [email]);
+    return rows[0];
+},
 
     create: async (adminData) => {
         const {
