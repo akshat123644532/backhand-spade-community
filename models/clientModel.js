@@ -1,4 +1,4 @@
-// Sirf ye line replace karo
+
 import { db } from '../config/db.js';
 
 const Client = {

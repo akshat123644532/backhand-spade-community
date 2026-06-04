@@ -23,5 +23,5 @@ pool.getConnection((err, connection) => {
     }
 });
 
-// Sirf ye line replace karo
+
 export const db = pool.promise();

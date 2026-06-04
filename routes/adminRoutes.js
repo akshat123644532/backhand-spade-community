@@ -1,20 +1,21 @@
 import express from 'express';
 const router = express.Router();
-import { 
-    loginAdmin, 
-    signupAdmin, 
-    searchEmail, 
-    updateAdmin, 
-    deleteAdmin, 
-    forgotPassword, 
-    verifyOTP, 
-    resetPassword, 
-    getAllAdmins, 
-    getAdminById 
+import {
+    loginAdmin,
+    signupAdmin,
+    searchEmail,
+    updateAdmin,
+    deleteAdmin,
+    forgotPassword,
+    verifyOTP,
+    resetPassword,
+    getAllAdmins,
+    getAdminById,
+    getSelf
 } from '../controllers/adminController.js';
 import verifyToken from '../middleware/authMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js'; 
-
+router.get('/me', verifyToken, getSelf);
 router.post('/signup', upload.single('image'), signupAdmin);
 router.post('/add-user', upload.single('image'), signupAdmin);
 router.post('/login', loginAdmin);

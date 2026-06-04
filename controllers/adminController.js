@@ -3,6 +3,33 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
 import { db } from '../config/db.js';
+export const getSelf = async (req, res) => {
+    try {
+
+        const admin = await Admin.getById(req.user.id);
+
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: "Admin not found!"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile fetched successfully",
+            data: admin
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};
+
 
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -77,28 +104,31 @@ export const loginAdmin = async (req, res) => {
 
         const freshAdminData = await Admin.findByEmail(email);
 
-        const { password: _, ...adminDataWithoutPassword } = freshAdminData;
+        const {
+            password: adminPassword,
+            otp,
+            otp_expiry,
+            token: storedToken,
+            ...adminData
+        } = freshAdminData;
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "Login successful!",
             token,
-            admin: {
-                ...adminDataWithoutPassword,
-                password: password
-            }
+            admin: adminData
         });
+
     } catch (error) {
         console.error(error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: "Server error!",
-            error_details: error.message
+            error: error.message
         });
     }
 };
-
 export const signupAdmin = async (req, res) => {
     const { name, email, password, contact_no, permission_type, status } = req.body;
     try {
@@ -126,16 +156,24 @@ export const signupAdmin = async (req, res) => {
             status: status || 'active'
         });
         
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        
         res.status(201).json({
             success: true,
             message: "Signup successful!",
-            admin: { name, email, contact_no, image_url: final_image_url }
+            admin: { 
+                name, 
+                email, 
+                contact_no, 
+                image_url: final_image_url ? `${baseUrl}${final_image_url}` : null 
+            }
         });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
     }
 };
+
 
 export const updateAdmin = async (req, res) => {
     const { id } = req.params;
@@ -167,86 +205,165 @@ export const deleteAdmin = async (req, res) => {
     }
 };
 
+import OTP from '../models/otpModel.js';
+
 export const forgotPassword = async (req, res) => {
     const { email } = req.body;
+
     try {
         if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required!" });
+            return res.status(400).json({
+                success: false,
+                message: "Email is required!"
+            });
         }
 
         const admin = await Admin.findByEmail(email);
+
         if (!admin) {
-            return res.status(404).json({ success: false, message: "Email not registered!" });
+            return res.status(404).json({
+                success: false,
+                message: "Email not registered!"
+            });
         }
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+        const otp = Math.floor(
+            100000 + Math.random() * 900000
+        ).toString();
 
-        await Admin.updateOTP(email, otp, otpExpiry);
+        const otpExpiry = new Date(
+            Date.now() + 10 * 60 * 1000
+        );
+
+        await OTP.create(
+            email,
+            otp,
+            otpExpiry
+        );
 
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: email,
-            subject: 'Password Reset OTP - PaperWar',
+            subject: "Password Reset OTP - PaperWar",
             text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes only.`
         };
 
         await transporter.sendMail(mailOptions);
-        res.status(200).json({ success: true, message: "OTP has been sent to your email!" });
+
+        return res.status(200).json({
+            success: true,
+            message: "OTP has been sent to your email!"
+        });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
-
 export const verifyOTP = async (req, res) => {
     const { email, otp } = req.body;
+
     try {
         if (!email || !otp) {
-            return res.status(400).json({ success: false, message: "Email and OTP are required!" });
+            return res.status(400).json({
+                success: false,
+                message: "Email and OTP are required!"
+            });
         }
 
-        const admin = await Admin.findByOTP(email, otp);
-        if (!admin) {
-            return res.status(400).json({ success: false, message: "Invalid OTP or Email!" });
+        const otpRecord = await OTP.findValidOTP(email, otp);
+
+        if (!otpRecord) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid OTP or Email!"
+            });
         }
 
-        if (new Date() > new Date(admin.otp_expiry)) {
-            return res.status(400).json({ success: false, message: "OTP has expired!" });
+        if (new Date() > new Date(otpRecord.expires_at)) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP has expired!"
+            });
         }
 
-        res.status(200).json({ success: true, message: "OTP verified! You can now reset your password." });
+        await OTP.markVerified(otpRecord.otp_id);
+
+        return res.status(200).json({
+            success: true,
+            message: "OTP verified successfully!"
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 };
 
 export const resetPassword = async (req, res) => {
     const { email, otp, newPassword } = req.body;
+
     try {
         if (!email || !otp || !newPassword) {
-            return res.status(400).json({ success: false, message: "All fields are required!" });
+            return res.status(400).json({
+                success: false,
+                message: "All fields are required!"
+            });
         }
 
-        const admin = await Admin.findByOTP(email, otp);
-        if (!admin) {
-            return res.status(400).json({ success: false, message: "Invalid request! Please check your OTP." });
+        const otpRecord = await OTP.findValidOTP(email, otp);
+
+        if (!otpRecord) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid OTP!"
+            });
         }
 
-        if (new Date() > new Date(admin.otp_expiry)) {
-            return res.status(400).json({ success: false, message: "OTP has expired!" });
+        if (new Date() > new Date(otpRecord.expires_at)) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP has expired!"
+            });
+        }
+
+        if (otpRecord.is_verified !== 1) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP not verified!"
+            });
         }
 
         const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
+        const hashedPassword = await bcrypt.hash(
+            newPassword,
+            salt
+        );
 
-        await Admin.updatePassword(email, hashedPassword);
-        res.status(200).json({ success: true, message: "Password reset successful! You can now login." });
+        await Admin.updatePassword(
+            email,
+            hashedPassword
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Password reset successful! You can now login."
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 };
-
 export const getAllAdmins = async (req, res) => {
     try {
         const admins = await Admin.getAll();
