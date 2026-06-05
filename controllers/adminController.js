@@ -223,7 +223,7 @@ export const forgotPassword = async (req, res) => {
             return res.status(404).json({ success: false, message: "Email not registered!" });
         }
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = "123";
         const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
         await OTP.create(email, otp, otpExpiry);

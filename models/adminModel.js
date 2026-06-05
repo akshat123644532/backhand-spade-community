@@ -13,7 +13,6 @@ findByEmail: async (email) => {
             image_url,
             status,
             contact_no,
-            login_count,
             token
         FROM admins
         WHERE email = ?
