@@ -17,10 +17,7 @@ import verifyToken from '../middleware/authMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js'; 
 router.get('/me', verifyToken, getSelf);
 router.post('/signup', upload.single('image'), signupAdmin);
-router.post('/add-user', (req, res, next) => {
-    console.log("ADD USER HIT", req.body);
-    next();
-}, upload.single('image'), signupAdmin);
+router.post('/add-user', upload.single('image'), signupAdmin);
 router.post('/login', loginAdmin);
 router.post('/searchemail', searchEmail);
 
