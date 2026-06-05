@@ -9,6 +9,7 @@ findByEmail: async (email) => {
             email,
             password,
             permission_type,
+            permissions,
             image_url,
             status,
             contact_no,
@@ -28,6 +29,7 @@ findByEmail: async (email) => {
             email,
             password,
             permission_type,
+            permissions,
             image_url,
             status,
             contact_no
@@ -35,8 +37,8 @@ findByEmail: async (email) => {
 
         const query = `
             INSERT INTO admins
-            (name, email, password, permission_type, image_url, status, contact_no)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (name, email, password, permission_type, permissions, image_url, status, contact_no)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const [result] = await db.execute(query, [
@@ -44,6 +46,7 @@ findByEmail: async (email) => {
             email,
             password,
             permission_type,
+            permissions ?? null,
             image_url,
             status,
             contact_no
@@ -56,6 +59,7 @@ findByEmail: async (email) => {
         const {
             name,
             permission_type,
+            permissions,
             image_url,
             status,
             updated_by
@@ -66,6 +70,7 @@ findByEmail: async (email) => {
             SET
                 name = ?,
                 permission_type = ?,
+                permissions = ?,
                 image_url = ?,
                 status = ?,
                 updated_by = ?
@@ -75,6 +80,7 @@ findByEmail: async (email) => {
         const [result] = await db.execute(query, [
             name,
             permission_type,
+            permissions ?? null,
             image_url,
             status,
             updated_by,
@@ -144,6 +150,7 @@ findByEmail: async (email) => {
                 name,
                 email,
                 permission_type,
+                permissions,
                 image_url,
                 status,
                 contact_no,
@@ -162,6 +169,7 @@ findByEmail: async (email) => {
                 name,
                 email,
                 permission_type,
+                permissions,
                 image_url,
                 status,
                 contact_no,
