@@ -113,19 +113,8 @@ export const loginAdmin = async (req, res) => {
     }
 };
 
-const parsePermissions = (encoded) => {
-    if (!encoded) return null;
-    try {
-        const decoded = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
-        return JSON.stringify(decoded);
-    } catch {
-        return null;
-    }
-};
-
 export const signupAdmin = async (req, res) => {
     try {
-        // multer ke baad req.body access karo
         const name = req.body.name;
         const email = req.body.email;
         const password = req.body.password;
@@ -148,7 +137,9 @@ export const signupAdmin = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const permissionsJSON = parsePermissions(permissions);
+        const permissionsEncrypted = permissions
+            ? Buffer.from(typeof permissions === 'string' ? permissions : JSON.stringify(permissions)).toString('base64')
+            : null;
 
         await Admin.create({
             name: name || null,
@@ -156,7 +147,7 @@ export const signupAdmin = async (req, res) => {
             password: hashedPassword,
             contact_no: contact_no || null,
             permission_type: permission_type || 'admin',
-            permissions: permissionsJSON,
+            permissions: permissionsEncrypted,
             image_url: final_image_url,
             status: status || 'active'
         });
@@ -170,6 +161,7 @@ export const signupAdmin = async (req, res) => {
                 name,
                 email,
                 contact_no,
+                permissions: permissionsEncrypted,
                 image_url: final_image_url ? `${baseUrl}${final_image_url}` : null
             }
         });
@@ -188,7 +180,9 @@ export const updateAdmin = async (req, res) => {
     try {
         const final_image_url = req.file ? `/uploads/${req.file.filename}` : (req.body.image_url || null);
 
-        const permissionsJSON = permissions ? parsePermissions(permissions) : undefined;
+        const permissionsEncrypted = permissions
+            ? Buffer.from(typeof permissions === 'string' ? permissions : JSON.stringify(permissions)).toString('base64')
+            : undefined;
 
         await Admin.update(id, {
             name: name || null,
@@ -196,7 +190,7 @@ export const updateAdmin = async (req, res) => {
             image_url: final_image_url,
             status: status || null,
             updated_by: performerId,
-            ...(permissionsJSON !== undefined && { permissions: permissionsJSON })
+            ...(permissionsEncrypted !== undefined && { permissions: permissionsEncrypted })
         });
 
         res.status(200).json({ success: true, message: "Admin updated successfully!" });
