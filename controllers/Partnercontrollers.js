@@ -10,7 +10,7 @@ export const addPartner = async (req, res) => {
             code, status
         } = req.body;
 
-        // Required fields check
+   
         if (!name || !email) {
             return res.status(400).json({ success: false, message: "Name and email are required!" });
         }
@@ -19,13 +19,13 @@ export const addPartner = async (req, res) => {
             return res.status(400).json({ success: false, message: "Partner code is required!" });
         }
 
-        // Email duplicate check
+       
         const emailExists = await Partner.findByEmail(email);
         if (emailExists) {
             return res.status(400).json({ success: false, message: "Email already registered!" });
         }
 
-        // Code duplicate check
+       
         const codeExists = await Partner.findByCode(code);
         if (codeExists) {
             return res.status(400).json({ success: false, message: "Partner code already exists!" });
@@ -61,7 +61,7 @@ export const getAllPartners = async (req, res) => {
         return res.status(200).json({
             success: true,
             count: partners.length,
-            data: partners  // code, name, email, website_url, contact_no, status
+            data: partners 
         });
 
     } catch (error) {
@@ -102,7 +102,7 @@ export const updatePartner = async (req, res) => {
             return res.status(404).json({ success: false, message: "Partner not found!" });
         }
 
-        // Agar email change ho rahi hai toh duplicate check
+        
         if (email && email !== partner.email) {
             const emailExists = await Partner.findByEmail(email);
             if (emailExists) {
@@ -116,7 +116,7 @@ export const updatePartner = async (req, res) => {
             over_quota, quality_term, survey_close, about_partner, status
         };
 
-        // undefined values remove karo
+       
         Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
 
         await Partner.update(id, updateData);
