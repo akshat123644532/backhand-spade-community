@@ -1,34 +1,36 @@
 import Partner from '../models/partnerModel.js';
 
-
+// ─────────────────────────────────────────────
+// ADD PARTNER (code auto-generate hoga)
+// POST /api/admin/partner/add
+// ─────────────────────────────────────────────
 export const addPartner = async (req, res) => {
     try {
         const {
             name, email, contact_no, country, contact_person,
             website_url, panel_size, complete, terminate,
             over_quota, quality_term, survey_close, about_partner,
-            code, status
+            status
         } = req.body;
 
-   
+        // Required fields check
         if (!name || !email) {
             return res.status(400).json({ success: false, message: "Name and email are required!" });
         }
 
-        if (!code) {
-            return res.status(400).json({ success: false, message: "Partner code is required!" });
-        }
-
-       
+        // ✅ Email duplicate check
         const emailExists = await Partner.findByEmail(email);
         if (emailExists) {
-            return res.status(400).json({ success: false, message: "Email already registered!" });
+            return res.status(400).json({ success: false, message: "Partner with this email already exists!" });
         }
 
-       
+        // ✅ Auto generate code (P001, P002...)
+        const code = await Partner.generateCode();
+
+        // ✅ Code duplicate check (safety ke liye)
         const codeExists = await Partner.findByCode(code);
         if (codeExists) {
-            return res.status(400).json({ success: false, message: "Partner code already exists!" });
+            return res.status(400).json({ success: false, message: "Code conflict, please try again!" });
         }
 
         await Partner.create({
@@ -41,7 +43,7 @@ export const addPartner = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Partner added successfully!",
-            data: { name, email, code }
+            data: { code, name, email }
         });
 
     } catch (error) {
@@ -51,26 +53,27 @@ export const addPartner = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
-// GET ALL PARTNERS (list)
-// GET /api/partner/list
+// GET ALL PARTNERS
+// GET /api/admin/partner/list
 // ─────────────────────────────────────────────
 export const getAllPartners = async (req, res) => {
     try {
         const partners = await Partner.getAll();
-
         return res.status(200).json({
             success: true,
             count: partners.length,
-            data: partners 
+            data: partners
         });
-
     } catch (error) {
         console.error("GET PARTNERS ERROR:", error);
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-
+// ─────────────────────────────────────────────
+// GET PARTNER BY ID
+// GET /api/admin/partner/:id
+// ─────────────────────────────────────────────
 export const getPartnerById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -81,13 +84,15 @@ export const getPartnerById = async (req, res) => {
         }
 
         return res.status(200).json({ success: true, data: partner });
-
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-
+// ─────────────────────────────────────────────
+// UPDATE PARTNER
+// PUT /api/admin/partner/:id
+// ─────────────────────────────────────────────
 export const updatePartner = async (req, res) => {
     try {
         const { id } = req.params;
@@ -102,7 +107,7 @@ export const updatePartner = async (req, res) => {
             return res.status(404).json({ success: false, message: "Partner not found!" });
         }
 
-        
+        // Email change hori hai toh duplicate check
         if (email && email !== partner.email) {
             const emailExists = await Partner.findByEmail(email);
             if (emailExists) {
@@ -116,13 +121,11 @@ export const updatePartner = async (req, res) => {
             over_quota, quality_term, survey_close, about_partner, status
         };
 
-       
         Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
 
         await Partner.update(id, updateData);
 
         return res.status(200).json({ success: true, message: "Partner updated successfully!" });
-
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -130,7 +133,7 @@ export const updatePartner = async (req, res) => {
 
 // ─────────────────────────────────────────────
 // DELETE PARTNER
-// DELETE /api/partner/:id
+// DELETE /api/admin/partner/:id
 // ─────────────────────────────────────────────
 export const deletePartner = async (req, res) => {
     try {
@@ -144,7 +147,6 @@ export const deletePartner = async (req, res) => {
         await Partner.delete(id);
 
         return res.status(200).json({ success: true, message: "Partner deleted successfully!" });
-
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
