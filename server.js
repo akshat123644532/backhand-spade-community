@@ -17,7 +17,7 @@ app.set("trust proxy", 2);
 
 app.use('/api/admin', adminRoutes);
 app.use('/api/clients', clientRoutes);
-app.use('/api/admin/partner', partnerRoutes);
+app.use('/api/partner', partnerRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

@@ -2,6 +2,15 @@ import { db } from '../config/db.js';
 
 const Partner = {
 
+    generateCode: async () => {
+        const [rows] = await db.execute(
+            `SELECT code FROM partners ORDER BY id DESC LIMIT 1`
+        );
+        if (!rows.length) return 'P001';
+        const num = parseInt(rows[0].code.replace('P', '')) + 1;
+        return `P${String(num).padStart(3, '0')}`;
+    },
+
     create: async (data) => {
         const {
             name, email, contact_no, country, contact_person,
@@ -32,7 +41,7 @@ const Partner = {
 
     getAll: async () => {
         const [rows] = await db.execute(
-            `SELECT id, code, name, email, website_url, contact_no, status, created_at 
+            `SELECT id, code, name, email, website_url, contact_no, country, status, created_at 
              FROM partners 
              WHERE deleted_at IS NULL
              ORDER BY created_at DESC`
