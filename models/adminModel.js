@@ -1,26 +1,26 @@
 import { db } from '../config/db.js';
 
 const Admin = {
-findByEmail: async (email) => {
-    const query = `
-        SELECT
-            id,
-            name,
-            email,
-            password,
-            permission_type,
-            permissions,
-            image_url,
-            status,
-            contact_no,
-            token
-        FROM admins
-        WHERE email = ?
-    `;
+    findByEmail: async (email) => {
+        const query = `
+            SELECT
+                id,
+                name,
+                email,
+                password,
+                permission_type,
+                permissions,
+                image_url,
+                status,
+                contact_no,
+                token
+            FROM admins
+            WHERE email = ?
+        `;
 
-    const [rows] = await db.execute(query, [email]);
-    return rows[0];
-},
+        const [rows] = await db.execute(query, [email]);
+        return rows[0];
+    },
 
     create: async (adminData) => {
         const {
@@ -97,15 +97,6 @@ findByEmail: async (email) => {
         return result;
     },
 
-    incrementLoginCount: async (id) => {
-        const [result] = await db.execute(
-            `UPDATE admins SET login_count = login_count + 1 WHERE id = ?`,
-            [id]
-        );
-
-        return result;
-    },
-
     updateToken: async (id, token) => {
         const [result] = await db.execute(
             `UPDATE admins SET token = ? WHERE id = ?`,
@@ -115,27 +106,10 @@ findByEmail: async (email) => {
         return result;
     },
 
-    updateOTP: async (email, otp, expiry) => {
-        const [result] = await db.execute(
-            `UPDATE admins SET otp = ?, otp_expiry = ? WHERE email = ?`,
-            [otp, expiry, email]
-        );
-
-        return result;
-    },
-
-    findByOTP: async (email, otp) => {
-        const [rows] = await db.execute(
-            `SELECT id, email, otp, otp_expiry FROM admins WHERE email = ? AND otp = ?`,
-            [email, otp]
-        );
-
-        return rows[0];
-    },
-
     updatePassword: async (email, hashedPassword) => {
+        // 'otp' aur 'otp_expiry' wale columns hata diye hain kyunki wo admins table mein nahi hain
         const [result] = await db.execute(
-            `UPDATE admins SET password = ?, otp = NULL, otp_expiry = NULL WHERE email = ?`,
+            `UPDATE admins SET password = ? WHERE email = ?`,
             [hashedPassword, email]
         );
 
@@ -152,8 +126,7 @@ findByEmail: async (email) => {
                 permissions,
                 image_url,
                 status,
-                contact_no,
-                login_count
+                contact_no
             FROM admins
         `);
 
@@ -171,8 +144,7 @@ findByEmail: async (email) => {
                 permissions,
                 image_url,
                 status,
-                contact_no,
-                login_count
+                contact_no
             FROM admins
             WHERE id = ?
             `,

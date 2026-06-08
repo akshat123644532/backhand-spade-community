@@ -84,8 +84,6 @@ export const loginAdmin = async (req, res) => {
             });
         }
 
-        await Admin.incrementLoginCount(admin.id);
-
         const token = jwt.sign(
             { id: admin.id, email: admin.email },
             process.env.JWT_SECRET,
@@ -171,32 +169,48 @@ export const signupAdmin = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
     }
 };
-
 export const updateAdmin = async (req, res) => {
     const { id } = req.params;
     const { name, permission_type, status, permissions } = req.body;
-    const performerId = req.user ? req.user.id : (req.body.updated_by || null);
+    
+    
+    const performerId = req.user?.id || req.body.updated_by || null;
 
     try {
+      
         const final_image_url = req.file ? `/uploads/${req.file.filename}` : (req.body.image_url || null);
 
-        const permissionsEncrypted = permissions
-            ? Buffer.from(typeof permissions === 'string' ? permissions : JSON.stringify(permissions)).toString('base64')
-            : undefined;
+     
+        let permissionsEncrypted = undefined;
+        if (permissions) {
+            const dataToEncrypt = typeof permissions === 'string' ? permissions : JSON.stringify(permissions);
+            permissionsEncrypted = Buffer.from(dataToEncrypt).toString('base64');
+        }
 
-        await Admin.update(id, {
-            name: name || null,
-            permission_type: permission_type || null,
+        
+        const updateData = {
+            name,
+            permission_type,
             image_url: final_image_url,
-            status: status || null,
-            updated_by: performerId,
-            ...(permissionsEncrypted !== undefined && { permissions: permissionsEncrypted })
-        });
+            status,
+            updated_by: performerId
+        };
+
+  
+        if (permissionsEncrypted !== undefined) {
+            updateData.permissions = permissionsEncrypted;
+        }
+
+   
+        Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+        await Admin.update(id, updateData);
 
         res.status(200).json({ success: true, message: "Admin updated successfully!" });
 
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Update Admin Error:", error);
+        res.status(500).json({ success: false, message: "Failed to update admin", error: error.message });
     }
 };
 
