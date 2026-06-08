@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import adminRoutes from './routes/adminRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
+import partnerRoutes from './routes/Partnerroutes.js';
 dotenv.config();
 const app = express();
 
@@ -16,7 +17,7 @@ app.set("trust proxy", 2);
 
 app.use('/api/admin', adminRoutes);
 app.use('/api/clients', clientRoutes);
-
+app.use('/api/admin/partner', partnerRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
