@@ -110,16 +110,9 @@ export const loginAdmin = async (req, res) => {
         });
     }
 };
-
 export const signupAdmin = async (req, res) => {
     try {
-        const name = req.body.name;
-        const email = req.body.email;
-        const password = req.body.password;
-        const contact_no = req.body.contact_no;
-        const permission_type = req.body.permission_type;
-        const status = req.body.status;
-        const permissions = req.body.permissions;
+        const { name, email, password, contact_no, permission_type, status, permissions } = req.body;
 
         if (!email || !password) {
             return res.status(400).json({ success: false, message: "Email and password are required!" });
@@ -135,8 +128,17 @@ export const signupAdmin = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const permissionsEncrypted = permissions
-            ? Buffer.from(typeof permissions === 'string' ? permissions : JSON.stringify(permissions)).toString('base64')
+        let parsedPermissions = permissions;
+        if (typeof permissions === 'string') {
+            try {
+                parsedPermissions = JSON.parse(permissions);
+            } catch (e) {
+                console.error("Error parsing permissions string:", e);
+            }
+        }
+
+        const permissionsEncrypted = parsedPermissions
+            ? Buffer.from(JSON.stringify(parsedPermissions)).toString('base64')
             : null;
 
         await Admin.create({
