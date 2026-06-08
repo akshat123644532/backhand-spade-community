@@ -7,7 +7,9 @@ const router = express.Router();
 router.post('/add', verifyToken, addPartner);           
 router.get('/list', verifyToken, getAllPartners);        
 router.get('/:id', verifyToken, getPartnerById);      
-router.put('/:id', verifyToken, updatePartner);         
+router.put('/:id', verifyToken, updatePartner); 
+
+
 router.delete('/:id', verifyToken, deletePartner);      
 
 export default router;
