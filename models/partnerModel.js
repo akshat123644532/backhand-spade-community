@@ -10,10 +10,10 @@ const Partner = {
     },
 
     create: async (data) => {
-        const { name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, code, status } = data;
+        const { name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, code, status, api_base_url, api_secret_key, api_body } = data;
         const [result] = await db.execute(
-            `INSERT INTO partners (code, name, email, contact_no, country, contact_person, website_url, panel_size, complete_val, terminate_val, over_quota_val, quality_term_val, survey_close_val, about_partner, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [code, name, email, contact_no || null, country || null, contact_person || null, website_url || null, panel_size || null, complete || null, terminate || null, over_quota || null, quality_term || null, survey_close || null, about_partner || null, status || 'active']
+            `INSERT INTO partners (code, name, email, contact_no, country, contact_person, website_url, panel_size, complete_val, terminate_val, over_quota_val, quality_term_val, survey_close_val, about_partner, status, api_base_url, api_secret_key, api_body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [code, name, email, contact_no || null, country || null, contact_person || null, website_url || null, panel_size || null, complete || null, terminate || null, over_quota || null, quality_term || null, survey_close || null, about_partner || null, status || 'active', api_base_url || null, api_secret_key || null, api_body || null]
         );
         return result;
     },
@@ -38,11 +38,10 @@ const Partner = {
             params.push(country);
         }
 
-        const sql = `SELECT id, code, name, email, website_url, contact_no, country, status, created_at FROM partners ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-        
-        // db.query use kiya hai aur limit/offset ko cast kiya hai
-        const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
-        
+        const [rows] = await db.query(
+            `SELECT id, code, name, email, website_url, contact_no, country, status, created_at FROM partners ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [...params, Number(l), Number(offset)]
+        );
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM partners ${where}`, params);
         const total = countResult[0].total || 0;
 

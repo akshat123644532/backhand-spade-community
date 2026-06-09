@@ -2,10 +2,10 @@ import { db } from '../config/db.js';
 
 const Client = {
     create: async (clientData) => {
-        const { name, email, country, contact_no, admin_id, website_url } = clientData;
+        const { name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body } = clientData;
         const [result] = await db.execute(
-            `INSERT INTO PaperWardb.clients (name, email, country, contact_no, admin_id, website_url) VALUES (?, ?, ?, ?, ?, ?)`,
-            [name || null, email || null, country || null, contact_no || null, admin_id || null, website_url || null]
+            `INSERT INTO PaperWardb.clients (name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [name || null, email || null, country || null, contact_no || null, admin_id || null, website_url || null, api_base_url || null, api_secret_key || null, api_body || null]
         );
         return result;
     },
@@ -26,14 +26,14 @@ const Client = {
             params.push(country);
         }
 
-        const sql = `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.created_at, c.admin_id, a.name AS admin_name
-                     FROM PaperWardb.clients c
-                     LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
-                     ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`;
-
-        const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
+        const [rows] = await db.query(
+            `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.created_at, c.admin_id, a.name AS admin_name
+             FROM PaperWardb.clients c
+             LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
+             ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`,
+            [...params, Number(l), Number(offset)]
+        );
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM PaperWardb.clients c ${where}`, params);
-        
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
@@ -41,7 +41,7 @@ const Client = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.created_at, c.admin_id, a.name AS admin_name
+            `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.api_base_url, c.api_secret_key, c.api_body, c.created_at, c.admin_id, a.name AS admin_name
              FROM PaperWardb.clients c
              LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
              WHERE c.id = ?`,
@@ -56,10 +56,10 @@ const Client = {
     },
 
     update: async (id, updateData) => {
-        const { name, country, contact_no, website_url } = updateData;
+        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body } = updateData;
         const [result] = await db.execute(
-            `UPDATE PaperWardb.clients SET name = ?, country = ?, contact_no = ?, website_url = ? WHERE id = ?`,
-            [name || null, country || null, contact_no || null, website_url || null, id]
+            `UPDATE PaperWardb.clients SET name = ?, country = ?, contact_no = ?, website_url = ?, api_base_url = ?, api_secret_key = ?, api_body = ? WHERE id = ?`,
+            [name || null, country || null, contact_no || null, website_url || null, api_base_url || null, api_secret_key || null, api_body || null, id]
         );
         return result;
     },

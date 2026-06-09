@@ -1,7 +1,7 @@
 import Client from '../models/clientModel.js';
 
 export const addClient = async (req, res) => {
-    const { name, email, country, contact_no, website_url } = req.body;
+    const { name, email, country, contact_no, website_url, api_base_url, api_secret_key, api_body } = req.body;
     const adminId = req.user ? req.user.id : null;
 
     try {
@@ -10,21 +10,17 @@ export const addClient = async (req, res) => {
         }
 
         const existingClient = await Client.findByEmail(email);
-
         if (existingClient) {
-            return res.status(400).json({ success: false, message: "Client email already register!" });
+            return res.status(400).json({ success: false, message: "Client email already registered!" });
         }
 
         await Client.create({
-            name,
-            email,
-            country,
-            contact_no,
-            admin_id: adminId,
-            website_url
+            name, email, country, contact_no,
+            admin_id: adminId, website_url,
+            api_base_url, api_secret_key, api_body
         });
 
-        res.status(201).json({ success: true, message: "Client added sucessfully" });
+        res.status(201).json({ success: true, message: "Client added successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -36,9 +32,9 @@ export const getAllClients = async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || '';
         const country = req.query.country || '';
- 
+
         const result = await Client.getAll({ page, limit, search, country });
- 
+
         res.status(200).json({ success: true, ...result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -50,7 +46,6 @@ export const getClientById = async (req, res) => {
 
     try {
         const client = await Client.getById(id);
-
         if (!client) {
             return res.status(404).json({ success: false, message: "Client not found!" });
         }
@@ -65,7 +60,10 @@ export const updateClient = async (req, res) => {
     const { id } = req.params;
 
     try {
-        await Client.update(id, req.body);
+        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body } = req.body;
+
+        await Client.update(id, { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body });
+
         res.status(200).json({ success: true, message: "Client updated successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
