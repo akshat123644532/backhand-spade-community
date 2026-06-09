@@ -3,81 +3,69 @@ import { db } from '../config/db.js';
 const Client = {
     create: async (clientData) => {
         const { name, email, country, contact_no, admin_id, website_url } = clientData;
-
-        const query = `
-        INSERT INTO PaperWardb.clients 
-        (name, email, country, contact_no, admin_id, website_url) 
-        VALUES (?, ?, ?, ?, ?, ?)
-        `;
-
-        const [result] = await db.execute(query, [
-            name || null,
-            email || null,
-            country || null,
-            contact_no || null,
-            admin_id || null,
-            website_url || null
-        ]);
-
+        const [result] = await db.execute(
+            `INSERT INTO PaperWardb.clients (name, email, country, contact_no, admin_id, website_url) VALUES (?, ?, ?, ?, ?, ?)`,
+            [name || null, email || null, country || null, contact_no || null, admin_id || null, website_url || null]
+        );
         return result;
     },
 
-    getAll: async () => {
-        const query = `
-        SELECT 
-            c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.created_at,
-            c.admin_id, a.name AS admin_name
-        FROM PaperWardb.clients c
-        LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
-        `;
+    getAll: async ({ page = 1, limit = 10, search = '', country = '' } = {}) => {
+        const p = parseInt(page) || 1;
+        const l = parseInt(limit) || 10;
+        const offset = (p - 1) * l;
+        let where = `WHERE 1=1`;
+        const params = [];
 
-        const [rows] = await db.execute(query);
-        return rows;
+        if (search) {
+            where += ` AND (c.name LIKE ? OR c.email LIKE ? OR c.contact_no LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+        if (country) {
+            where += ` AND c.country = ?`;
+            params.push(country);
+        }
+
+        const sql = `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.created_at, c.admin_id, a.name AS admin_name
+                     FROM PaperWardb.clients c
+                     LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
+                     ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`;
+
+        const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
+        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM PaperWardb.clients c ${where}`, params);
+        
+        const total = countResult[0].total || 0;
+
+        return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
     },
 
     getById: async (id) => {
-        const query = `
-        SELECT 
-            c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.created_at,
-            c.admin_id, a.name AS admin_name
-        FROM PaperWardb.clients c
-        LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
-        WHERE c.id = ?
-        `;
-
-        const [rows] = await db.execute(query, [id]);
+        const [rows] = await db.execute(
+            `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.created_at, c.admin_id, a.name AS admin_name
+             FROM PaperWardb.clients c
+             LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
+             WHERE c.id = ?`,
+            [id]
+        );
         return rows[0];
     },
 
     findByEmail: async (email) => {
-        const query = `SELECT id, email FROM PaperWardb.clients WHERE email = ?`;
-        const [rows] = await db.execute(query, [email]);
+        const [rows] = await db.execute(`SELECT id, email FROM PaperWardb.clients WHERE email = ?`, [email]);
         return rows[0];
     },
 
     update: async (id, updateData) => {
         const { name, country, contact_no, website_url } = updateData;
-
-        const query = `
-        UPDATE PaperWardb.clients 
-        SET name = ?, country = ?, contact_no = ?, website_url = ?
-        WHERE id = ?
-        `;
-
-        const [result] = await db.execute(query, [
-            name || null,
-            country || null,
-            contact_no || null,
-            website_url || null,
-            id
-        ]);
-
+        const [result] = await db.execute(
+            `UPDATE PaperWardb.clients SET name = ?, country = ?, contact_no = ?, website_url = ? WHERE id = ?`,
+            [name || null, country || null, contact_no || null, website_url || null, id]
+        );
         return result;
     },
 
     delete: async (id) => {
-        const query = `DELETE FROM PaperWardb.clients WHERE id = ?`;
-        const [result] = await db.execute(query, [id]);
+        const [result] = await db.execute(`DELETE FROM PaperWardb.clients WHERE id = ?`, [id]);
         return result;
     }
 };

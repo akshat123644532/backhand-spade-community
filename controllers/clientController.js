@@ -32,8 +32,14 @@ export const addClient = async (req, res) => {
 
 export const getAllClients = async (req, res) => {
     try {
-        const clients = await Client.getAll();
-        res.status(200).json({ success: true, count: clients.length, clients });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const country = req.query.country || '';
+ 
+        const result = await Client.getAll({ page, limit, search, country });
+ 
+        res.status(200).json({ success: true, ...result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

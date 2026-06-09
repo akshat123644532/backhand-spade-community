@@ -322,13 +322,18 @@ export const resetPassword = async (req, res) => {
 
 export const getAllAdmins = async (req, res) => {
     try {
-        const admins = await Admin.getAll();
-        res.status(200).json({ success: true, count: admins.length, admins });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+ 
+        const result = await Admin.getAll({ page, limit, search, status });
+ 
+        res.status(200).json({ success: true, ...result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 };
-
 export const getAdminById = async (req, res) => {
     const { id } = req.params;
 

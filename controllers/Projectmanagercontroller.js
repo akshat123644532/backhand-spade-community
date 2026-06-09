@@ -44,16 +44,20 @@ export const addProjectManager = async (req, res) => {
 
 export const getAllProjectManagers = async (req, res) => {
     try {
-        const managers = await ProjectManager.getAll();
-
-        const baseUrl = BASE_URL(req);
-        const data = managers.map(m => ({
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+ 
+        const result = await ProjectManager.getAll({ page, limit, search, status });
+ 
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        result.data = result.data.map(m => ({
             ...m,
             profile_image: m.profile_image ? `${baseUrl}${m.profile_image}` : null
         }));
-
-        return res.status(200).json({ success: true, count: data.length, data });
-
+ 
+        return res.status(200).json({ success: true, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

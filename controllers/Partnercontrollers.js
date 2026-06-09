@@ -54,18 +54,18 @@ export const addPartner = async (req, res) => {
 
 // ─────────────────────────────────────────────
 // GET ALL PARTNERS
-// GET /api/admin/partner/list
-// ─────────────────────────────────────────────
 export const getAllPartners = async (req, res) => {
     try {
-        const partners = await Partner.getAll();
-        return res.status(200).json({
-            success: true,
-            count: partners.length,
-            data: partners
-        });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const country = req.query.country || '';
+ 
+        const result = await Partner.getAll({ page, limit, search, status, country });
+ 
+        return res.status(200).json({ success: true, ...result });
     } catch (error) {
-        console.error("GET PARTNERS ERROR:", error);
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
