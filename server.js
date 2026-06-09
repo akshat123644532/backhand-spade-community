@@ -7,6 +7,7 @@ import clientRoutes from './routes/clientRoutes.js';
 import partnerRoutes from './routes/Partnerroutes.js';
 dotenv.config();
 import projectManagerRoutes from './routes/projectManagerRoutes.js';
+import countryRoutes from './routes/countryRoutes.js';
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/partner', partnerRoutes);
 app.use('/api/projectmanager', projectManagerRoutes);
+app.use('/api/countries', countryRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
