@@ -35,14 +35,14 @@ const ProjectManager = {
             params.push(status);
         }
 
-        // FIX: LIMIT aur OFFSET ke liye db.query ka use kiya hai
-        // db.execute yahan strict type checking ke karan fail ho raha tha
+
+        
         const sql = `SELECT id, code, name, email, profile_image, status, created_at FROM project_managers ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
         
         // LIMIT aur OFFSET ko strictly Number mein convert karke bheja hai
         const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
         
-        // Total count nikalne ke liye
+
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM project_managers ${where}`, params);
         const total = countResult[0].total || 0;
 
