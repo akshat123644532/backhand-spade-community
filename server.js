@@ -13,7 +13,8 @@ import salesProjectRoutes from './routes/salesProjectRoutes.js';
 import salesManagerRoutes from './routes/salesManagerRoutes.js'; 
 import prescreenRoutes from './routes/prescreenRoutes.js'; 
 
-import projectRoutes from './routes/projectRoutes.js';
+import surveyRoutes from './routes/surveyRoutes.js';
+
 
 const app = express();
 
@@ -32,7 +33,7 @@ app.use('/api/countries', countryRoutes);
 app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
 app.use('/api/prescreen', prescreenRoutes);
-app.use('/api/project', projectRoutes);
+app.use('/api/survey', surveyRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
