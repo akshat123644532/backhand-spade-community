@@ -1,29 +1,28 @@
 import { db } from '../config/db.js';
 
-const SurveyGroup = {
-
+const Prescreen = {
     create: async (data) => {
         const { survey_title, language, status } = data;
         const [result] = await db.execute(
-            `INSERT INTO survey_groups (survey_title, language, status) VALUES (?, ?, ?)`,
+            `INSERT INTO prescreens (survey_title, language, status) VALUES (?, ?, ?)`,
             [survey_title, language, status || 'active']
         );
         return result.insertId;
     },
 
-    addQuestions: async (survey_group_id, questions) => {
+    addQuestions: async (prescreen_id, questions) => {
         for (const question of questions) {
             await db.execute(
-                `INSERT INTO survey_group_questions (survey_group_id, question) VALUES (?, ?)`,
-                [survey_group_id, question]
+                `INSERT INTO prescreen_questions (survey_group_id, question) VALUES (?, ?)`,
+                [prescreen_id, question]
             );
         }
     },
 
-    deleteQuestions: async (survey_group_id) => {
+    deleteQuestions: async (prescreen_id) => {
         await db.execute(
-            `DELETE FROM survey_group_questions WHERE survey_group_id = ?`,
-            [survey_group_id]
+            `DELETE FROM prescreen_questions WHERE survey_group_id = ?`,
+            [prescreen_id]
         );
     },
 
@@ -48,10 +47,10 @@ const SurveyGroup = {
         }
 
         const [rows] = await db.query(
-            `SELECT id, survey_title, language, status, created_at FROM survey_groups ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT id, survey_title, language, status, created_at FROM prescreens ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM survey_groups ${where}`, params);
+        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM prescreens ${where}`, params);
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
@@ -59,12 +58,12 @@ const SurveyGroup = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM survey_groups WHERE id = ? AND deleted_at IS NULL`, [id]
+            `SELECT * FROM prescreens WHERE id = ? AND deleted_at IS NULL`, [id]
         );
         if (!rows[0]) return null;
 
         const [questions] = await db.execute(
-            `SELECT id, question FROM survey_group_questions WHERE survey_group_id = ?`, [id]
+            `SELECT id, question FROM prescreen_questions WHERE survey_group_id = ?`, [id]
         );
 
         return { ...rows[0], questions };
@@ -73,7 +72,7 @@ const SurveyGroup = {
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(
-            `UPDATE survey_groups SET ${fields}, updated_at = NOW() WHERE id = ?`,
+            `UPDATE prescreens SET ${fields}, updated_at = NOW() WHERE id = ?`,
             [...Object.values(data), id]
         );
         return result;
@@ -81,7 +80,7 @@ const SurveyGroup = {
 
     toggleStatus: async (id, status) => {
         const [result] = await db.execute(
-            `UPDATE survey_groups SET status = ?, updated_at = NOW() WHERE id = ?`,
+            `UPDATE prescreens SET status = ?, updated_at = NOW() WHERE id = ?`,
             [status, id]
         );
         return result;
@@ -89,10 +88,10 @@ const SurveyGroup = {
 
     delete: async (id) => {
         const [result] = await db.execute(
-            `UPDATE survey_groups SET deleted_at = NOW() WHERE id = ?`, [id]
+            `UPDATE prescreens SET deleted_at = NOW() WHERE id = ?`, [id]
         );
         return result;
     }
 };
 
-export default SurveyGroup;
+export default Prescreen;
