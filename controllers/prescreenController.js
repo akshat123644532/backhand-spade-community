@@ -2,10 +2,8 @@ import Prescreen from '../models/prescreenModel.js';
 
 export const addPrescreen = async (req, res) => {
     try {
-        // Yahan 'title' ki jagah 'survey_title' use karein
         const { survey_title, language, status, questions } = req.body;
 
-        // Validation mein bhi 'survey_title' check karein
         if (!survey_title || !language) {
             return res.status(400).json({ success: false, message: "Survey title and language are required!" });
         }
@@ -49,12 +47,12 @@ export const getPrescreenById = async (req, res) => {
 export const updatePrescreen = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, language, status, questions } = req.body;
+        const { survey_title, language, status, questions } = req.body;
         const group = await Prescreen.getById(id);
         if (!group) return res.status(404).json({ success: false, message: "Prescreen not found!" });
 
         const updateData = {};
-        if (title) updateData.title = title;
+        if (survey_title) updateData.survey_title = survey_title;
         if (language) updateData.language = language;
         if (status) updateData.status = status;
 
