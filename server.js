@@ -11,10 +11,7 @@ import countryRoutes from './routes/countryRoutes.js';
 import salesProjectRoutes from './routes/salesProjectRoutes.js';
 
 import salesManagerRoutes from './routes/salesManagerRoutes.js'; 
-
-
-
-
+import surveyGroupRoutes from './routes/surveyGroupRoutes.js';
 const app = express();
 
 app.use(helmet());
@@ -31,6 +28,7 @@ app.use('/api/projectmanager', projectManagerRoutes);
 app.use('/api/countries', countryRoutes);
 app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
+app.use('/api/survey/group', surveyGroupRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
