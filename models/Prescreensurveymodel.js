@@ -1,27 +1,30 @@
 import { db } from '../config/db.js';
 
-const Prescreen = {
+const PrescreenSurvey = {
 
     create: async (data) => {
-        const { language, question_title, right_answer, status } = data;
+        const { survey_title, language, status } = data;
         const [result] = await db.execute(
-            `INSERT INTO prescreens (language, question_title, right_answer, status) VALUES (?, ?, ?, ?)`,
-            [language, question_title, right_answer || null, status || 'active']
+            `INSERT INTO prescreen_surveys (survey_title, language, status) VALUES (?, ?, ?)`,
+            [survey_title, language, status || 'active']
         );
         return result.insertId;
     },
 
-    addOptions: async (prescreen_id, options) => {
-        for (const option of options) {
+    addQuestions: async (prescreen_survey_id, prescreen_ids) => {
+        for (const prescreen_id of prescreen_ids) {
             await db.execute(
-                `INSERT INTO prescreen_options (prescreen_id, option_text) VALUES (?, ?)`,
-                [prescreen_id, option]
+                `INSERT INTO prescreen_survey_questions (prescreen_survey_id, prescreen_id) VALUES (?, ?)`,
+                [prescreen_survey_id, prescreen_id]
             );
         }
     },
 
-    deleteOptions: async (prescreen_id) => {
-        await db.execute(`DELETE FROM prescreen_options WHERE prescreen_id = ?`, [prescreen_id]);
+    deleteQuestions: async (prescreen_survey_id) => {
+        await db.execute(
+            `DELETE FROM prescreen_survey_questions WHERE prescreen_survey_id = ?`,
+            [prescreen_survey_id]
+        );
     },
 
     getAll: async ({ page = 1, limit = 10, search = '', status = '', language = '' } = {}) => {
@@ -32,7 +35,7 @@ const Prescreen = {
         const params = [];
 
         if (search) {
-            where += ` AND question_title LIKE ?`;
+            where += ` AND survey_title LIKE ?`;
             params.push(`%${search}%`);
         }
         if (status) {
@@ -45,10 +48,10 @@ const Prescreen = {
         }
 
         const [rows] = await db.query(
-            `SELECT id, language, question_title, right_answer, status, created_at FROM prescreens ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT id, survey_title, language, status, created_at FROM prescreen_surveys ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM prescreens ${where}`, params);
+        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM prescreen_surveys ${where}`, params);
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
@@ -56,34 +59,28 @@ const Prescreen = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM prescreens WHERE id = ? AND deleted_at IS NULL`, [id]
+            `SELECT * FROM prescreen_surveys WHERE id = ? AND deleted_at IS NULL`, [id]
         );
         if (!rows[0]) return null;
 
-        const [options] = await db.execute(
-            `SELECT id, option_text FROM prescreen_options WHERE prescreen_id = ?`, [id]
-        );
-
-        return { ...rows[0], options };
-    },
-
-    getByLanguage: async (language) => {
-        const [rows] = await db.execute(
+        const [questions] = await db.execute(
             `SELECT p.id, p.question_title, p.right_answer,
              JSON_ARRAYAGG(po.option_text) as options
-             FROM prescreens p
+             FROM prescreen_survey_questions psq
+             JOIN prescreens p ON psq.prescreen_id = p.id
              LEFT JOIN prescreen_options po ON p.id = po.prescreen_id
-             WHERE p.language = ? AND p.deleted_at IS NULL AND p.status = 'active'
+             WHERE psq.prescreen_survey_id = ?
              GROUP BY p.id`,
-            [language]
+            [id]
         );
-        return rows;
+
+        return { ...rows[0], questions };
     },
 
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(
-            `UPDATE prescreens SET ${fields}, updated_at = NOW() WHERE id = ?`,
+            `UPDATE prescreen_surveys SET ${fields}, updated_at = NOW() WHERE id = ?`,
             [...Object.values(data), id]
         );
         return result;
@@ -91,7 +88,7 @@ const Prescreen = {
 
     toggleStatus: async (id, status) => {
         const [result] = await db.execute(
-            `UPDATE prescreens SET status = ?, updated_at = NOW() WHERE id = ?`,
+            `UPDATE prescreen_surveys SET status = ?, updated_at = NOW() WHERE id = ?`,
             [status, id]
         );
         return result;
@@ -99,10 +96,10 @@ const Prescreen = {
 
     delete: async (id) => {
         const [result] = await db.execute(
-            `UPDATE prescreens SET deleted_at = NOW() WHERE id = ?`, [id]
+            `UPDATE prescreen_surveys SET deleted_at = NOW() WHERE id = ?`, [id]
         );
         return result;
     }
 };
 
-export default Prescreen;
+export default PrescreenSurvey;

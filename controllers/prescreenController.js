@@ -2,31 +2,38 @@ import Prescreen from '../models/prescreenModel.js';
 
 export const addPrescreen = async (req, res) => {
     try {
-        const { survey_title, language, status, questions } = req.body;
+        const { language, question_title, options, right_answer, status } = req.body;
 
-        if (!survey_title || !language) {
-            return res.status(400).json({ success: false, message: "Survey title and language are required!" });
+        if (!language || !question_title) {
+            return res.status(400).json({ success: false, message: "Language and question title are required!" });
+        }
+        if (!options || options.length === 0) {
+            return res.status(400).json({ success: false, message: "At least one option is required!" });
         }
 
-        const prescreen_id = await Prescreen.create({ survey_title, language, status });
-
-        if (questions && questions.length > 0) {
-            await Prescreen.addQuestions(prescreen_id, questions);
-        }
+        const prescreen_id = await Prescreen.create({ language, question_title, right_answer, status });
+        await Prescreen.addOptions(prescreen_id, options);
 
         return res.status(201).json({
             success: true,
             message: "Prescreen added successfully!",
-            data: { id: prescreen_id, survey_title, language }
+            data: { id: prescreen_id, question_title, language }
         });
+
     } catch (error) {
+        console.error("ADD PRESCREEN ERROR:", error);
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
 export const getAllPrescreens = async (req, res) => {
     try {
-        const { page, limit, search, status, language } = req.query;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const language = req.query.language || '';
+
         const result = await Prescreen.getAll({ page, limit, search, status, language });
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
@@ -36,9 +43,20 @@ export const getAllPrescreens = async (req, res) => {
 
 export const getPrescreenById = async (req, res) => {
     try {
-        const group = await Prescreen.getById(req.params.id);
-        if (!group) return res.status(404).json({ success: false, message: "Prescreen not found!" });
-        return res.status(200).json({ success: true, data: group });
+        const { id } = req.params;
+        const prescreen = await Prescreen.getById(id);
+        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
+        return res.status(200).json({ success: true, data: prescreen });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const getByLanguage = async (req, res) => {
+    try {
+        const { language } = req.params;
+        const prescreens = await Prescreen.getByLanguage(language);
+        return res.status(200).json({ success: true, count: prescreens.length, data: prescreens });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -47,21 +65,25 @@ export const getPrescreenById = async (req, res) => {
 export const updatePrescreen = async (req, res) => {
     try {
         const { id } = req.params;
-        const { survey_title, language, status, questions } = req.body;
-        const group = await Prescreen.getById(id);
-        if (!group) return res.status(404).json({ success: false, message: "Prescreen not found!" });
+        const { language, question_title, options, right_answer, status } = req.body;
+
+        const prescreen = await Prescreen.getById(id);
+        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
 
         const updateData = {};
-        if (survey_title) updateData.survey_title = survey_title;
         if (language) updateData.language = language;
+        if (question_title) updateData.question_title = question_title;
+        if (right_answer) updateData.right_answer = right_answer;
         if (status) updateData.status = status;
 
         if (Object.keys(updateData).length > 0) await Prescreen.update(id, updateData);
-        if (questions && questions.length > 0) {
-            await Prescreen.deleteQuestions(id);
-            await Prescreen.addQuestions(id, questions);
+
+        if (options && options.length > 0) {
+            await Prescreen.deleteOptions(id);
+            await Prescreen.addOptions(id, options);
         }
-        return res.status(200).json({ success: true, message: "Prescreen updated!" });
+
+        return res.status(200).json({ success: true, message: "Prescreen updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -69,8 +91,15 @@ export const updatePrescreen = async (req, res) => {
 
 export const toggleStatus = async (req, res) => {
     try {
-        await Prescreen.toggleStatus(req.params.id, req.body.status);
-        return res.status(200).json({ success: true, message: "Status updated!" });
+        const { id } = req.params;
+        const { status } = req.body;
+        if (!['active', 'inactive'].includes(status)) {
+            return res.status(400).json({ success: false, message: "Status must be active or inactive!" });
+        }
+        const prescreen = await Prescreen.getById(id);
+        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
+        await Prescreen.toggleStatus(id, status);
+        return res.status(200).json({ success: true, message: `Status updated to ${status}!` });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -78,8 +107,11 @@ export const toggleStatus = async (req, res) => {
 
 export const deletePrescreen = async (req, res) => {
     try {
-        await Prescreen.delete(req.params.id);
-        return res.status(200).json({ success: true, message: "Prescreen deleted!" });
+        const { id } = req.params;
+        const prescreen = await Prescreen.getById(id);
+        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
+        await Prescreen.delete(id);
+        return res.status(200).json({ success: true, message: "Prescreen deleted successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

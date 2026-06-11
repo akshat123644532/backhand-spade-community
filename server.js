@@ -11,7 +11,8 @@ import countryRoutes from './routes/countryRoutes.js';
 import salesProjectRoutes from './routes/salesProjectRoutes.js';
 
 import salesManagerRoutes from './routes/salesManagerRoutes.js'; 
-import prescreenRoutes from './routes/prescreenRoutes.js'; 
+import prescreenRoutes from './routes/prescreenRoutes.js';
+import prescreenSurveyRoutes from './routes/prescreenSurveyRoutes.js';
 
 import surveyRoutes from './routes/surveyRoutes.js';
 
@@ -32,7 +33,10 @@ app.use('/api/projectmanager', projectManagerRoutes);
 app.use('/api/countries', countryRoutes);
 app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
+
 app.use('/api/prescreen', prescreenRoutes);
+app.use('/api/prescreen-survey', prescreenSurveyRoutes);
+
 app.use('/api/survey', surveyRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
