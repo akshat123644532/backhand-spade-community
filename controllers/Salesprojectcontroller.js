@@ -4,7 +4,7 @@ const VALID_STATUS = ['wip', 'lost', 'won'];
 
 export const addSalesProject = async (req, res) => {
     try {
-        const { client_name, email, country, email_subject, status, comment } = req.body;
+        const { client_name, email, country, email_subject, status, comment, sales_manager_id } = req.body;
 
         if (!client_name || !email) {
             return res.status(400).json({ success: false, message: "Client name and email are required!" });
@@ -24,6 +24,7 @@ export const addSalesProject = async (req, res) => {
         await SalesProject.create({
             project_id, client_name, email, country,
             email_subject, status: status || 'wip', comment,
+            sales_manager_id: sales_manager_id || null,
             created_by: req.user?.id || null
         });
 
@@ -73,7 +74,7 @@ export const getSalesProjectById = async (req, res) => {
 export const updateSalesProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const { client_name, email, country, email_subject, status, comment } = req.body;
+        const { client_name, email, country, email_subject, status, comment, sales_manager_id } = req.body;
 
         if (status && !VALID_STATUS.includes(status)) {
             return res.status(400).json({ success: false, message: "Status must be wip, lost or won!" });
@@ -91,7 +92,7 @@ export const updateSalesProject = async (req, res) => {
             }
         }
 
-        const updateData = { client_name, email, country, email_subject, status, comment };
+        const updateData = { client_name, email, country, email_subject, status, comment, sales_manager_id };
         Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
 
         await SalesProject.update(id, updateData);

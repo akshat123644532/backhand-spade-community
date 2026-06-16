@@ -14,7 +14,7 @@ const SalesProject = {
         const { project_id, client_name, email, country, email_subject, status, comment, created_by } = data;
         const [result] = await db.execute(
             `INSERT INTO sales_projects (project_id, client_name, email, country, email_subject, status, comment, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [project_id, client_name, email, country || null, email_subject || null, status || 'pending', comment || null, created_by || null]
+            [project_id, client_name, email, country || null, email_subject || null, status || 'wip', comment || null, created_by || null]
         );
         return result;
     },
@@ -23,27 +23,40 @@ const SalesProject = {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        let where = `WHERE deleted_at IS NULL`;
+        let where = `WHERE sp.deleted_at IS NULL`;
         const params = [];
 
         if (search) {
-            where += ` AND (client_name LIKE ? OR email LIKE ? OR project_id LIKE ?)`;
+            where += ` AND (sp.client_name LIKE ? OR sp.email LIKE ? OR sp.project_id LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
         if (status) {
-            where += ` AND status = ?`;
+            where += ` AND sp.status = ?`;
             params.push(status);
         }
         if (country) {
-            where += ` AND country = ?`;
+            where += ` AND sp.country = ?`;
             params.push(country);
         }
 
         const [rows] = await db.query(
-            `SELECT id, project_id, client_name, email, country, status, created_at FROM sales_projects ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT 
+                sp.id, sp.project_id, sp.client_name, sp.email, sp.country,
+                sp.email_subject, sp.status, sp.comment, sp.created_at,
+                sm.id AS sales_manager_id,
+                sm.name AS sales_manager_name
+             FROM sales_projects sp
+             LEFT JOIN sales_managers sm ON sp.sales_manager_id = sm.id
+             ${where} 
+             ORDER BY sp.created_at DESC 
+             LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM sales_projects ${where}`, params);
+
+        const [countResult] = await db.query(
+            `SELECT COUNT(*) as total FROM sales_projects sp ${where}`, 
+            params
+        );
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
@@ -51,7 +64,14 @@ const SalesProject = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM sales_projects WHERE id = ? AND deleted_at IS NULL`, [id]
+            `SELECT 
+                sp.*,
+                sm.id AS sales_manager_id,
+                sm.name AS sales_manager_name
+             FROM sales_projects sp
+             LEFT JOIN sales_managers sm ON sp.sales_manager_id = sm.id
+             WHERE sp.id = ? AND sp.deleted_at IS NULL`,
+            [id]
         );
         return rows[0] || null;
     },

@@ -1,9 +1,6 @@
 import Partner from '../models/partnerModel.js';
 
-// ─────────────────────────────────────────────
-// ADD PARTNER (code auto-generate hoga)
-// POST /api/admin/partner/add
-// ─────────────────────────────────────────────
+// 
 export const addPartner = async (req, res) => {
     try {
         const {

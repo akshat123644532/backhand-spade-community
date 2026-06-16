@@ -9,13 +9,12 @@ dotenv.config();
 import projectManagerRoutes from './routes/projectManagerRoutes.js';
 import countryRoutes from './routes/countryRoutes.js';
 import salesProjectRoutes from './routes/salesProjectRoutes.js';
-
 import salesManagerRoutes from './routes/salesManagerRoutes.js'; 
 import prescreenRoutes from './routes/prescreenRoutes.js';
 import prescreenSurveyRoutes from './routes/prescreenSurveyRoutes.js';
-
 import surveyRoutes from './routes/surveyRoutes.js';
 import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
+import salesLogRoutes from './routes/salesLogRoutes.js';
 
 const app = express();
 
@@ -35,11 +34,10 @@ app.use('/api/projectmanager', projectManagerRoutes);
 app.use('/api/countries', countryRoutes);
 app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
-
 app.use('/api/prescreen', prescreenRoutes);
 app.use('/api/prescreen-survey', prescreenSurveyRoutes);
-
 app.use('/api/survey', surveyRoutes);
+app.use('/api/sales/log', salesLogRoutes);
 app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
 
 const PORT = process.env.PORT || 5050;
