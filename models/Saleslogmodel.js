@@ -19,7 +19,7 @@ const SalesLog = {
                 sl.comment_by, sl.created_at,
                 au.name AS created_by_name
              FROM sales_logs sl
-             LEFT JOIN admin_users au ON sl.created_by = au.id
+             LEFT JOIN PaperWardb.admins au ON sl.created_by = au.id
              WHERE sl.project_id = ? AND sl.deleted_at IS NULL
              ORDER BY sl.created_at DESC`,
             [project_id]

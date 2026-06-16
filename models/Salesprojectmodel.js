@@ -11,10 +11,10 @@ const SalesProject = {
     },
 
     create: async (data) => {
-        const { project_id, client_name, email, country, email_subject, status, comment, created_by } = data;
+        const { project_id, client_name, email, country, email_subject, status, comment, sales_manager_id, created_by } = data;
         const [result] = await db.execute(
-            `INSERT INTO sales_projects (project_id, client_name, email, country, email_subject, status, comment, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [project_id, client_name, email, country || null, email_subject || null, status || 'wip', comment || null, created_by || null]
+            `INSERT INTO sales_projects (project_id, client_name, email, country, email_subject, status, comment, sales_manager_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [project_id, client_name, email, country || null, email_subject || null, status || 'wip', comment || null, sales_manager_id || null, created_by || null]
         );
         return result;
     },
