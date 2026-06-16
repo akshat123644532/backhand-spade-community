@@ -3,15 +3,17 @@ import verifyToken from '../Middleware/authMIddleware.js';
 import {
     addSalesLog,
     getSalesLogs,
+    getSalesLogById,
     updateSalesLog,
     deleteSalesLog
 } from '../controllers/salesLogController.js';
 
 const router = express.Router();
 
-router.post('/:id/add',      verifyToken, addSalesLog);
-router.get('/:id/list',      verifyToken, getSalesLogs);
-router.put('/:id/:logId',    verifyToken, updateSalesLog);
-router.delete('/:id/:logId', verifyToken, deleteSalesLog);
+router.post('/:id/add',         verifyToken, addSalesLog);
+router.get('/:id/list',         verifyToken, getSalesLogs);
+router.get('/:id/view/:logId',  verifyToken, getSalesLogById);
+router.put('/:id/:logId',       verifyToken, updateSalesLog);
+router.delete('/:id/:logId',    verifyToken, deleteSalesLog);
 
 export default router;

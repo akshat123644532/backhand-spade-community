@@ -103,3 +103,18 @@ export const deleteSalesLog = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+export const getSalesLogById = async (req, res) => {
+    try {
+        const { logId } = req.params;
+
+        const log = await SalesLog.getById(logId);
+        if (!log) {
+            return res.status(404).json({ success: false, message: "Log not found!" });
+        }
+
+        return res.status(200).json({ success: true, data: log });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
