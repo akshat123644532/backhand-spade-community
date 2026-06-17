@@ -6,6 +6,7 @@ import {
     getSurveyById,
     updateSurvey,
     deleteSurvey,
+    searchSurveys,
     getEligiblePartners,
     assignPartners,
     getAssignedPartners,
@@ -17,6 +18,7 @@ const router = express.Router();
 
 router.post('/add',                                        verifyToken, addSurvey);
 router.get('/list',                                        verifyToken, getAllSurveys);
+router.get('/search',                                      verifyToken, searchSurveys);
 router.get('/:id',                                         verifyToken, getSurveyById);
 router.put('/:id',                                         verifyToken, updateSurvey);
 router.delete('/:id',                                      verifyToken, deleteSurvey);
