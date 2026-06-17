@@ -27,6 +27,30 @@ const SurveyGroupProject = {
         );
     },
 
+    // ─── SURVEYS LINK ────────────────────────────
+    addSurveys: async (survey_group_project_id, survey_ids) => {
+        for (const survey_id of survey_ids) {
+            await db.execute(
+                `INSERT IGNORE INTO survey_group_project_surveys (survey_group_project_id, survey_id) VALUES (?, ?)`,
+                [survey_group_project_id, survey_id]
+            );
+        }
+    },
+
+    deleteSurveys: async (survey_group_project_id) => {
+        await db.execute(
+            `DELETE FROM survey_group_project_surveys WHERE survey_group_project_id = ?`,
+            [survey_group_project_id]
+        );
+    },
+
+    removeSurvey: async (survey_group_project_id, survey_id) => {
+        await db.execute(
+            `DELETE FROM survey_group_project_surveys WHERE survey_group_project_id = ? AND survey_id = ?`,
+            [survey_group_project_id, survey_id]
+        );
+    },
+
     getAll: async ({ page = 1, limit = 10, search = '', status = '' } = {}) => {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
@@ -45,10 +69,13 @@ const SurveyGroupProject = {
 
         const [rows] = await db.query(
             `SELECT sgp.id, sgp.project_name, sgp.status, sgp.created_at,
-             GROUP_CONCAT(c.name SEPARATOR ', ') AS client_names
+             GROUP_CONCAT(DISTINCT c.name SEPARATOR ', ') AS client_names,
+             GROUP_CONCAT(DISTINCT s.project_name SEPARATOR ', ') AS survey_names
              FROM survey_group_projects sgp
              LEFT JOIN survey_group_project_clients sgpc ON sgp.id = sgpc.survey_group_project_id
              LEFT JOIN PaperWardb.clients c ON sgpc.client_id = c.id
+             LEFT JOIN survey_group_project_surveys sgps ON sgp.id = sgps.survey_group_project_id
+             LEFT JOIN surveys s ON sgps.survey_id = s.survey_id
              ${where}
              GROUP BY sgp.id
              ORDER BY sgp.created_at DESC LIMIT ? OFFSET ?`,
@@ -76,7 +103,17 @@ const SurveyGroupProject = {
             [id]
         );
 
-        return { ...rows[0], clients };
+        const [surveys] = await db.execute(
+            `SELECT s.id, s.survey_id, s.project_name, s.project_country,
+             s.start_date, s.end_date, s.loi, s.ir, s.sample_size,
+             s.cpi, s.currency, s.status
+             FROM survey_group_project_surveys sgps
+             JOIN surveys s ON sgps.survey_id = s.survey_id
+             WHERE sgps.survey_group_project_id = ? AND s.deleted_at IS NULL`,
+            [id]
+        );
+
+        return { ...rows[0], clients, surveys };
     },
 
     update: async (id, data) => {

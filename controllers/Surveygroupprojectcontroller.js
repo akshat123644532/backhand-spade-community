@@ -2,7 +2,7 @@ import SurveyGroupProject from '../models/surveyGroupProjectModel.js';
 
 export const addSurveyGroupProject = async (req, res) => {
     try {
-        const { project_name, description, notes, status, client_ids } = req.body;
+        const { project_name, description, notes, status, client_ids, survey_ids } = req.body;
 
         if (!project_name) {
             return res.status(400).json({ success: false, message: "Project name is required!" });
@@ -17,6 +17,10 @@ export const addSurveyGroupProject = async (req, res) => {
         });
 
         await SurveyGroupProject.addClients(project_id, client_ids);
+
+        if (survey_ids && survey_ids.length > 0) {
+            await SurveyGroupProject.addSurveys(project_id, survey_ids);
+        }
 
         return res.status(201).json({
             success: true,
@@ -58,7 +62,7 @@ export const getSurveyGroupProjectById = async (req, res) => {
 export const updateSurveyGroupProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const { project_name, description, notes, status, client_ids } = req.body;
+        const { project_name, description, notes, status, client_ids, survey_ids } = req.body;
 
         const project = await SurveyGroupProject.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
@@ -74,6 +78,11 @@ export const updateSurveyGroupProject = async (req, res) => {
         if (client_ids && client_ids.length > 0) {
             await SurveyGroupProject.deleteClients(id);
             await SurveyGroupProject.addClients(id, client_ids);
+        }
+
+        if (survey_ids && survey_ids.length > 0) {
+            await SurveyGroupProject.deleteSurveys(id);
+            await SurveyGroupProject.addSurveys(id, survey_ids);
         }
 
         return res.status(200).json({ success: true, message: "Project updated successfully!" });
@@ -105,6 +114,43 @@ export const deleteSurveyGroupProject = async (req, res) => {
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
         await SurveyGroupProject.delete(id);
         return res.status(200).json({ success: true, message: "Project deleted successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// ─── ADD SURVEYS TO GROUP ────────────────────
+export const addSurveysToGroup = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { survey_ids } = req.body;
+
+        if (!survey_ids || !Array.isArray(survey_ids) || survey_ids.length === 0) {
+            return res.status(400).json({ success: false, message: "survey_ids array is required!" });
+        }
+
+        const project = await SurveyGroupProject.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        await SurveyGroupProject.addSurveys(id, survey_ids);
+
+        return res.status(200).json({ success: true, message: `${survey_ids.length} survey(s) added to group!` });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// ─── REMOVE SURVEY FROM GROUP ────────────────
+export const removeSurveyFromGroup = async (req, res) => {
+    try {
+        const { id, surveyId } = req.params;
+
+        const project = await SurveyGroupProject.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        await SurveyGroupProject.removeSurvey(id, surveyId);
+
+        return res.status(200).json({ success: true, message: "Survey removed from group!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

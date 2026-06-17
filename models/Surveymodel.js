@@ -1,5 +1,8 @@
 import { db } from '../config/db.js';
 
+
+
+
 const Survey = {
 
     generateSurveyId: async () => {
@@ -205,7 +208,35 @@ const Survey = {
             [allocated_size, survey_id, partner_id]
         );
         return result;
-    }
+    },
+    getRecontacts: async () => {
+
+    const [rows] = await db.execute(`
+        SELECT s.*,
+               c.name AS client_name,
+               pm.name AS project_manager_name
+        FROM surveys s
+        LEFT JOIN PaperWardb.clients c ON c.id = s.client_id
+        LEFT JOIN project_managers pm ON pm.id = s.project_manager_id
+        WHERE s.survey_type='recontact'
+        AND s.deleted_at IS NULL
+        ORDER BY s.created_at DESC
+    `);
+
+    return rows;
+},
+getRecontactsBySurvey: async (parentSurveyId) => {
+
+    const [rows] = await db.execute(`
+        SELECT *
+        FROM surveys
+        WHERE parent_survey_id = ?
+        AND deleted_at IS NULL
+    `,[parentSurveyId]);
+
+    return rows;
+},
 };
+
 
 export default Survey;

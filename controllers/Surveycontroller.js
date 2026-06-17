@@ -1,5 +1,121 @@
 import Survey from '../models/surveyModel.js';
+import SurveyGroupProject from '../models/surveyGroupProjectModel.js';   
 import { db } from '../config/db.js';
+
+export const addRecontact = async (req, res) => {
+    try {
+
+        const {
+            parent_survey_id,
+            project_name,
+            description,
+            loi,
+            ir,
+            sample_size,
+            currency,
+            start_date,
+            end_date,
+            cpi,
+            notes,
+            live_url,
+            test_url
+        } = req.body;
+
+        if (!parent_survey_id) {
+            return res.status(400).json({
+                success: false,
+                message: "parent_survey_id is required"
+            });
+        }
+
+        const parentSurvey = await Survey.getById(parent_survey_id);
+
+        if (!parentSurvey) {
+            return res.status(404).json({
+                success: false,
+                message: "Parent survey not found"
+            });
+        }
+
+        const survey_id = await Survey.generateSurveyId();
+
+        await Survey.create({
+            survey_id,
+            survey_type: "recontact",
+            parent_survey_id,
+
+            project_name,
+
+            client_id: parentSurvey.client_id,
+            project_manager_id: parentSurvey.project_manager_id,
+            project_country: parentSurvey.project_country,
+
+            description,
+            loi,
+            ir,
+            sample_size,
+            currency,
+            start_date,
+            end_date,
+            cpi,
+            notes,
+            live_url,
+            test_url,
+
+            created_by: req.user?.id || null
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "ReContact created successfully"
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+};
+export const getAllRecontacts = async (req,res)=>{
+    try{
+
+        const data = await Survey.getRecontacts();
+
+        return res.status(200).json({
+            success:true,
+            data
+        });
+
+    }catch(error){
+
+        return res.status(500).json({
+            success:false,
+            error:error.message
+        });
+    }
+};
+export const getSurveyRecontacts = async (req,res)=>{
+    try{
+
+        const { id } = req.params;
+
+        const data =
+            await Survey.getRecontactsBySurvey(id);
+
+        return res.status(200).json({
+            success:true,
+            data
+        });
+
+    }catch(error){
+
+        return res.status(500).json({
+            success:false,
+            error:error.message
+        });
+    }
+};
 
 export const addSurvey = async (req, res) => {
     try {
@@ -7,7 +123,8 @@ export const addSurvey = async (req, res) => {
             project_name, client_id, project_manager_id, project_country,
             description, sales_manager_id, sales_project_id, loi, ir, sample_size,
             currency, start_date, end_date, link_type, term_point, comp_point,
-            notes, cpi, live_url, test_url, status
+            notes, cpi, live_url, test_url, status,
+            survey_group_project_id   // 👈 ye naya field — group se aaya to id yahan aayegi
         } = req.body;
 
         if (!project_name) {
@@ -24,6 +141,11 @@ export const addSurvey = async (req, res) => {
             created_by: req.user?.id || null
         });
 
+        // 👇 agar ye survey kisi Group Project ke "+" se add hui hai, to usse link kar do
+        if (survey_group_project_id) {
+            await SurveyGroupProject.addSurveys(survey_group_project_id, [survey_id]);
+        }
+
         return res.status(201).json({
             success: true,
             message: "Survey added successfully!",
@@ -35,7 +157,6 @@ export const addSurvey = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
-
 export const getAllSurveys = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
