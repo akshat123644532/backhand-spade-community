@@ -113,3 +113,121 @@ export const deleteSurvey = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
+// ─── ELIGIBLE PARTNERS ───────────────────────────
+export const getEligiblePartners = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const survey = await Survey.getById(id);
+        if (!survey) {
+            return res.status(404).json({ success: false, message: "Survey not found!" });
+        }
+
+        const partners = await Survey.getEligiblePartners(id);
+
+        return res.status(200).json({
+            success: true,
+            message: `${partners.length} eligible partners found`,
+            filters_applied: {
+                country: survey.project_country || null,
+                sample_size: survey.sample_size || null,
+                comp_point: survey.comp_point || null,
+                term_point: survey.term_point || null,
+            },
+            data: partners
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// ─── ASSIGN PARTNERS ─────────────────────────────
+export const assignPartners = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { partner_ids } = req.body;
+
+        if (!partner_ids || !Array.isArray(partner_ids)) {
+            return res.status(400).json({ success: false, message: "partner_ids array is required!" });
+        }
+
+        const survey = await Survey.getById(id);
+        if (!survey) {
+            return res.status(404).json({ success: false, message: "Survey not found!" });
+        }
+
+        await Survey.assignPartners(survey.survey_id, partner_ids);
+
+        return res.status(200).json({
+            success: true,
+            message: `${partner_ids.length} partner(s) assigned successfully!`
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// ─── GET ASSIGNED PARTNERS ───────────────────────
+export const getAssignedPartners = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const survey = await Survey.getById(id);
+        if (!survey) {
+            return res.status(404).json({ success: false, message: "Survey not found!" });
+        }
+
+        const partners = await Survey.getAssignedPartners(survey.survey_id);
+
+        return res.status(200).json({ success: true, data: partners });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// ─── REMOVE PARTNER ──────────────────────────────
+export const removePartner = async (req, res) => {
+    try {
+        const { id, partnerId } = req.params;
+
+        const survey = await Survey.getById(id);
+        if (!survey) {
+            return res.status(404).json({ success: false, message: "Survey not found!" });
+        }
+
+        await Survey.removePartner(survey.survey_id, partnerId);
+
+        return res.status(200).json({ success: true, message: "Partner removed from survey!" });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// ─── UPDATE PARTNER ALLOCATION ───────────────────
+export const updatePartnerAllocation = async (req, res) => {
+    try {
+        const { id, partnerId } = req.params;
+        const { allocated_size } = req.body;
+
+        if (!allocated_size) {
+            return res.status(400).json({ success: false, message: "allocated_size is required!" });
+        }
+
+        const survey = await Survey.getById(id);
+        if (!survey) {
+            return res.status(404).json({ success: false, message: "Survey not found!" });
+        }
+
+        await Survey.updatePartnerAllocation(survey.survey_id, partnerId, allocated_size);
+
+        return res.status(200).json({ success: true, message: "Partner allocation updated!" });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};

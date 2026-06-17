@@ -53,16 +53,24 @@ const Survey = {
 
         const [rows] = await db.query(
             `SELECT s.id, s.survey_id, s.project_name, s.start_date, s.end_date, s.status,
+             s.loi, s.ir, s.sample_size, s.cpi, s.currency,
              c.name AS client_name, c.id AS client_code,
-             pm.name AS project_manager_name
+             pm.name AS project_manager_name,
+            GROUP_CONCAT(DISTINCT p.name SEPARATOR ', ') AS partner_names
+       
              FROM surveys s
              LEFT JOIN PaperWardb.clients c ON s.client_id = c.id
              LEFT JOIN project_managers pm ON s.project_manager_id = pm.id
-             ${where} ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+             LEFT JOIN survey_partners spp ON s.survey_id = spp.survey_id
+             LEFT JOIN partners p ON spp.partner_id = p.id
+             ${where}
+             GROUP BY s.id
+             ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
+
         const [countResult] = await db.query(
-            `SELECT COUNT(*) as total FROM surveys s
+            `SELECT COUNT(DISTINCT s.id) as total FROM surveys s
              LEFT JOIN PaperWardb.clients c ON s.client_id = c.id
              ${where}`, params
         );
@@ -101,6 +109,100 @@ const Survey = {
     delete: async (id) => {
         const [result] = await db.execute(
             `UPDATE surveys SET deleted_at = NOW() WHERE id = ?`, [id]
+        );
+        return result;
+    },
+
+    getEligiblePartners: async (surveyId) => {
+        const [surveyRows] = await db.execute(
+            `SELECT project_country, sample_size, loi, ir, currency, start_date, end_date, comp_point, term_point
+             FROM surveys WHERE id = ? AND deleted_at IS NULL`,
+            [surveyId]
+        );
+        if (!surveyRows.length) return [];
+
+        const survey = surveyRows[0];
+        const params = [];
+        let where = `WHERE p.status = 'active' AND p.deleted_at IS NULL`;
+
+        if (survey.project_country) {
+            where += ` AND p.country = ?`;
+            params.push(survey.project_country);
+        }
+        if (survey.sample_size) {
+            where += ` AND (p.panel_size IS NULL OR CAST(p.panel_size AS UNSIGNED) >= ?)`;
+            params.push(survey.sample_size);
+        }
+        if (survey.comp_point) {
+            where += ` AND (p.complete_val IS NULL OR CAST(p.complete_val AS UNSIGNED) = ?)`;
+            params.push(survey.comp_point);
+        }
+        if (survey.term_point) {
+            where += ` AND (p.terminate_val IS NULL OR CAST(p.terminate_val AS UNSIGNED) = ?)`;
+            params.push(survey.term_point);
+        }
+        if (survey.start_date && survey.end_date) {
+            where += `
+                AND p.id NOT IN (
+                    SELECT sp2.partner_id
+                    FROM survey_partners sp2
+                    JOIN surveys s2 ON sp2.survey_id = s2.survey_id
+                    WHERE sp2.status = 'active'
+                      AND s2.deleted_at IS NULL
+                      AND s2.id != ?
+                      AND s2.start_date <= ? AND s2.end_date >= ?
+                )
+            `;
+            params.push(surveyId, survey.end_date, survey.start_date);
+        }
+
+        const [partners] = await db.query(
+            `SELECT p.id, p.code, p.name, p.email, p.country,
+                p.panel_size, p.complete_val, p.terminate_val,
+                p.over_quota_val, p.quality_term_val, p.survey_close_val,
+                p.website_url, p.status
+             FROM partners p
+             ${where}
+             ORDER BY CAST(p.panel_size AS UNSIGNED) DESC`,
+            params
+        );
+        return partners;
+    },
+
+    assignPartners: async (survey_id, partnerIds = []) => {
+        await db.execute(`DELETE FROM survey_partners WHERE survey_id = ?`, [survey_id]);
+        if (!partnerIds.length) return;
+        const values = partnerIds.map(pid => [survey_id, pid]);
+        await db.query(`INSERT INTO survey_partners (survey_id, partner_id) VALUES ?`, [values]);
+    },
+
+    getAssignedPartners: async (survey_id) => {
+        const [rows] = await db.execute(
+            `SELECT p.id, p.code, p.name, p.email, p.country,
+                p.panel_size, p.website_url, p.status,
+                sp.allocated_size, sp.status AS assignment_status,
+                sp.created_at AS assigned_at
+             FROM survey_partners sp
+             JOIN partners p ON sp.partner_id = p.id
+             WHERE sp.survey_id = ? AND p.deleted_at IS NULL
+             ORDER BY sp.created_at ASC`,
+            [survey_id]
+        );
+        return rows;
+    },
+
+    removePartner: async (survey_id, partner_id) => {
+        const [result] = await db.execute(
+            `DELETE FROM survey_partners WHERE survey_id = ? AND partner_id = ?`,
+            [survey_id, partner_id]
+        );
+        return result;
+    },
+
+    updatePartnerAllocation: async (survey_id, partner_id, allocated_size) => {
+        const [result] = await db.execute(
+            `UPDATE survey_partners SET allocated_size = ? WHERE survey_id = ? AND partner_id = ?`,
+            [allocated_size, survey_id, partner_id]
         );
         return result;
     }
