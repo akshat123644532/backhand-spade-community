@@ -15,6 +15,9 @@ import prescreenSurveyRoutes from './routes/prescreenSurveyRoutes.js';
 import surveyRoutes from './routes/surveyRoutes.js';
 import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
 import salesLogRoutes from './routes/salesLogRoutes.js';
+import surveyPageRoutes from './routes/surveyPageRoutes.js';
+
+
 
 const app = express();
 
@@ -39,7 +42,7 @@ app.use('/api/prescreen-survey', prescreenSurveyRoutes);
 app.use('/api/survey', surveyRoutes);
 app.use('/api/sales/log', salesLogRoutes);
 app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
-
+app.use('/api/survey-pages', surveyPageRoutes);  
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
