@@ -1,5 +1,5 @@
 import Survey from '../models/surveyModel.js';
-import SurveyGroupProject from '../models/surveyGroupProjectModel.js';   
+import SurveyGroupProject from '../models/surveyGroupProjectModel.js';
 import { db } from '../config/db.js';
 
 export const addRecontact = async (req, res) => {
@@ -77,26 +77,28 @@ export const addRecontact = async (req, res) => {
         });
     }
 };
-export const getAllRecontacts = async (req,res)=>{
-    try{
+
+export const getAllRecontacts = async (req, res) => {
+    try {
 
         const data = await Survey.getRecontacts();
 
         return res.status(200).json({
-            success:true,
+            success: true,
             data
         });
 
-    }catch(error){
+    } catch (error) {
 
         return res.status(500).json({
-            success:false,
-            error:error.message
+            success: false,
+            error: error.message
         });
     }
 };
-export const getSurveyRecontacts = async (req,res)=>{
-    try{
+
+export const getSurveyRecontacts = async (req, res) => {
+    try {
 
         const { id } = req.params;
 
@@ -104,27 +106,27 @@ export const getSurveyRecontacts = async (req,res)=>{
             await Survey.getRecontactsBySurvey(id);
 
         return res.status(200).json({
-            success:true,
+            success: true,
             data
         });
 
-    }catch(error){
+    } catch (error) {
 
         return res.status(500).json({
-            success:false,
-            error:error.message
+            success: false,
+            error: error.message
         });
     }
 };
 
 export const addSurvey = async (req, res) => {
     try {
+        const { groupId } = req.params;
         const {
             project_name, client_id, project_manager_id, project_country,
             description, sales_manager_id, sales_project_id, loi, ir, sample_size,
             currency, start_date, end_date, link_type, term_point, comp_point,
-            notes, cpi, live_url, test_url, status,
-            survey_group_project_id   // 👈 ye naya field — group se aaya to id yahan aayegi
+            notes, cpi, live_url, test_url, status
         } = req.body;
 
         if (!project_name) {
@@ -141,9 +143,8 @@ export const addSurvey = async (req, res) => {
             created_by: req.user?.id || null
         });
 
-        // 👇 agar ye survey kisi Group Project ke "+" se add hui hai, to usse link kar do
-        if (survey_group_project_id) {
-            await SurveyGroupProject.addSurveys(survey_group_project_id, [survey_id]);
+        if (groupId) {
+            await SurveyGroupProject.addSurveys(groupId, [survey_id]);
         }
 
         return res.status(201).json({
@@ -157,6 +158,7 @@ export const addSurvey = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
 export const getAllSurveys = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;

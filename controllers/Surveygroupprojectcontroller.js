@@ -22,10 +22,12 @@ export const addSurveyGroupProject = async (req, res) => {
             await SurveyGroupProject.addSurveys(project_id, survey_ids);
         }
 
+        const fullProject = await SurveyGroupProject.getById(project_id);
+
         return res.status(201).json({
             success: true,
             message: "Survey group project added successfully!",
-            data: { id: project_id, project_name }
+            data: fullProject
         });
 
     } catch (error) {
@@ -119,7 +121,6 @@ export const deleteSurveyGroupProject = async (req, res) => {
     }
 };
 
-// ─── ADD SURVEYS TO GROUP ────────────────────
 export const addSurveysToGroup = async (req, res) => {
     try {
         const { id } = req.params;
@@ -140,7 +141,6 @@ export const addSurveysToGroup = async (req, res) => {
     }
 };
 
-// ─── REMOVE SURVEY FROM GROUP ────────────────
 export const removeSurveyFromGroup = async (req, res) => {
     try {
         const { id, surveyId } = req.params;
