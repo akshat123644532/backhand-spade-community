@@ -2,14 +2,14 @@ import Client from '../models/clientModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 
 export const addClient = async (req, res) => {
-    const { name, email, country, contact_no, website_url, api_base_url, api_secret_key, api_body } = req.body;
+    const { name, email, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status } = req.body;
     const adminId = req.user ? req.user.id : null;
     try {
         if (!name || !email) return res.status(400).json({ success: false, message: "Name and email are required" });
         const existingClient = await Client.findByEmail(email);
         if (existingClient) return res.status(400).json({ success: false, message: "Client email already registered!" });
 
-        await Client.create({ name, email, country, contact_no, admin_id: adminId, website_url, api_base_url, api_secret_key, api_body });
+        await Client.create({ name, email, country, contact_no, admin_id: adminId, website_url, api_base_url, api_secret_key, api_body, status });
 
         await logActivity({ admin_id: adminId, action: 'ADD', module: 'Client', description: `Client "${name}" added`, ip_address: req.ip });
 
@@ -46,8 +46,12 @@ export const getClientById = async (req, res) => {
 export const updateClient = async (req, res) => {
     const { id } = req.params;
     try {
-        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body } = req.body;
-        await Client.update(id, { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body });
+        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status } = req.body;
+
+        const updateData = { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status };
+        Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
+
+        await Client.update(id, updateData);
 
         await logActivity({ admin_id: req.user?.id, action: 'UPDATE', module: 'Client', description: `Client ID ${id} updated`, ip_address: req.ip });
 
