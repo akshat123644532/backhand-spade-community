@@ -19,6 +19,7 @@ import salesLogRoutes from './routes/salesLogRoutes.js';
 import surveyPageRoutes from './routes/surveyPageRoutes.js';
 import activityLogRoutes from './routes/activityLogRoutes.js';
 import emailTemplateRoutes from './routes/emailTemplateRoutes.js';
+import invoiceSettingsRoutes from './routes/invoiceSettingsRoutes.js';
 
 const app = express();
 
@@ -46,7 +47,7 @@ app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
 app.use('/api/survey-pages', surveyPageRoutes);
 app.use('/api/activity', activityLogRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
-
+app.use('/api/invoice/settings', invoiceSettingsRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
