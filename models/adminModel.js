@@ -67,6 +67,22 @@ const Admin = {
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
     },
+   
+
+getByIdWithPassword: async (id) => {
+    const [rows] = await db.execute(
+        `SELECT id, name, email, password FROM admins WHERE id = ?`,
+        [id]
+    );
+    return rows[0];
+},
+getByIdWithPassword: async (id) => {
+    const [rows] = await db.execute(
+        `SELECT id, name, email, password FROM admins WHERE id = ?`,
+        [id]
+    );
+    return rows[0];
+},
 
     getById: async (id) => {
         const [rows] = await db.execute(

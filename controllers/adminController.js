@@ -239,3 +239,52 @@ export const getAdminById = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
+
+
+export const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+        const adminId = req.user?.id;
+
+        if (!adminId) {
+            return res.status(401).json({ success: false, message: "Unauthorized!" });
+        }
+
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            return res.status(400).json({ success: false, message: "All fields are required!" });
+        }
+
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ success: false, message: "New password and confirm password do not match!" });
+        }
+
+        const admin = await Admin.getByIdWithPassword(adminId);
+        if (!admin) {
+            return res.status(404).json({ success: false, message: "Admin not found!" });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, admin.password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: "Current password is incorrect!" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        await Admin.updatePassword(admin.email, hashedPassword);
+
+        await logActivity({
+            admin_id: adminId,
+            action: 'CHANGE_PASSWORD',
+            module: 'Auth',
+            description: `${admin.name} changed their password`,
+            ip_address: req.ip
+        });
+
+        return res.status(200).json({ success: true, message: "Password updated successfully!" });
+
+    } catch (error) {
+        console.error("CHANGE PASSWORD ERROR:", error);
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};

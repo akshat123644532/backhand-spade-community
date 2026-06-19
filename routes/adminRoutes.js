@@ -1,4 +1,5 @@
 import express from 'express';
+import { changePassword } from '../controllers/adminController.js';
 const router = express.Router();
 import {
     loginAdmin,
@@ -31,4 +32,5 @@ router.post('/reset-password', resetPassword);
 router.get('/all', verifyToken, getAllAdmins);
 router.get('/:id', verifyToken, getAdminById);
 
+router.put('/change-password', verifyToken, changePassword);
 export default router;
