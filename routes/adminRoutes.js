@@ -1,6 +1,4 @@
 import express from 'express';
-import { changePassword } from '../controllers/adminController.js';
-const router = express.Router();
 import {
     loginAdmin,
     signupAdmin,
@@ -12,25 +10,43 @@ import {
     resetPassword,
     getAllAdmins,
     getAdminById,
-    getSelf
+    getSelf,
+    changePassword
 } from '../controllers/adminController.js';
 import verifyToken from '../middleware/authMiddleware.js';
-import upload from '../middleware/uploadMiddleware.js'; 
+import upload from '../middleware/uploadMiddleware.js';
+import {
+    validateLogin,
+    validateSignup,
+    validateSearchEmail,
+    validateUpdateAdmin,
+    validateAdminId,
+    validateForgotPassword,
+    validateVerifyOTP,
+    validateResetPassword,
+    validateGetAllAdmins,
+    validateChangePassword
+} from '../validations/adminValidations.js';
+
+const router = express.Router();
+
 router.get('/me', verifyToken, getSelf);
-router.post('/signup', upload.single('image'), signupAdmin);
-router.post('/add-user', upload.single('image'), signupAdmin);
-router.post('/login', loginAdmin);
-router.post('/searchemail', searchEmail);
 
-router.put('/updateadmin/:id', verifyToken, updateAdmin);
-router.delete('/delete/:id', verifyToken, deleteAdmin);
+router.post('/signup', upload.single('image'), validateSignup, signupAdmin);
+router.post('/add-user', upload.single('image'), validateSignup, signupAdmin);
+router.post('/login', validateLogin, loginAdmin);
+router.post('/searchemail', validateSearchEmail, searchEmail);
 
-router.post('/forgot-password', forgotPassword);
-router.post('/verify-otp', verifyOTP);
-router.post('/reset-password', resetPassword);
+router.put('/updateadmin/:id', verifyToken, validateUpdateAdmin, updateAdmin);
+router.delete('/delete/:id', verifyToken, validateAdminId, deleteAdmin);
 
-router.get('/all', verifyToken, getAllAdmins);
-router.get('/:id', verifyToken, getAdminById);
+router.post('/forgot-password', validateForgotPassword, forgotPassword);
+router.post('/verify-otp', validateVerifyOTP, verifyOTP);
+router.post('/reset-password', validateResetPassword, resetPassword);
 
-router.put('/change-password', verifyToken, changePassword);
+router.get('/all', verifyToken, validateGetAllAdmins, getAllAdmins);
+router.get('/:id', verifyToken, validateAdminId, getAdminById);
+
+router.put('/change-password', verifyToken, validateChangePassword, changePassword);
+
 export default router;
