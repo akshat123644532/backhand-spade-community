@@ -4,16 +4,21 @@ import {
     getAllEmailTemplates,
     getEmailTemplateById,
     updateEmailTemplate,
-    updateEmailTemplateStatus,  
-    deleteEmailTemplate         
+    updateEmailTemplateStatus,
+    deleteEmailTemplate
 } from '../controllers/emailTemplateController.js';
+import {
+    validateEmailTemplateId,
+    validateUpdateEmailTemplate,
+    validateUpdateEmailTemplateStatus
+} from '../validations/emailTemplateValidations.js';
 
 const router = express.Router();
 
-router.get('/list',           verifyToken, getAllEmailTemplates);
-router.get('/:id',            verifyToken, getEmailTemplateById);
-router.put('/:id',            verifyToken, updateEmailTemplate);
-router.patch('/:id/status',   verifyToken, updateEmailTemplateStatus); 
-router.delete('/:id',         verifyToken, deleteEmailTemplate);        
+router.get('/list',         verifyToken, getAllEmailTemplates);
+router.get('/:id',          verifyToken, validateEmailTemplateId,             getEmailTemplateById);
+router.put('/:id',          verifyToken, validateUpdateEmailTemplate,          updateEmailTemplate);
+router.patch('/:id/status', verifyToken, validateUpdateEmailTemplateStatus,    updateEmailTemplateStatus);
+router.delete('/:id',       verifyToken, validateEmailTemplateId,             deleteEmailTemplate);
 
 export default router;
