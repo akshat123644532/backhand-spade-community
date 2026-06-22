@@ -4,7 +4,7 @@ const EmailTemplate = {
 
     getAll: async () => {
         const [rows] = await db.execute(
-            `SELECT id, title, slug FROM email_templates ORDER BY id ASC`
+            `SELECT id, title, slug, status FROM email_templates ORDER BY id ASC`
         );
         return rows;
     },
@@ -28,6 +28,23 @@ const EmailTemplate = {
         const [result] = await db.execute(
             `UPDATE email_templates SET ${fields}, updated_at = NOW() WHERE id = ?`,
             [...Object.values(data), id]
+        );
+        return result;
+    },
+
+    // ── NEW: Update only status ──────────────────────────────────
+    updateStatus: async (id, status) => {
+        const [result] = await db.execute(
+            `UPDATE email_templates SET status = ?, updated_at = NOW() WHERE id = ?`,
+            [status, id]
+        );
+        return result;
+    },
+
+    // ── NEW: Soft delete (sets deleted_at) ──────────────────────
+    delete: async (id) => {
+        const [result] = await db.execute(
+            `DELETE FROM email_templates WHERE id = ?`, [id]
         );
         return result;
     }
