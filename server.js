@@ -45,7 +45,9 @@ app.use((req, res, next) => {
         express.urlencoded({ limit: "10mb", extended: true })(req, res, next);
     });
 });
-
+app.get('/health', (req, res) => {
+    res.status(200).json({ success: true, message: "Server is running!" });
+});
 app.use('/api/admin', adminRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/partner', partnerRoutes);
