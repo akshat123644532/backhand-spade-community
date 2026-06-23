@@ -5,7 +5,7 @@ const verifyToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ success: false, message: "Access Denied: Token nahi mila!" });
+        return res.status(401).json({ success: false, message: "Access Denied: Token not found!" });
     }
 
     try {
