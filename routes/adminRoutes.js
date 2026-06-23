@@ -13,8 +13,9 @@ import {
     getSelf,
     changePassword
 } from '../controllers/adminController.js';
-import verifyToken from '../middleware/authMiddleware.js';
-import upload from '../middleware/uploadMiddleware.js';
+import verifyToken from '../Middleware/authMIddleware.js';
+import upload from '../Middleware/uploadMiddleware.js';
+import { validateImageFile } from '../Middleware/imageValidationMiddleware.js';
 import {
     validateLogin,
     validateSignup,
@@ -32,12 +33,12 @@ const router = express.Router();
 
 router.get('/me', verifyToken, getSelf);
 
-router.post('/signup', upload.single('image'), validateSignup, signupAdmin);
-router.post('/add-user', upload.single('image'), validateSignup, signupAdmin);
+router.post('/signup',   upload.single('image'), validateImageFile, validateSignup, signupAdmin);
+router.post('/add-user', upload.single('image'), validateImageFile, validateSignup, signupAdmin);
 router.post('/login', validateLogin, loginAdmin);
 router.post('/searchemail', validateSearchEmail, searchEmail);
 
-router.put('/updateadmin/:id', verifyToken, validateUpdateAdmin, updateAdmin);
+router.put('/updateadmin/:id', verifyToken, upload.single('image'), validateImageFile, validateUpdateAdmin, updateAdmin);
 router.delete('/delete/:id', verifyToken, validateAdminId, deleteAdmin);
 
 router.post('/forgot-password', validateForgotPassword, forgotPassword);
