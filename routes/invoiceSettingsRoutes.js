@@ -1,6 +1,6 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
-import upload from '../Middleware/uploadMiddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
+import upload from '../middleware/uploadMiddleware.js';
 import {
     getInvoiceSettings,
     updateInvoiceSettings

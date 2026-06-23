@@ -1,9 +1,9 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
-import upload from '../Middleware/uploadMiddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
+import upload from '../middleware/uploadMiddleware.js';
 import { addSalesManager, getAllSalesManagers, getSalesManagerById, updateSalesManager, toggleStatus, deleteSalesManager } from '../controllers/salesManagerController.js';
 import { validateAddSalesManager, validateUpdateSalesManager, validateSalesManagerId, validateToggleStatus, validateGetAllSalesManagers } from '../validations/salesManagerValidations.js';
-import { validateImageFile } from '../Middleware/imageValidationMiddleware.js';
+import { validateImageFile } from '../middleware/imageValidationMiddleware.js';
 
 const router = express.Router();
 

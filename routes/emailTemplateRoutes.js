@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import {
     getAllEmailTemplates,
     getEmailTemplateById,

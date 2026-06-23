@@ -13,9 +13,9 @@ import {
     getSelf,
     changePassword
 } from '../controllers/adminController.js';
-import verifyToken from '../Middleware/authMIddleware.js';
-import upload from '../Middleware/uploadMiddleware.js';
-import { validateImageFile } from '../Middleware/imageValidationMiddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
+import upload from '../middleware/uploadMiddleware.js';
+import { validateImageFile } from '../middleware/imageValidationMiddleware.js';
 import {
     validateLogin,
     validateSignup,

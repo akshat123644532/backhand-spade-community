@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import { addPrescreenSurvey, getAllPrescreenSurveys, getPrescreenSurveyById, updatePrescreenSurvey, toggleStatus, deletePrescreenSurvey } from '../controllers/prescreenSurveyController.js';
 import { validateAddPrescreenSurvey, validateUpdatePrescreenSurvey, validatePrescreenSurveyId, validateToggleStatus, validateGetAllPrescreenSurveys } from '../validations/prescreenSurveyValidations.js';
 

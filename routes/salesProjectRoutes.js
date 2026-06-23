@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import { addSalesProject, getAllSalesProjects, getSalesProjectById, updateSalesProject, deleteSalesProject } from '../controllers/salesProjectController.js';
 import { validateAddSalesProject, validateUpdateSalesProject, validateSalesProjectId, validateGetAllSalesProjects } from '../validations/salesProjectValidations.js';
 

@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import { addSurvey, getAllSurveys, getSurveyById, updateSurvey, deleteSurvey, searchSurveys, getEligiblePartners, assignPartners, getAssignedPartners, removePartner, updatePartnerAllocation, addRecontact, getAllRecontacts, getSurveyRecontacts } from '../controllers/surveyController.js';
 import { validateAddSurvey, validateUpdateSurvey, validateSurveyId, validateGetAllSurveys, validateSearchSurveys, validateAssignPartners, validatePartnerAllocation, validateAddRecontact } from '../validations/surveyValidations.js';
 

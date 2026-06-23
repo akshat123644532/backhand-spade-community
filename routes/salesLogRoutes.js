@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import { addSalesLog, getSalesLogs, getSalesLogById, updateSalesLog, deleteSalesLog } from '../controllers/salesLogController.js';
 import { validateAddSalesLog, validateUpdateSalesLog, validateSalesLogId } from '../validations/salesLogValidations.js';
 

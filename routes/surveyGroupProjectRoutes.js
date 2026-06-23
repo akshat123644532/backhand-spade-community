@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import { addSurveyGroupProject, getAllSurveyGroupProjects, getSurveyGroupProjectById, updateSurveyGroupProject, toggleStatus, deleteSurveyGroupProject, addSurveysToGroup, removeSurveyFromGroup } from '../controllers/surveyGroupProjectController.js';
 import { validateAddSurveyGroupProject, validateUpdateSurveyGroupProject, validateSurveyGroupProjectId, validateToggleStatus, validateGetAllSurveyGroupProjects, validateAddSurveysToGroup, validateRemoveSurveyFromGroup } from '../validations/surveyGroupProjectValidations.js';
 

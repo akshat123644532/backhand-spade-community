@@ -1,9 +1,9 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
-import upload from '../Middleware/uploadMiddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
+import upload from '../middleware/uploadMiddleware.js';
 import { addProjectManager, getAllProjectManagers, getProjectManagerById, updateProjectManager, toggleStatus, deleteProjectManager } from '../controllers/projectManagerController.js';
 import { validateAddProjectManager, validateUpdateProjectManager, validateProjectManagerId, validateToggleStatus, validateGetAllProjectManagers } from '../validations/projectManagerValidations.js';
-import { validateImageFile } from '../Middleware/imageValidationMiddleware.js';
+import { validateImageFile } from '../middleware/imageValidationMiddleware.js';
 
 const router = express.Router();
 

@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import { getSurveyPage, updateSurveyPage } from '../controllers/surveyPageController.js';
 import { validateSurveyPageId, validateUpdateSurveyPage } from '../validations/surveyPageValidations.js';
 
