@@ -1,6 +1,6 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
-import { addPartner, getAllPartners, getPartnerById, updatePartner, deletePartner } from '../controllers/Partnercontrollers.js';
+import { addPartner, getAllPartners, getPartnerById, updatePartner, deletePartner } from '../controllers/partnerController.js';
 
 const router = express.Router();
 
