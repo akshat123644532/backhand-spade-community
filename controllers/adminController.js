@@ -122,7 +122,25 @@ export const signupAdmin = async (req, res) => {
             ip_address: req.ip
         });
 
-        return res.status(201).json({ success: true, message: "Admin added successfully!", data: { name, email, contact_no, permissions: permissionsEncrypted, image_url: resolveImageUrl(final_image_url, req) } });
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        let responseImageUrl = null;
+        if (final_image_url) {
+            if (typeof final_image_url === 'string' && final_image_url.startsWith('/uploads/')) {
+                responseImageUrl = `${baseUrl}${final_image_url}`;
+            } else {
+                const imageBuffer = Buffer.isBuffer(final_image_url)
+                    ? final_image_url
+                    : (final_image_url?.type === 'Buffer' ? Buffer.from(final_image_url.data) : null);
+                if (imageBuffer) {
+                    const storedPath = imageBuffer.toString('utf8');
+                    responseImageUrl = storedPath.startsWith('/uploads/')
+                        ? `${baseUrl}${storedPath}`
+                        : imageBuffer.toString('base64');
+                }
+            }
+        }
+
+        return res.status(201).json({ success: true, message: "Admin added successfully!", data: { name, email, contact_no, permissions: permissionsEncrypted, image_url: responseImageUrl } });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
     }
