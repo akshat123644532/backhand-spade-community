@@ -63,6 +63,8 @@ const Admin = {
         const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM admins ${where}`, params);
         
+
+        
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
