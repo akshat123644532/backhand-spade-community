@@ -1,22 +1,17 @@
 import express from 'express';
 import verifyToken from '../Middleware/authMIddleware.js';
 import upload from '../Middleware/uploadMiddleware.js';
-import {
-    addProjectManager,
-    getAllProjectManagers,
-    getProjectManagerById,
-    updateProjectManager,
-    toggleStatus,
-    deleteProjectManager
-} from '../controllers/projectManagerController.js';
+import { addProjectManager, getAllProjectManagers, getProjectManagerById, updateProjectManager, toggleStatus, deleteProjectManager } from '../controllers/projectManagerController.js';
+import { validateAddProjectManager, validateUpdateProjectManager, validateProjectManagerId, validateToggleStatus, validateGetAllProjectManagers } from '../validations/projectManagerValidations.js';
+import { validateImageFile } from '../Middleware/imageValidationMiddleware.js';
 
 const router = express.Router();
 
-router.post('/add', verifyToken, upload.single('profile_image'), addProjectManager);
-router.get('/list', verifyToken, getAllProjectManagers);
-router.get('/:id', verifyToken, getProjectManagerById);
-router.put('/:id', verifyToken, upload.single('profile_image'), updateProjectManager);
-router.patch('/:id/status', verifyToken, toggleStatus);
-router.delete('/:id', verifyToken, deleteProjectManager);
+router.post('/add',         verifyToken, upload.single('profile_image'), validateImageFile, validateAddProjectManager,    addProjectManager);
+router.get('/list',         verifyToken, validateGetAllProjectManagers,                                                   getAllProjectManagers);
+router.get('/:id',          verifyToken, validateProjectManagerId,                                                        getProjectManagerById);
+router.put('/:id',          verifyToken, upload.single('profile_image'), validateImageFile, validateUpdateProjectManager, updateProjectManager);
+router.patch('/:id/status', verifyToken, validateToggleStatus,                                                            toggleStatus);
+router.delete('/:id',       verifyToken, validateProjectManagerId,                                                        deleteProjectManager);
 
 export default router;
