@@ -5,6 +5,38 @@ import nodemailer from 'nodemailer';
 import { db } from '../config/db.js';
 import OTP from '../models/otpModel.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { IMAGE_STORAGE_MODE } from '../middleware/uploadMiddleware.js';
+
+const resolveImageUrl = (imageUrl, req) => {
+    if (!imageUrl) return null;
+
+    if (typeof imageUrl === 'string') {
+        if (imageUrl.startsWith('/uploads/')) {
+            return `${req.protocol}://${req.get('host')}${imageUrl}`;
+        }
+        return imageUrl;
+    }
+
+    if (Buffer.isBuffer(imageUrl)) {
+        const storedPath = imageUrl.toString('utf8');
+        if (storedPath.startsWith('/uploads/')) {
+            return `${req.protocol}://${req.get('host')}${storedPath}`;
+        }
+        return imageUrl.toString('base64');
+    }
+
+    return null;
+};
+
+const buildSignupImageUrl = (req) => {
+    if (!req.file) return req.body.image_url || null;
+
+    if (IMAGE_STORAGE_MODE === 'blob') {
+        return req.file.buffer;
+    }
+
+    return Buffer.from(`/uploads/${req.file.filename}`, 'utf8');
+};
 
 export const getSelf = async (req, res) => {
     try {
@@ -70,7 +102,7 @@ export const signupAdmin = async (req, res) => {
         const existingAdmin = await Admin.findByEmail(email);
         if (existingAdmin) return res.status(400).json({ success: false, message: "Email already registered!" });
 
-        const final_image_url = req.file ? `/uploads/${req.file.filename}` : (req.body.image_url || null);
+        const final_image_url = buildSignupImageUrl(req);
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -90,8 +122,7 @@ export const signupAdmin = async (req, res) => {
             ip_address: req.ip
         });
 
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        return res.status(201).json({ success: true, message: "Admin added successfully!", data: { name, email, contact_no, permissions: permissionsEncrypted, image_url: final_image_url ? `${baseUrl}${final_image_url}` : null } });
+        return res.status(201).json({ success: true, message: "Admin added successfully!", data: { name, email, contact_no, permissions: permissionsEncrypted, image_url: resolveImageUrl(final_image_url, req) } });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
     }
