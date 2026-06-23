@@ -26,7 +26,7 @@ export const validateSignup = [
     body('password').notEmpty().withMessage('Password is required').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('name').optional().isLength({ max: 100 }).withMessage('Name too long'),
     body('contact_no').optional().isMobilePhone().withMessage('Invalid contact number'),
-    body('permission_type').optional().isIn(['admin', 'superadmin', 'moderator']).withMessage('Invalid permission type'),
+    body('permission_type').optional().isIn(['user', 'admin', 'superadmin', 'moderator']).withMessage('Invalid permission type'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
     validate
 ];
@@ -39,7 +39,7 @@ export const validateSearchEmail = [
 export const validateUpdateAdmin = [
     param('id').isInt({ min: 1 }).withMessage('Invalid admin ID'),
     body('name').optional().isLength({ max: 100 }).withMessage('Name too long'),
-    body('permission_type').optional().isIn(['admin', 'superadmin', 'moderator']).withMessage('Invalid permission type'),
+    body('permission_type').optional().isIn(['user', 'admin', 'superadmin', 'moderator']).withMessage('Invalid permission type'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
     validate
 ];
