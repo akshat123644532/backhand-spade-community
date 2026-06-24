@@ -2,26 +2,28 @@ import Prescreen from '../models/prescreenModel.js';
 
 export const addPrescreen = async (req, res) => {
     try {
-        const { language, question_title, options, right_answer, status } = req.body;
+        const { language, question_title, question_type, options, right_answer, status, sort_order } = req.body;
 
         if (!language || !question_title) {
             return res.status(400).json({ success: false, message: "Language and question title are required!" });
         }
-        if (!options || options.length === 0) {
-            return res.status(400).json({ success: false, message: "At least one option is required!" });
+        if (!question_type) {
+            return res.status(400).json({ success: false, message: "Question type is required!" });
         }
 
-        const prescreen_id = await Prescreen.create({ language, question_title, right_answer, status });
-        await Prescreen.addOptions(prescreen_id, options);
+        const prescreen_id = await Prescreen.create({ language, question_title, question_type, right_answer, status, sort_order });
+
+        if (options && options.length > 0) {
+            await Prescreen.addOptions(prescreen_id, options);
+        }
 
         return res.status(201).json({
             success: true,
             message: "Prescreen added successfully!",
-            data: { id: prescreen_id, question_title, language }
+            data: { id: prescreen_id, question_title, language, question_type }
         });
 
     } catch (error) {
-        console.error("ADD PRESCREEN ERROR:", error);
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
@@ -65,7 +67,7 @@ export const getByLanguage = async (req, res) => {
 export const updatePrescreen = async (req, res) => {
     try {
         const { id } = req.params;
-        const { language, question_title, options, right_answer, status } = req.body;
+        const { language, question_title, question_type, options, right_answer, status, sort_order } = req.body;
 
         const prescreen = await Prescreen.getById(id);
         if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
@@ -73,8 +75,10 @@ export const updatePrescreen = async (req, res) => {
         const updateData = {};
         if (language) updateData.language = language;
         if (question_title) updateData.question_title = question_title;
+        if (question_type) updateData.question_type = question_type;
         if (right_answer) updateData.right_answer = right_answer;
         if (status) updateData.status = status;
+        if (sort_order !== undefined) updateData.sort_order = sort_order;
 
         if (Object.keys(updateData).length > 0) await Prescreen.update(id, updateData);
 
@@ -84,6 +88,19 @@ export const updatePrescreen = async (req, res) => {
         }
 
         return res.status(200).json({ success: true, message: "Prescreen updated successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const updateSortOrder = async (req, res) => {
+    try {
+        const { items } = req.body;
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: "Items array is required!" });
+        }
+        await Prescreen.updateSortOrder(items);
+        return res.status(200).json({ success: true, message: "Sort order updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

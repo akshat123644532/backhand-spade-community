@@ -3,10 +3,10 @@ import { db } from '../config/db.js';
 const Prescreen = {
 
     create: async (data) => {
-        const { language, question_title, right_answer, status } = data;
+        const { language, question_title, question_type, right_answer, status, sort_order } = data;
         const [result] = await db.execute(
-            `INSERT INTO prescreens (language, question_title, right_answer, status) VALUES (?, ?, ?, ?)`,
-            [language, question_title, right_answer || null, status || 'active']
+            `INSERT INTO prescreens (language, question_title, question_type, right_answer, status, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
+            [language, question_title, question_type || 'textbox', right_answer || null, status || 'active', sort_order ?? 0]
         );
         return result.insertId;
     },
@@ -45,7 +45,8 @@ const Prescreen = {
         }
 
         const [rows] = await db.query(
-            `SELECT id, language, question_title, right_answer, status, created_at FROM prescreens ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT id, language, question_title, question_type, sort_order, right_answer, status, created_at 
+             FROM prescreens ${where} ORDER BY sort_order ASC, created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM prescreens ${where}`, params);
@@ -69,12 +70,13 @@ const Prescreen = {
 
     getByLanguage: async (language) => {
         const [rows] = await db.execute(
-            `SELECT p.id, p.question_title, p.right_answer,
+            `SELECT p.id, p.question_title, p.question_type, p.sort_order, p.right_answer,
              JSON_ARRAYAGG(po.option_text) as options
              FROM prescreens p
              LEFT JOIN prescreen_options po ON p.id = po.prescreen_id
              WHERE p.language = ? AND p.deleted_at IS NULL AND p.status = 'active'
-             GROUP BY p.id`,
+             GROUP BY p.id
+             ORDER BY p.sort_order ASC`,
             [language]
         );
         return rows;
@@ -95,6 +97,15 @@ const Prescreen = {
             [status, id]
         );
         return result;
+    },
+
+    updateSortOrder: async (items) => {
+        for (const item of items) {
+            await db.execute(
+                `UPDATE prescreens SET sort_order = ?, updated_at = NOW() WHERE id = ?`,
+                [item.sort_order, item.id]
+            );
+        }
     },
 
     delete: async (id) => {
