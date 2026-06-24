@@ -1,7 +1,9 @@
 import multer from 'multer';
 import path from 'path';
 
-export const IMAGE_STORAGE_MODE = process.env.IMAGE_STORAGE === 'blob' ? 'blob' : 'path';
+const getImageStorageMode = () => (process.env.IMAGE_STORAGE === 'blob' ? 'blob' : 'path');
+
+export const IMAGE_STORAGE_MODE = getImageStorageMode();
 
 const diskStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -13,7 +15,7 @@ const diskStorage = multer.diskStorage({
     }
 });
 
-const storage = IMAGE_STORAGE_MODE === 'blob'
+const storage = getImageStorageMode() === 'blob'
     ? multer.memoryStorage()
     : diskStorage;
 

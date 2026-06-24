@@ -5,7 +5,15 @@ import nodemailer from 'nodemailer';
 import { db } from '../config/db.js';
 import OTP from '../models/otpModel.js';
 import { logActivity } from '../utils/activityLogger.js';
-import { IMAGE_STORAGE_MODE } from '../middleware/uploadMiddleware.js';
+
+const toImageBuffer = (value) => {
+    if (!value) return null;
+    if (Buffer.isBuffer(value)) return value;
+    if (value instanceof Uint8Array) return Buffer.from(value);
+    if (value?.type === 'Buffer' && Array.isArray(value.data)) return Buffer.from(value.data);
+    if (Array.isArray(value)) return Buffer.from(value);
+    return null;
+};
 
 const resolveImageUrl = (imageUrl, req) => {
     if (!imageUrl) return null;
@@ -17,32 +25,48 @@ const resolveImageUrl = (imageUrl, req) => {
         return imageUrl;
     }
 
-    if (Buffer.isBuffer(imageUrl)) {
-        const storedPath = imageUrl.toString('utf8');
-        if (storedPath.startsWith('/uploads/')) {
-            return `${req.protocol}://${req.get('host')}${storedPath}`;
-        }
-        return imageUrl.toString('base64');
+    const imageBuffer = toImageBuffer(imageUrl);
+    if (!imageBuffer) return null;
+
+    const storedPath = imageBuffer.toString('utf8');
+    if (storedPath.startsWith('/uploads/')) {
+        return `${req.protocol}://${req.get('host')}${storedPath}`;
     }
 
-    return null;
+    return imageBuffer.toString('base64');
+};
+
+const serializeAdminImage = (admin, req) => ({
+    ...admin,
+    image_url: resolveImageUrl(admin.image_url, req),
+    image_mime_type: admin.image_mime_type ?? null,
+    image_file_name: admin.image_file_name ?? null
+});
+
+const buildImageFileName = (req) => {
+    if (!req.file) return null;
+    return req.file.filename || req.file.originalname || null;
 };
 
 const buildSignupImageUrl = (req) => {
     if (!req.file) return req.body.image_url || null;
 
-    if (IMAGE_STORAGE_MODE === 'blob') {
+    if (req.file.buffer) {
         return req.file.buffer;
     }
 
-    return Buffer.from(`/uploads/${req.file.filename}`, 'utf8');
+    if (req.file.filename) {
+        return Buffer.from(`/uploads/${req.file.filename}`, 'utf8');
+    }
+
+    return null;
 };
 
 export const getSelf = async (req, res) => {
     try {
         const admin = await Admin.getById(req.user.id);
         if (!admin) return res.status(404).json({ success: false, message: "Admin not found!" });
-        return res.status(200).json({ success: true, message: "Profile fetched successfully", data: admin });
+        return res.status(200).json({ success: true, message: "Profile fetched successfully", data: serializeAdminImage(admin, req) });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
@@ -88,7 +112,7 @@ export const loginAdmin = async (req, res) => {
 
         const freshAdminData = await Admin.findByEmail(email);
         const { password: adminPassword, token: storedToken, ...adminData } = freshAdminData;
-        return res.status(200).json({ success: true, message: "Login successful!", data: { token, admin: adminData } });
+        return res.status(200).json({ success: true, message: "Login successful!", data: { token, admin: serializeAdminImage(adminData, req) } });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -103,6 +127,8 @@ export const signupAdmin = async (req, res) => {
         if (existingAdmin) return res.status(400).json({ success: false, message: "Email already registered!" });
 
         const final_image_url = buildSignupImageUrl(req);
+        const image_mime_type = req.file?.mimetype ?? null;
+        const image_file_name = buildImageFileName(req);
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -112,7 +138,7 @@ export const signupAdmin = async (req, res) => {
         }
         const permissionsEncrypted = parsedPermissions ? Buffer.from(JSON.stringify(parsedPermissions)).toString('base64') : null;
 
-        await Admin.create({ name: name || null, email, password: hashedPassword, contact_no: contact_no || null, permission_type: permission_type || 'admin', permissions: permissionsEncrypted, image_url: final_image_url, status: status || 'active' });
+        await Admin.create({ name: name || null, email, password: hashedPassword, contact_no: contact_no || null, permission_type: permission_type || 'admin', permissions: permissionsEncrypted, image_url: final_image_url, image_mime_type, image_file_name, status: status || 'active' });
 
         await logActivity({
             admin_id: req.user?.id || null,
@@ -122,25 +148,19 @@ export const signupAdmin = async (req, res) => {
             ip_address: req.ip
         });
 
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        let responseImageUrl = null;
-        if (final_image_url) {
-            if (typeof final_image_url === 'string' && final_image_url.startsWith('/uploads/')) {
-                responseImageUrl = `${baseUrl}${final_image_url}`;
-            } else {
-                const imageBuffer = Buffer.isBuffer(final_image_url)
-                    ? final_image_url
-                    : (final_image_url?.type === 'Buffer' ? Buffer.from(final_image_url.data) : null);
-                if (imageBuffer) {
-                    const storedPath = imageBuffer.toString('utf8');
-                    responseImageUrl = storedPath.startsWith('/uploads/')
-                        ? `${baseUrl}${storedPath}`
-                        : imageBuffer.toString('base64');
-                }
+        return res.status(201).json({
+            success: true,
+            message: "Admin added successfully!",
+            data: {
+                name,
+                email,
+                contact_no,
+                permissions: permissionsEncrypted,
+                image_url: resolveImageUrl(final_image_url, req),
+                image_mime_type,
+                image_file_name
             }
-        }
-
-        return res.status(201).json({ success: true, message: "Admin added successfully!", data: { name, email, contact_no, permissions: permissionsEncrypted, image_url: responseImageUrl } });
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error!", error_details: error.message });
     }
@@ -151,13 +171,17 @@ export const updateAdmin = async (req, res) => {
     const { name, permission_type, status, permissions } = req.body;
     const performerId = req.user?.id || req.body.updated_by || null;
     try {
-        const final_image_url = req.file ? `/uploads/${req.file.filename}` : (req.body.image_url || null);
         let permissionsEncrypted = undefined;
         if (permissions) {
             const dataToEncrypt = typeof permissions === 'string' ? permissions : JSON.stringify(permissions);
             permissionsEncrypted = Buffer.from(dataToEncrypt).toString('base64');
         }
-        const updateData = { name, permission_type, image_url: final_image_url, status, updated_by: performerId };
+        const updateData = { name, permission_type, status, updated_by: performerId };
+        if (req.file) {
+            updateData.image_url = buildSignupImageUrl(req);
+            updateData.image_mime_type = req.file.mimetype;
+            updateData.image_file_name = buildImageFileName(req);
+        }
         if (permissionsEncrypted !== undefined) updateData.permissions = permissionsEncrypted;
         Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
@@ -272,6 +296,7 @@ export const getAllAdmins = async (req, res) => {
         const search = req.query.search || '';
         const status = req.query.status || '';
         const result = await Admin.getAll({ page, limit, search, status });
+        result.data = result.data.map((admin) => serializeAdminImage(admin, req));
         res.status(200).json({ success: true, ...result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -283,7 +308,7 @@ export const getAdminById = async (req, res) => {
     try {
         const admin = await Admin.getById(id);
         if (!admin) return res.status(404).json({ success: false, message: "Admin not found!" });
-        return res.status(200).json({ success: true, message: "Admin fetched successfully", data: admin });
+        return res.status(200).json({ success: true, message: "Admin fetched successfully", data: serializeAdminImage(admin, req) });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
