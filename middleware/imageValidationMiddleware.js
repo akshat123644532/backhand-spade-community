@@ -8,6 +8,8 @@ const ALLOWED_MIME_TYPES = [
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.heic', '.heif'];
 
+
+
 export const validateImageFile = (req, res, next) => {
     // image optional hai aur upload nahi ki toh skip
     if (!req.file) return next();
