@@ -24,3 +24,4 @@ router.put('/:id',    verifyToken, validateUpdateSurvey, updateSurvey);
 router.delete('/:id', verifyToken, validateSurveyId,     deleteSurvey);
 
 export default router;
+

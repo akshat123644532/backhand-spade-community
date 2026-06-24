@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import {
     addPrescreen,
     getAllPrescreens,
@@ -31,3 +31,4 @@ router.patch('/:id/status',         verifyToken, validateToggleStatus,     toggl
 router.delete('/:id',               verifyToken, validatePrescreenId,      deletePrescreen);
 
 export default router;
+

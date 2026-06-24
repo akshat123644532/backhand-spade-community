@@ -13,3 +13,4 @@ router.put('/:id', verifyToken, updatePartner);
 router.delete('/:id', verifyToken, deletePartner);      
 
 export default router;
+

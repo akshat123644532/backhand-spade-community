@@ -9,3 +9,4 @@ router.get('/:id', verifyToken, validateSurveyPageId,     getSurveyPage);
 router.put('/:id', verifyToken, validateUpdateSurveyPage, updateSurveyPage);
 
 export default router;
+

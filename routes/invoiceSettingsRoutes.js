@@ -14,3 +14,4 @@ router.get('/', verifyToken, getInvoiceSettings);
 router.put('/', verifyToken, upload.single('logo_image'), validateImageFile, validateUpdateInvoiceSettings, updateInvoiceSettings);
 
 export default router;
+

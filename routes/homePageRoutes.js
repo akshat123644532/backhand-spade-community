@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../Middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import {
     getAllSettings,
     getSectionSetting,
@@ -17,3 +17,4 @@ router.delete('/:section',                  verifyToken, deleteSection);
 router.delete('/:section/:field_key',       verifyToken, deleteField);
 
 export default router;
+

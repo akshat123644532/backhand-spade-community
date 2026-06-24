@@ -13,3 +13,4 @@ router.delete('/all',   verifyToken, deleteAllActivityLogs);
 router.delete('/:id',   verifyToken, deleteActivityLog);
 
 export default router;
+

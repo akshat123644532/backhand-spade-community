@@ -22,3 +22,4 @@ router.patch('/:id/status', verifyToken, validateUpdateEmailTemplateStatus,    u
 router.delete('/:id',       verifyToken, validateEmailTemplateId,             deleteEmailTemplate);
 
 export default router;
+

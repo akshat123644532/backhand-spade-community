@@ -13,3 +13,4 @@ router.patch('/:id/status', verifyToken, validateToggleStatus,           toggleS
 router.delete('/:id',       verifyToken, validatePrescreenSurveyId,      deletePrescreenSurvey);
 
 export default router;
+

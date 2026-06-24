@@ -15,3 +15,4 @@ router.patch('/:id/status', verifyToken, validateToggleStatus,                  
 router.delete('/:id',       verifyToken, validateProjectManagerId,                                                        deleteProjectManager);
 
 export default router;
+

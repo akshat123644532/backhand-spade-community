@@ -12,3 +12,4 @@ router.get('/list', verifyToken, validateGetAllCountries, getAllCountries);
 router.get('/:id', verifyToken, validateCountryId, getCountryById);
 
 export default router;
+

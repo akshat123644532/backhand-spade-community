@@ -22,3 +22,4 @@ router.put('/update/:id', verifyToken, validateUpdateClient, updateClient);
 router.delete('/delete/:id', verifyToken, validateClientId, deleteClient);
 
 export default router;
+

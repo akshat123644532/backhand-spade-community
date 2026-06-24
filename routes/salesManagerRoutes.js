@@ -15,3 +15,4 @@ router.patch('/status/:id', verifyToken, validateToggleStatus,                  
 router.delete('/:id',       verifyToken, validateSalesManagerId,                                                        deleteSalesManager);
 
 export default router;
+

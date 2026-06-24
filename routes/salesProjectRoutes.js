@@ -12,3 +12,4 @@ router.put('/:id',    verifyToken, validateUpdateSalesProject,   updateSalesProj
 router.delete('/:id', verifyToken, validateSalesProjectId,       deleteSalesProject);
 
 export default router;
+

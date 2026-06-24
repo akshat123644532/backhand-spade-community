@@ -12,3 +12,4 @@ router.put('/:id/:logId',       verifyToken, validateUpdateSalesLog, updateSales
 router.delete('/:id/:logId',    verifyToken, validateSalesLogId,     deleteSalesLog);
 
 export default router;
+

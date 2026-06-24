@@ -51,3 +51,4 @@ router.get('/:id', verifyToken, validateAdminId, getAdminById);
 router.put('/change-password', verifyToken, validateChangePassword, changePassword);
 
 export default router;
+
