@@ -22,6 +22,7 @@ import activityLogRoutes from './routes/activityLogRoutes.js';
 import emailTemplateRoutes from './routes/emailTemplateRoutes.js';
 import invoiceSettingsRoutes from './routes/invoiceSettingsRoutes.js';
 import systemEmailRoutes from './routes/systemEmailRoutes.js';
+import homePageRoutes from './routes/homePageRoutes.js';
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -65,7 +66,7 @@ app.use('/api/activity', activityLogRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/invoice/settings', invoiceSettingsRoutes);
 app.use('/api/system-emails', systemEmailRoutes);
-
+app.use('/api/homepage', homePageRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
