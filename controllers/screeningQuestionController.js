@@ -27,7 +27,7 @@ export const addQuestion = async (req, res) => {
 export const getAllQuestions = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 15;
         const search = req.query.search || '';
         const status = req.query.status || '';
         const language = req.query.language || '';
@@ -56,6 +56,17 @@ export const getQuestionsByTitle = async (req, res) => {
         const data = await ScreeningQuestion.getByTitle(decodeURIComponent(question_title));
         if (!data) return res.status(404).json({ success: false, message: "No questions found for this title!" });
         return res.status(200).json({ success: true, data });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const getQuestionsByLanguage = async (req, res) => {
+    try {
+        const { language } = req.params;
+        const data = await ScreeningQuestion.getByLanguage(language);
+        if (!data.length) return res.status(404).json({ success: false, message: "No questions found for this language!" });
+        return res.status(200).json({ success: true, count: data.length, data });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

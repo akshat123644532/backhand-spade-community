@@ -5,6 +5,7 @@ import {
     getAllQuestions,
     getQuestionById,
     getQuestionsByTitle,
+    getQuestionsByLanguage,
     updateQuestion,
     updateSortOrder,
     toggleStatus,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.post('/add',                     verifyToken, addQuestion);
 router.get('/list',                     verifyToken, getAllQuestions);
 router.put('/sort-order',               verifyToken, updateSortOrder);
+router.get('/language/:language',       verifyToken, getQuestionsByLanguage);
 router.get('/by-title/:question_title', verifyToken, getQuestionsByTitle);
 router.get('/:id',                      verifyToken, getQuestionById);
 router.put('/:id',                      verifyToken, updateQuestion);
