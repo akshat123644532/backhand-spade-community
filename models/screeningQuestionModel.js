@@ -11,7 +11,7 @@ const ScreeningQuestion = {
         return result.insertId;
     },
 
-    addOptions: async (question_id, options, randomize = 0) => {
+    addOptions: async (question_id, options) => {
         for (const option of options) {
             await db.execute(
                 `INSERT INTO screening_question_options (question_id, option_text) VALUES (?, ?)`,
@@ -46,13 +46,37 @@ const ScreeningQuestion = {
 
         const [rows] = await db.query(
             `SELECT id, language, question_title, question_text, question_type, is_required, sort_order, status, created_at 
-             FROM screening_questions ${where} ORDER BY sort_order ASC, created_at DESC LIMIT ? OFFSET ?`,
-            [...params, Number(l), Number(offset)]
+             FROM screening_questions ${where} ORDER BY question_title ASC, sort_order ASC`,
+            [...params]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM screening_questions ${where}`, params);
-        const total = countResult[0].total || 0;
 
-        return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
+        // Group by question_title
+        const grouped = {};
+        for (const row of rows) {
+            const key = row.question_title;
+            if (!grouped[key]) {
+                grouped[key] = {
+                    question_title: row.question_title,
+                    language: row.language,
+                    questions: []
+                };
+            }
+            grouped[key].questions.push({
+                id: row.id,
+                question_text: row.question_text,
+                question_type: row.question_type,
+                is_required: row.is_required,
+                sort_order: row.sort_order,
+                status: row.status,
+                created_at: row.created_at
+            });
+        }
+
+        const data = Object.values(grouped);
+        const total = data.length;
+        const paginated = data.slice(offset, offset + l);
+
+        return { data: paginated, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
     },
 
     getById: async (id) => {
@@ -66,6 +90,25 @@ const ScreeningQuestion = {
         );
 
         return { ...rows[0], options };
+    },
+
+    getByTitle: async (question_title) => {
+        const [rows] = await db.execute(
+            `SELECT id, language, question_title, question_text, question_type, is_required, sort_order, status, created_at
+             FROM screening_questions WHERE question_title = ? AND deleted_at IS NULL ORDER BY sort_order ASC`,
+            [question_title]
+        );
+        if (!rows.length) return null;
+
+        const questions = [];
+        for (const row of rows) {
+            const [options] = await db.execute(
+                `SELECT id, option_text FROM screening_question_options WHERE question_id = ?`, [row.id]
+            );
+            questions.push({ ...row, options });
+        }
+
+        return { question_title, language: rows[0].language, questions };
     },
 
     update: async (id, data) => {

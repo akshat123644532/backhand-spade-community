@@ -50,6 +50,17 @@ export const getQuestionById = async (req, res) => {
     }
 };
 
+export const getQuestionsByTitle = async (req, res) => {
+    try {
+        const { question_title } = req.params;
+        const data = await ScreeningQuestion.getByTitle(decodeURIComponent(question_title));
+        if (!data) return res.status(404).json({ success: false, message: "No questions found for this title!" });
+        return res.status(200).json({ success: true, data });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const updateQuestion = async (req, res) => {
     try {
         const { id } = req.params;
