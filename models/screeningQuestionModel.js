@@ -117,9 +117,6 @@ getByLanguage: async (language) => {
 
     return Object.values(grouped);
 },
-
-
-
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(

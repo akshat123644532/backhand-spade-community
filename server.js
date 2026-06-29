@@ -24,6 +24,7 @@ import invoiceSettingsRoutes from './routes/invoiceSettingsRoutes.js';
 import systemEmailRoutes from './routes/systemEmailRoutes.js';
 import homePageRoutes from './routes/homePageRoutes.js';
 import screeningQuestionRoutes from './routes/screeningQuestionRoutes.js';
+import rewardSettingRoutes from './routes/rewardSettingRoutes.js';
 
 
 if (!fs.existsSync('uploads')) {
@@ -70,6 +71,7 @@ app.use('/api/invoice/settings', invoiceSettingsRoutes);
 app.use('/api/system-emails', systemEmailRoutes);
 app.use('/api/homepage', homePageRoutes);
 app.use('/api/screening/questions', screeningQuestionRoutes);
+app.use('/api/reward-settings', rewardSettingRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
