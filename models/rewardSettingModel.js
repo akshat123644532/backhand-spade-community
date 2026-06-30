@@ -9,7 +9,6 @@ class RewardSetting {
     static async update(data) {
         const {
             registration_reward_points,
-            redeem_points,
             minimum_payout,
             amazon_enabled,
             flipkart_enabled,
@@ -19,7 +18,6 @@ class RewardSetting {
         await db.execute(`
             UPDATE reward_settings SET
                 registration_reward_points = ?,
-                redeem_points = ?,
                 minimum_payout = ?,
                 amazon_enabled = ?,
                 flipkart_enabled = ?,
@@ -27,7 +25,6 @@ class RewardSetting {
             LIMIT 1
         `, [
             registration_reward_points,
-            redeem_points,
             minimum_payout,
             amazon_enabled,
             flipkart_enabled,

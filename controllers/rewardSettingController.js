@@ -13,7 +13,6 @@ export const updateSettings = async (req, res) => {
     try {
         const {
             registration_reward_points,
-            redeem_points,
             minimum_payout,
             amazon_enabled,
             flipkart_enabled,
@@ -22,7 +21,6 @@ export const updateSettings = async (req, res) => {
 
         if (
             registration_reward_points === undefined ||
-            redeem_points === undefined ||
             minimum_payout === undefined ||
             amazon_enabled === undefined ||
             flipkart_enabled === undefined ||
@@ -33,7 +31,6 @@ export const updateSettings = async (req, res) => {
 
         await RewardSetting.update({
             registration_reward_points,
-            redeem_points,
             minimum_payout,
             amazon_enabled,
             flipkart_enabled,

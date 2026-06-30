@@ -1,8 +1,5 @@
 import { db } from '../config/db.js';
 
-
-
-
 const Survey = {
 
     generateSurveyId: async () => {
@@ -21,18 +18,21 @@ const Survey = {
             notes, cpi, live_url, test_url, status, created_by
         } = data;
 
+        const form_url = `https://yourdomain.com/forms/${survey_id}`;
+
         const [result] = await db.execute(
             `INSERT INTO surveys (survey_id, project_name, client_id, project_manager_id, project_country,
              description, sales_manager_id, sales_project_id, loi, ir, sample_size, currency,
-             start_date, end_date, link_type, term_point, comp_point, notes, cpi, live_url, test_url, status, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             start_date, end_date, link_type, term_point, comp_point, notes, cpi, live_url, test_url, form_url, status, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 survey_id, project_name, client_id || null, project_manager_id || null,
                 project_country || null, description || null, sales_manager_id || null,
                 sales_project_id || null, loi || null, ir || null, sample_size || null,
                 currency || null, start_date || null, end_date || null, link_type || null,
                 term_point || null, comp_point || null, notes || null, cpi || null,
-                live_url || null, test_url || null, status || 'active', created_by || null
+                live_url || null, test_url || null, form_url,
+                status || 'active', created_by || null
             ]
         );
         return result;
@@ -56,11 +56,10 @@ const Survey = {
 
         const [rows] = await db.query(
             `SELECT s.id, s.survey_id, s.project_name, s.start_date, s.end_date, s.status,
-             s.loi, s.ir, s.sample_size, s.cpi, s.currency,
+             s.loi, s.ir, s.sample_size, s.cpi, s.currency, s.form_url,
              c.name AS client_name, c.id AS client_code,
              pm.name AS project_manager_name,
-            GROUP_CONCAT(DISTINCT p.name SEPARATOR ', ') AS partner_names
-       
+             GROUP_CONCAT(DISTINCT p.name SEPARATOR ', ') AS partner_names
              FROM surveys s
              LEFT JOIN PaperWardb.clients c ON s.client_id = c.id
              LEFT JOIN project_managers pm ON s.project_manager_id = pm.id
@@ -209,34 +208,33 @@ const Survey = {
         );
         return result;
     },
+
     getRecontacts: async () => {
+        const [rows] = await db.execute(`
+            SELECT s.*,
+                   c.name AS client_name,
+                   pm.name AS project_manager_name
+            FROM surveys s
+            LEFT JOIN PaperWardb.clients c ON c.id = s.client_id
+            LEFT JOIN project_managers pm ON pm.id = s.project_manager_id
+            WHERE s.survey_type = 'recontact'
+            AND s.deleted_at IS NULL
+            ORDER BY s.created_at DESC
+        `);
+        return rows;
+    },
 
-    const [rows] = await db.execute(`
-        SELECT s.*,
-               c.name AS client_name,
-               pm.name AS project_manager_name
-        FROM surveys s
-        LEFT JOIN PaperWardb.clients c ON c.id = s.client_id
-        LEFT JOIN project_managers pm ON pm.id = s.project_manager_id
-        WHERE s.survey_type='recontact'
-        AND s.deleted_at IS NULL
-        ORDER BY s.created_at DESC
-    `);
-
-    return rows;
-},
-getRecontactsBySurvey: async (parentSurveyId) => {
-
-    const [rows] = await db.execute(`
-        SELECT *
-        FROM surveys
-        WHERE parent_survey_id = ?
-        AND deleted_at IS NULL
-    `,[parentSurveyId]);
-
-    return rows;
-},
+    getRecontactsBySurvey: async (parentSurveyId) => {
+        const [rows] = await db.execute(`
+            SELECT *
+            FROM surveys
+            WHERE parent_survey_id = ?
+            AND deleted_at IS NULL
+        `, [parentSurveyId]);
+        return rows;
+    },
 };
 
-
 export default Survey;
+
+

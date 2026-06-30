@@ -49,6 +49,8 @@ export const addSurvey = async (req, res) => {
         if (!project_name) return res.status(400).json({ success: false, message: "Project name is required!" });
 
         const survey_id = await Survey.generateSurveyId();
+        const form_url = `https://locolhost.com/forms/${survey_id}`;
+
         await Survey.create({ survey_id, project_name, client_id, project_manager_id, project_country, description, sales_manager_id, sales_project_id, loi, ir, sample_size, currency, start_date, end_date, link_type, term_point, comp_point, notes, cpi, live_url, test_url, status, created_by: req.user?.id || null });
 
         if (groupId) {
@@ -57,12 +59,11 @@ export const addSurvey = async (req, res) => {
 
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'Survey', description: `Survey "${project_name}" added with ID ${survey_id}`, ip_address: req.ip });
 
-        return res.status(201).json({ success: true, message: "Survey added successfully!", data: { survey_id, project_name } });
+        return res.status(201).json({ success: true, message: "Survey added successfully!", data: { survey_id, project_name, form_url } });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
-
 export const getAllSurveys = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
