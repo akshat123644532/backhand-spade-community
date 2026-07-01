@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import { addQuestionnaireGroup, getAllQuestionnaireGroups, getQuestionnaireGroupById, updateQuestionnaireGroup, toggleStatus, deleteQuestionnaireGroup } from '../controllers/questionnaireGroupController.js';
 import { validateAddQuestionnaireGroup, validateUpdateQuestionnaireGroup, validateQuestionnaireGroupId, validateToggleStatus, validateGetAllQuestionnaireGroups } from '../validations/questionnaireGroupValidations.js';
 

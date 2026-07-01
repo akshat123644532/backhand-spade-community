@@ -1,5 +1,5 @@
 import express from 'express';
-import verifyToken from '../middleware/authMIddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 import {
     addPanelQuestion,
     getAllPanelQuestions,
