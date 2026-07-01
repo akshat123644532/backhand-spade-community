@@ -1,6 +1,6 @@
-import ScreeningQuestion from '../models/screeningQuestionModel.js';
+import PanelQuestionnaire from '../models/panelQuestionnaireModel.js';
 
-export const addQuestion = async (req, res) => {
+export const addPanelQuestion = async (req, res) => {
     try {
         const { language, question_title, question_text, question_type, is_required, options, sort_order, status } = req.body;
 
@@ -8,10 +8,10 @@ export const addQuestion = async (req, res) => {
             return res.status(400).json({ success: false, message: "Language, question title, question text and question type are required!" });
         }
 
-        const question_id = await ScreeningQuestion.create({ language, question_title, question_text, question_type, is_required, sort_order, status });
+        const question_id = await PanelQuestionnaire.create({ language, question_title, question_text, question_type, is_required, sort_order, status });
 
         if (options && options.length > 0) {
-            await ScreeningQuestion.addOptions(question_id, options);
+            await PanelQuestionnaire.addOptions(question_id, options);
         }
 
         return res.status(201).json({
@@ -24,7 +24,7 @@ export const addQuestion = async (req, res) => {
     }
 };
 
-export const getAllQuestions = async (req, res) => {
+export const getAllPanelQuestions = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 15;
@@ -32,17 +32,17 @@ export const getAllQuestions = async (req, res) => {
         const status = req.query.status || '';
         const language = req.query.language || '';
 
-        const result = await ScreeningQuestion.getAll({ page, limit, search, status, language });
+        const result = await PanelQuestionnaire.getAll({ page, limit, search, status, language });
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const getQuestionById = async (req, res) => {
+export const getPanelQuestionById = async (req, res) => {
     try {
         const { id } = req.params;
-        const question = await ScreeningQuestion.getById(id);
+        const question = await PanelQuestionnaire.getById(id);
         if (!question) return res.status(404).json({ success: false, message: "Question not found!" });
         return res.status(200).json({ success: true, data: question });
     } catch (error) {
@@ -50,10 +50,10 @@ export const getQuestionById = async (req, res) => {
     }
 };
 
-export const getQuestionsByTitle = async (req, res) => {
+export const getPanelQuestionsByTitle = async (req, res) => {
     try {
         const { question_title } = req.params;
-        const data = await ScreeningQuestion.getByTitle(decodeURIComponent(question_title));
+        const data = await PanelQuestionnaire.getByTitle(decodeURIComponent(question_title));
         if (!data) return res.status(404).json({ success: false, message: "No questions found for this title!" });
         return res.status(200).json({ success: true, data });
     } catch (error) {
@@ -61,10 +61,10 @@ export const getQuestionsByTitle = async (req, res) => {
     }
 };
 
-export const getQuestionsByLanguage = async (req, res) => {
+export const getPanelQuestionsByLanguage = async (req, res) => {
     try {
         const { language } = req.params;
-        const data = await ScreeningQuestion.getByLanguage(language);
+        const data = await PanelQuestionnaire.getByLanguage(language);
         if (!data.length) return res.status(404).json({ success: false, message: "No questions found for this language!" });
         return res.status(200).json({ success: true, count: data.length, data });
     } catch (error) {
@@ -72,12 +72,12 @@ export const getQuestionsByLanguage = async (req, res) => {
     }
 };
 
-export const updateQuestion = async (req, res) => {
+export const updatePanelQuestion = async (req, res) => {
     try {
         const { id } = req.params;
         const { language, question_title, question_text, question_type, is_required, options, sort_order, status } = req.body;
 
-        const question = await ScreeningQuestion.getById(id);
+        const question = await PanelQuestionnaire.getById(id);
         if (!question) return res.status(404).json({ success: false, message: "Question not found!" });
 
         const updateData = {};
@@ -89,11 +89,11 @@ export const updateQuestion = async (req, res) => {
         if (sort_order !== undefined) updateData.sort_order = sort_order;
         if (status) updateData.status = status;
 
-        if (Object.keys(updateData).length > 0) await ScreeningQuestion.update(id, updateData);
+        if (Object.keys(updateData).length > 0) await PanelQuestionnaire.update(id, updateData);
 
         if (options && options.length > 0) {
-            await ScreeningQuestion.deleteOptions(id);
-            await ScreeningQuestion.addOptions(id, options);
+            await PanelQuestionnaire.deleteOptions(id);
+            await PanelQuestionnaire.addOptions(id, options);
         }
 
         return res.status(200).json({ success: true, message: "Question updated successfully!" });
@@ -102,41 +102,41 @@ export const updateQuestion = async (req, res) => {
     }
 };
 
-export const updateSortOrder = async (req, res) => {
+export const updatePanelQuestionSortOrder = async (req, res) => {
     try {
         const { items } = req.body;
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: "Items array is required!" });
         }
-        await ScreeningQuestion.updateSortOrder(items);
+        await PanelQuestionnaire.updateSortOrder(items);
         return res.status(200).json({ success: true, message: "Sort order updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const toggleStatus = async (req, res) => {
+export const togglePanelQuestionStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
         if (!['active', 'inactive'].includes(status)) {
             return res.status(400).json({ success: false, message: "Status must be active or inactive!" });
         }
-        const question = await ScreeningQuestion.getById(id);
+        const question = await PanelQuestionnaire.getById(id);
         if (!question) return res.status(404).json({ success: false, message: "Question not found!" });
-        await ScreeningQuestion.toggleStatus(id, status);
+        await PanelQuestionnaire.toggleStatus(id, status);
         return res.status(200).json({ success: true, message: `Status updated to ${status}!` });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const deleteQuestion = async (req, res) => {
+export const deletePanelQuestion = async (req, res) => {
     try {
         const { id } = req.params;
-        const question = await ScreeningQuestion.getById(id);
+        const question = await PanelQuestionnaire.getById(id);
         if (!question) return res.status(404).json({ success: false, message: "Question not found!" });
-        await ScreeningQuestion.delete(id);
+        await PanelQuestionnaire.delete(id);
         return res.status(200).json({ success: true, message: "Question deleted successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });

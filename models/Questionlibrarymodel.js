@@ -1,27 +1,27 @@
 import { db } from '../config/db.js';
 
-const Prescreen = {
+const QuestionLibrary = {
 
     create: async (data) => {
         const { language, question_title, question_type, right_answer, status, sort_order } = data;
         const [result] = await db.execute(
-            `INSERT INTO prescreens (language, question_title, question_type, right_answer, status, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO question_library (language, question_title, question_type, right_answer, status, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
             [language, question_title, question_type || 'textbox', right_answer || null, status || 'active', sort_order ?? 0]
         );
         return result.insertId;
     },
 
-    addOptions: async (prescreen_id, options) => {
+    addOptions: async (question_library_id, options) => {
         for (const option of options) {
             await db.execute(
-                `INSERT INTO prescreen_options (prescreen_id, option_text) VALUES (?, ?)`,
-                [prescreen_id, option]
+                `INSERT INTO question_library_options (question_library_id, option_text) VALUES (?, ?)`,
+                [question_library_id, option]
             );
         }
     },
 
-    deleteOptions: async (prescreen_id) => {
-        await db.execute(`DELETE FROM prescreen_options WHERE prescreen_id = ?`, [prescreen_id]);
+    deleteOptions: async (question_library_id) => {
+        await db.execute(`DELETE FROM question_library_options WHERE question_library_id = ?`, [question_library_id]);
     },
 
     getAll: async ({ page = 1, limit = 10, search = '', status = '', language = '' } = {}) => {
@@ -46,10 +46,10 @@ const Prescreen = {
 
         const [rows] = await db.query(
             `SELECT id, language, question_title, question_type, sort_order, right_answer, status, created_at 
-             FROM prescreens ${where} ORDER BY sort_order ASC, created_at DESC LIMIT ? OFFSET ?`,
+             FROM question_library ${where} ORDER BY sort_order ASC, created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM prescreens ${where}`, params);
+        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM question_library ${where}`, params);
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
@@ -57,12 +57,12 @@ const Prescreen = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM prescreens WHERE id = ? AND deleted_at IS NULL`, [id]
+            `SELECT * FROM question_library WHERE id = ? AND deleted_at IS NULL`, [id]
         );
         if (!rows[0]) return null;
 
         const [options] = await db.execute(
-            `SELECT id, option_text FROM prescreen_options WHERE prescreen_id = ?`, [id]
+            `SELECT id, option_text FROM question_library_options WHERE question_library_id = ?`, [id]
         );
 
         return { ...rows[0], options };
@@ -70,13 +70,13 @@ const Prescreen = {
 
     getByLanguage: async (language) => {
         const [rows] = await db.execute(
-            `SELECT p.id, p.question_title, p.question_type, p.sort_order, p.right_answer,
-             JSON_ARRAYAGG(po.option_text) as options
-             FROM prescreens p
-             LEFT JOIN prescreen_options po ON p.id = po.prescreen_id
-             WHERE p.language = ? AND p.deleted_at IS NULL AND p.status = 'active'
-             GROUP BY p.id
-             ORDER BY p.sort_order ASC`,
+            `SELECT ql.id, ql.question_title, ql.question_type, ql.sort_order, ql.right_answer,
+             JSON_ARRAYAGG(qlo.option_text) as options
+             FROM question_library ql
+             LEFT JOIN question_library_options qlo ON ql.id = qlo.question_library_id
+             WHERE ql.language = ? AND ql.deleted_at IS NULL AND ql.status = 'active'
+             GROUP BY ql.id
+             ORDER BY ql.sort_order ASC`,
             [language]
         );
         return rows;
@@ -85,7 +85,7 @@ const Prescreen = {
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(
-            `UPDATE prescreens SET ${fields}, updated_at = NOW() WHERE id = ?`,
+            `UPDATE question_library SET ${fields}, updated_at = NOW() WHERE id = ?`,
             [...Object.values(data), id]
         );
         return result;
@@ -93,7 +93,7 @@ const Prescreen = {
 
     toggleStatus: async (id, status) => {
         const [result] = await db.execute(
-            `UPDATE prescreens SET status = ?, updated_at = NOW() WHERE id = ?`,
+            `UPDATE question_library SET status = ?, updated_at = NOW() WHERE id = ?`,
             [status, id]
         );
         return result;
@@ -102,7 +102,7 @@ const Prescreen = {
     updateSortOrder: async (items) => {
         for (const item of items) {
             await db.execute(
-                `UPDATE prescreens SET sort_order = ?, updated_at = NOW() WHERE id = ?`,
+                `UPDATE question_library SET sort_order = ?, updated_at = NOW() WHERE id = ?`,
                 [item.sort_order, item.id]
             );
         }
@@ -110,10 +110,10 @@ const Prescreen = {
 
     delete: async (id) => {
         const [result] = await db.execute(
-            `UPDATE prescreens SET deleted_at = NOW() WHERE id = ?`, [id]
+            `UPDATE question_library SET deleted_at = NOW() WHERE id = ?`, [id]
         );
         return result;
     }
 };
 
-export default Prescreen;
+export default QuestionLibrary;

@@ -9,7 +9,7 @@ export const validate = (req, res, next) => {
     next();
 };
 
-export const validateAddPrescreen = [
+export const validateAddLibraryQuestion = [
     body('language').notEmpty().withMessage('Language is required').isLength({ max: 50 }).withMessage('Language too long'),
     body('question_title').notEmpty().withMessage('Question title is required').isLength({ max: 500 }).withMessage('Question title too long'),
     body('question_type').notEmpty().withMessage('Question type is required').isIn(['textbox', 'textarea', 'checkbox', 'dropdown', 'radio']).withMessage('Invalid question type'),
@@ -20,8 +20,8 @@ export const validateAddPrescreen = [
     validate
 ];
 
-export const validateUpdatePrescreen = [
-    param('id').isInt({ min: 1 }).withMessage('Invalid prescreen ID'),
+export const validateUpdateLibraryQuestion = [
+    param('id').isInt({ min: 1 }).withMessage('Invalid library question ID'),
     body('language').optional().isLength({ max: 50 }).withMessage('Language too long'),
     body('question_title').optional().isLength({ max: 500 }).withMessage('Question title too long'),
     body('question_type').optional().isIn(['textbox', 'textarea', 'checkbox', 'dropdown', 'radio']).withMessage('Invalid question type'),
@@ -32,18 +32,18 @@ export const validateUpdatePrescreen = [
     validate
 ];
 
-export const validatePrescreenId = [
-    param('id').isInt({ min: 1 }).withMessage('Invalid prescreen ID'),
+export const validateLibraryQuestionId = [
+    param('id').isInt({ min: 1 }).withMessage('Invalid library question ID'),
     validate
 ];
 
 export const validateToggleStatus = [
-    param('id').isInt({ min: 1 }).withMessage('Invalid prescreen ID'),
+    param('id').isInt({ min: 1 }).withMessage('Invalid library question ID'),
     body('status').notEmpty().withMessage('Status is required').isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
     validate
 ];
 
-export const validateGetAllPrescreens = [
+export const validateGetAllLibraryQuestions = [
     query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
     query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
     query('search').optional(),

@@ -1,11 +1,11 @@
 import { db } from '../config/db.js';
 
-const ScreeningQuestion = {
+const PanelQuestionnaire = {
 
     create: async (data) => {
         const { language, question_title, question_text, question_type, is_required, sort_order, status } = data;
         const [result] = await db.execute(
-            `INSERT INTO screening_questions (language, question_title, question_text, question_type, is_required, sort_order, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO panel_questionnaire (language, question_title, question_text, question_type, is_required, sort_order, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [language, question_title, question_text, question_type || 'textbox', is_required || 0, sort_order ?? 0, status || 'active']
         );
         return result.insertId;
@@ -14,14 +14,14 @@ const ScreeningQuestion = {
     addOptions: async (question_id, options) => {
         for (const option of options) {
             await db.execute(
-                `INSERT INTO screening_question_options (question_id, option_text) VALUES (?, ?)`,
+                `INSERT INTO panel_questionnaire_options (question_id, option_text) VALUES (?, ?)`,
                 [question_id, option]
             );
         }
     },
 
     deleteOptions: async (question_id) => {
-        await db.execute(`DELETE FROM screening_question_options WHERE question_id = ?`, [question_id]);
+        await db.execute(`DELETE FROM panel_questionnaire_options WHERE question_id = ?`, [question_id]);
     },
 
     getAll: async ({ page = 1, limit = 15, search = '', status = '', language = '' } = {}) => {
@@ -46,14 +46,14 @@ const ScreeningQuestion = {
 
         const [rows] = await db.query(
             `SELECT id, language, question_title, question_text, question_type, sort_order, status
-             FROM screening_questions ${where} 
+             FROM panel_questionnaire ${where} 
              ORDER BY question_title ASC, sort_order ASC 
              LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
 
         const [countResult] = await db.query(
-            `SELECT COUNT(*) as total FROM screening_questions ${where}`, params
+            `SELECT COUNT(*) as total FROM panel_questionnaire ${where}`, params
         );
         const total = countResult[0].total || 0;
 
@@ -62,12 +62,12 @@ const ScreeningQuestion = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM screening_questions WHERE id = ? AND deleted_at IS NULL`, [id]
+            `SELECT * FROM panel_questionnaire WHERE id = ? AND deleted_at IS NULL`, [id]
         );
         if (!rows[0]) return null;
 
         const [options] = await db.execute(
-            `SELECT id, option_text FROM screening_question_options WHERE question_id = ?`, [id]
+            `SELECT id, option_text FROM panel_questionnaire_options WHERE question_id = ?`, [id]
         );
 
         return { ...rows[0], options };
@@ -76,7 +76,7 @@ const ScreeningQuestion = {
     getByTitle: async (question_title) => {
         const [rows] = await db.execute(
             `SELECT id, language, question_title, question_text, question_type, is_required, sort_order, status, created_at
-             FROM screening_questions WHERE question_title = ? AND deleted_at IS NULL ORDER BY sort_order ASC`,
+             FROM panel_questionnaire WHERE question_title = ? AND deleted_at IS NULL ORDER BY sort_order ASC`,
             [question_title]
         );
         if (!rows.length) return null;
@@ -84,43 +84,45 @@ const ScreeningQuestion = {
         const questions = [];
         for (const row of rows) {
             const [options] = await db.execute(
-                `SELECT id, option_text FROM screening_question_options WHERE question_id = ?`, [row.id]
+                `SELECT id, option_text FROM panel_questionnaire_options WHERE question_id = ?`, [row.id]
             );
             questions.push({ ...row, options });
         }
 
         return { question_title, language: rows[0].language, questions };
     },
-getByLanguage: async (language) => {
-    const [rows] = await db.execute(
-        `SELECT id, question_title, question_text
-         FROM screening_questions 
-         WHERE language = ? AND deleted_at IS NULL AND status = 'active'
-         ORDER BY question_title ASC, sort_order ASC`,
-        [language]
-    );
 
-    const grouped = {};
-    for (const row of rows) {
-        const key = row.question_title;
-        if (!grouped[key]) {
-            grouped[key] = {
-                question_title: key,
-                questions: []
-            };
+    getByLanguage: async (language) => {
+        const [rows] = await db.execute(
+            `SELECT id, question_title, question_text
+             FROM panel_questionnaire 
+             WHERE language = ? AND deleted_at IS NULL AND status = 'active'
+             ORDER BY question_title ASC, sort_order ASC`,
+            [language]
+        );
+
+        const grouped = {};
+        for (const row of rows) {
+            const key = row.question_title;
+            if (!grouped[key]) {
+                grouped[key] = {
+                    question_title: key,
+                    questions: []
+                };
+            }
+            grouped[key].questions.push({
+                id: row.id,
+                question_text: row.question_text
+            });
         }
-        grouped[key].questions.push({
-            id: row.id,
-            question_text: row.question_text
-        });
-    }
 
-    return Object.values(grouped);
-},
+        return Object.values(grouped);
+    },
+
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(
-            `UPDATE screening_questions SET ${fields}, updated_at = NOW() WHERE id = ?`,
+            `UPDATE panel_questionnaire SET ${fields}, updated_at = NOW() WHERE id = ?`,
             [...Object.values(data), id]
         );
         return result;
@@ -128,7 +130,7 @@ getByLanguage: async (language) => {
 
     toggleStatus: async (id, status) => {
         const [result] = await db.execute(
-            `UPDATE screening_questions SET status = ?, updated_at = NOW() WHERE id = ?`,
+            `UPDATE panel_questionnaire SET status = ?, updated_at = NOW() WHERE id = ?`,
             [status, id]
         );
         return result;
@@ -137,7 +139,7 @@ getByLanguage: async (language) => {
     updateSortOrder: async (items) => {
         for (const item of items) {
             await db.execute(
-                `UPDATE screening_questions SET sort_order = ?, updated_at = NOW() WHERE id = ?`,
+                `UPDATE panel_questionnaire SET sort_order = ?, updated_at = NOW() WHERE id = ?`,
                 [item.sort_order, item.id]
             );
         }
@@ -145,10 +147,10 @@ getByLanguage: async (language) => {
 
     delete: async (id) => {
         const [result] = await db.execute(
-            `UPDATE screening_questions SET deleted_at = NOW() WHERE id = ?`, [id]
+            `UPDATE panel_questionnaire SET deleted_at = NOW() WHERE id = ?`, [id]
         );
         return result;
     }
 };
 
-export default ScreeningQuestion;
+export default PanelQuestionnaire;

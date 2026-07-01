@@ -1,6 +1,6 @@
-import Prescreen from '../models/prescreenModel.js';
+import QuestionLibrary from '../models/questionLibraryModel.js';
 
-export const addPrescreen = async (req, res) => {
+export const addLibraryQuestion = async (req, res) => {
     try {
         const { language, question_title, question_type, options, right_answer, status, sort_order } = req.body;
 
@@ -11,16 +11,16 @@ export const addPrescreen = async (req, res) => {
             return res.status(400).json({ success: false, message: "Question type is required!" });
         }
 
-        const prescreen_id = await Prescreen.create({ language, question_title, question_type, right_answer, status, sort_order });
+        const question_library_id = await QuestionLibrary.create({ language, question_title, question_type, right_answer, status, sort_order });
 
         if (options && options.length > 0) {
-            await Prescreen.addOptions(prescreen_id, options);
+            await QuestionLibrary.addOptions(question_library_id, options);
         }
 
         return res.status(201).json({
             success: true,
-            message: "Prescreen added successfully!",
-            data: { id: prescreen_id, question_title, language, question_type }
+            message: "Question added to library successfully!",
+            data: { id: question_library_id, question_title, language, question_type }
         });
 
     } catch (error) {
@@ -28,7 +28,7 @@ export const addPrescreen = async (req, res) => {
     }
 };
 
-export const getAllPrescreens = async (req, res) => {
+export const getAllLibraryQuestions = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -36,41 +36,41 @@ export const getAllPrescreens = async (req, res) => {
         const status = req.query.status || '';
         const language = req.query.language || '';
 
-        const result = await Prescreen.getAll({ page, limit, search, status, language });
+        const result = await QuestionLibrary.getAll({ page, limit, search, status, language });
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const getPrescreenById = async (req, res) => {
+export const getLibraryQuestionById = async (req, res) => {
     try {
         const { id } = req.params;
-        const prescreen = await Prescreen.getById(id);
-        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
-        return res.status(200).json({ success: true, data: prescreen });
+        const question = await QuestionLibrary.getById(id);
+        if (!question) return res.status(404).json({ success: false, message: "Question not found in library!" });
+        return res.status(200).json({ success: true, data: question });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const getByLanguage = async (req, res) => {
+export const getLibraryQuestionsByLanguage = async (req, res) => {
     try {
         const { language } = req.params;
-        const prescreens = await Prescreen.getByLanguage(language);
-        return res.status(200).json({ success: true, count: prescreens.length, data: prescreens });
+        const questions = await QuestionLibrary.getByLanguage(language);
+        return res.status(200).json({ success: true, count: questions.length, data: questions });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const updatePrescreen = async (req, res) => {
+export const updateLibraryQuestion = async (req, res) => {
     try {
         const { id } = req.params;
         const { language, question_title, question_type, options, right_answer, status, sort_order } = req.body;
 
-        const prescreen = await Prescreen.getById(id);
-        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
+        const question = await QuestionLibrary.getById(id);
+        if (!question) return res.status(404).json({ success: false, message: "Question not found in library!" });
 
         const updateData = {};
         if (language) updateData.language = language;
@@ -80,55 +80,55 @@ export const updatePrescreen = async (req, res) => {
         if (status) updateData.status = status;
         if (sort_order !== undefined) updateData.sort_order = sort_order;
 
-        if (Object.keys(updateData).length > 0) await Prescreen.update(id, updateData);
+        if (Object.keys(updateData).length > 0) await QuestionLibrary.update(id, updateData);
 
         if (options && options.length > 0) {
-            await Prescreen.deleteOptions(id);
-            await Prescreen.addOptions(id, options);
+            await QuestionLibrary.deleteOptions(id);
+            await QuestionLibrary.addOptions(id, options);
         }
 
-        return res.status(200).json({ success: true, message: "Prescreen updated successfully!" });
+        return res.status(200).json({ success: true, message: "Library question updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const updateSortOrder = async (req, res) => {
+export const updateLibraryQuestionSortOrder = async (req, res) => {
     try {
         const { items } = req.body;
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: "Items array is required!" });
         }
-        await Prescreen.updateSortOrder(items);
+        await QuestionLibrary.updateSortOrder(items);
         return res.status(200).json({ success: true, message: "Sort order updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const toggleStatus = async (req, res) => {
+export const toggleLibraryQuestionStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
         if (!['active', 'inactive'].includes(status)) {
             return res.status(400).json({ success: false, message: "Status must be active or inactive!" });
         }
-        const prescreen = await Prescreen.getById(id);
-        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
-        await Prescreen.toggleStatus(id, status);
+        const question = await QuestionLibrary.getById(id);
+        if (!question) return res.status(404).json({ success: false, message: "Question not found in library!" });
+        await QuestionLibrary.toggleStatus(id, status);
         return res.status(200).json({ success: true, message: `Status updated to ${status}!` });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
 
-export const deletePrescreen = async (req, res) => {
+export const deleteLibraryQuestion = async (req, res) => {
     try {
         const { id } = req.params;
-        const prescreen = await Prescreen.getById(id);
-        if (!prescreen) return res.status(404).json({ success: false, message: "Prescreen not found!" });
-        await Prescreen.delete(id);
-        return res.status(200).json({ success: true, message: "Prescreen deleted successfully!" });
+        const question = await QuestionLibrary.getById(id);
+        if (!question) return res.status(404).json({ success: false, message: "Question not found in library!" });
+        await QuestionLibrary.delete(id);
+        return res.status(200).json({ success: true, message: "Question deleted from library successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
