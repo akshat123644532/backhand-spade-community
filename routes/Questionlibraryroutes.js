@@ -9,7 +9,7 @@ import {
     updateLibraryQuestionSortOrder,
     toggleLibraryQuestionStatus,
     deleteLibraryQuestion
-} from '../controllers/questionLibraryController.js';
+} from '../controllers/Questionlibrarycontroller.js';
 import {
     validateAddLibraryQuestion,
     validateUpdateLibraryQuestion,
@@ -17,7 +17,7 @@ import {
     validateToggleStatus,
     validateGetAllLibraryQuestions,
     validateGetByLanguage
-} from '../validations/questionLibraryValidations.js';
+} from '../validations/Questionlibraryvalidations.js';
 
 const router = express.Router();
 

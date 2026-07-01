@@ -1,4 +1,4 @@
-import QuestionLibrary from '../models/questionLibraryModel.js';
+import QuestionLibrary from '../models/Questionlibrarymodel.js';
 
 export const addLibraryQuestion = async (req, res) => {
     try {
