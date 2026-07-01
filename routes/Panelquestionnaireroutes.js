@@ -10,7 +10,7 @@ import {
     updatePanelQuestionSortOrder,
     togglePanelQuestionStatus,
     deletePanelQuestion
-} from '../controllers/panelQuestionnaireController.js';
+} from '../controllers/Panelquestionnairecontroller.js';
 
 const router = express.Router();
 

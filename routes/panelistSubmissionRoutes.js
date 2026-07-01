@@ -1,5 +1,5 @@
 import express from 'express';
-import { getQuestionnaireByUrl, submitQuestionnaire } from '../controllers/panelistSubmissionController.js';
+import { getQuestionnaireByUrl, submitQuestionnaire } from '../controllers/Panelistsubmissioncontroller.js';
 
 const router = express.Router();
 

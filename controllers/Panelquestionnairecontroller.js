@@ -1,4 +1,4 @@
-import PanelQuestionnaire from '../models/panelQuestionnaireModel.js';
+import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 
 export const addPanelQuestion = async (req, res) => {
     try {

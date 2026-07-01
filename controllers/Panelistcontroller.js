@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import Panelist from '../models/panelistModel.js';
+import Panelist from '../models/Panelistmodel.js';
 import transporter from '../config/mailer.js';
 
 export const signup = async (req, res) => {

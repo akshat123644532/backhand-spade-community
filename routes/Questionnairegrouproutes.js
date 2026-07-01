@@ -1,7 +1,7 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
-import { addQuestionnaireGroup, getAllQuestionnaireGroups, getQuestionnaireGroupById, updateQuestionnaireGroup, toggleStatus, deleteQuestionnaireGroup } from '../controllers/questionnaireGroupController.js';
-import { validateAddQuestionnaireGroup, validateUpdateQuestionnaireGroup, validateQuestionnaireGroupId, validateToggleStatus, validateGetAllQuestionnaireGroups } from '../validations/questionnaireGroupValidations.js';
+import { addQuestionnaireGroup, getAllQuestionnaireGroups, getQuestionnaireGroupById, updateQuestionnaireGroup, toggleStatus, deleteQuestionnaireGroup } from '../controllers/Questionnairegroupcontroller.js';
+import { validateAddQuestionnaireGroup, validateUpdateQuestionnaireGroup, validateQuestionnaireGroupId, validateToggleStatus, validateGetAllQuestionnaireGroups } from '../validations/Questionnairegroupvalidations.js';
 
 const router = express.Router();
 

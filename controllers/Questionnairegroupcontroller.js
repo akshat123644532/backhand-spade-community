@@ -1,4 +1,4 @@
-import QuestionnaireGroup from '../models/questionnaireGroupModel.js';
+import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
 
 export const addQuestionnaireGroup = async (req, res) => {
     try {

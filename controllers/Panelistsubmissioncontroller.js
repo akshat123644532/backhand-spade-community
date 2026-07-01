@@ -1,5 +1,5 @@
-import Panelist from '../models/panelistModel.js';
-import PanelQuestionnaire from '../models/panelQuestionnaireModel.js';
+import Panelist from '../models/Panelistmodel.js';
+import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 import PanelistSubmissionResponse from '../models/panelistSubmissionResponseModel.js';
 
 // Points credited to a panelist's balance when they complete the questionnaire.
