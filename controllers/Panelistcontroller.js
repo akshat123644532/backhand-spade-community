@@ -36,7 +36,7 @@ export const signup = async (req, res) => {
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
-        const activationLink = `https://spade-community.com/activate/${activation_token}`;
+        const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
         await transporter.sendMail({
