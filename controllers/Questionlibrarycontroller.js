@@ -11,16 +11,12 @@ export const addLibraryQuestion = async (req, res) => {
             return res.status(400).json({ success: false, message: "Question type is required!" });
         }
 
-        const question_library_id = await QuestionLibrary.create({ language, question_title, question_type, right_answer, status, sort_order });
-
-        if (options && options.length > 0) {
-            await QuestionLibrary.addOptions(question_library_id, options);
-        }
+        const question_library_id = await QuestionLibrary.create({ language, question_title, question_type, options, right_answer, status, sort_order });
 
         return res.status(201).json({
             success: true,
             message: "Question added to library successfully!",
-            data: { id: question_library_id, question_title, language, question_type }
+            data: { id: question_library_id, question_title, language, question_type, options: options || [] }
         });
 
     } catch (error) {
@@ -76,16 +72,12 @@ export const updateLibraryQuestion = async (req, res) => {
         if (language) updateData.language = language;
         if (question_title) updateData.question_title = question_title;
         if (question_type) updateData.question_type = question_type;
+        if (options) updateData.options = options;
         if (right_answer) updateData.right_answer = right_answer;
         if (status) updateData.status = status;
         if (sort_order !== undefined) updateData.sort_order = sort_order;
 
         if (Object.keys(updateData).length > 0) await QuestionLibrary.update(id, updateData);
-
-        if (options && options.length > 0) {
-            await QuestionLibrary.deleteOptions(id);
-            await QuestionLibrary.addOptions(id, options);
-        }
 
         return res.status(200).json({ success: true, message: "Library question updated successfully!" });
     } catch (error) {

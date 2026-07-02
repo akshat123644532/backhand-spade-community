@@ -3,25 +3,12 @@ import { db } from '../config/db.js';
 const PanelQuestionnaire = {
 
     create: async (data) => {
-        const { language, question_title, question_text, question_type, is_required, sort_order, status } = data;
+        const { language, question_title, question_text, question_type, options, is_required, sort_order, status } = data;
         const [result] = await db.execute(
-            `INSERT INTO panel_questionnaire (language, question_title, question_text, question_type, is_required, sort_order, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [language, question_title, question_text, question_type || 'textbox', is_required || 0, sort_order ?? 0, status || 'active']
+            `INSERT INTO panel_questionnaire (language, question_title, question_text, question_type, options, is_required, sort_order, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [language, question_title, question_text, question_type || 'textbox', JSON.stringify(options || []), is_required || 0, sort_order ?? 0, status || 'active']
         );
         return result.insertId;
-    },
-
-    addOptions: async (question_id, options) => {
-        for (const option of options) {
-            await db.execute(
-                `INSERT INTO panel_questionnaire_options (question_id, option_text) VALUES (?, ?)`,
-                [question_id, option]
-            );
-        }
-    },
-
-    deleteOptions: async (question_id) => {
-        await db.execute(`DELETE FROM panel_questionnaire_options WHERE question_id = ?`, [question_id]);
     },
 
     getAll: async ({ page = 1, limit = 15, search = '', status = '', language = '' } = {}) => {
@@ -45,7 +32,7 @@ const PanelQuestionnaire = {
         }
 
         const [rows] = await db.query(
-            `SELECT id, language, question_title, question_text, question_type, sort_order, status
+            `SELECT id, language, question_title, question_text, question_type, options, sort_order, status
              FROM panel_questionnaire ${where} 
              ORDER BY question_title ASC, sort_order ASC 
              LIMIT ? OFFSET ?`,
@@ -64,37 +51,23 @@ const PanelQuestionnaire = {
         const [rows] = await db.execute(
             `SELECT * FROM panel_questionnaire WHERE id = ? AND deleted_at IS NULL`, [id]
         );
-        if (!rows[0]) return null;
-
-        const [options] = await db.execute(
-            `SELECT id, option_text FROM panel_questionnaire_options WHERE question_id = ?`, [id]
-        );
-
-        return { ...rows[0], options };
+        return rows[0] || null;
     },
 
     getByTitle: async (question_title) => {
         const [rows] = await db.execute(
-            `SELECT id, language, question_title, question_text, question_type, is_required, sort_order, status, created_at
+            `SELECT id, language, question_title, question_text, question_type, options, is_required, sort_order, status, created_at
              FROM panel_questionnaire WHERE question_title = ? AND deleted_at IS NULL ORDER BY sort_order ASC`,
             [question_title]
         );
         if (!rows.length) return null;
 
-        const questions = [];
-        for (const row of rows) {
-            const [options] = await db.execute(
-                `SELECT id, option_text FROM panel_questionnaire_options WHERE question_id = ?`, [row.id]
-            );
-            questions.push({ ...row, options });
-        }
-
-        return { question_title, language: rows[0].language, questions };
+        return { question_title, language: rows[0].language, questions: rows };
     },
 
     getByLanguage: async (language) => {
         const [rows] = await db.execute(
-            `SELECT id, question_title, question_text
+            `SELECT id, question_title, question_text, options
              FROM panel_questionnaire 
              WHERE language = ? AND deleted_at IS NULL AND status = 'active'
              ORDER BY question_title ASC, sort_order ASC`,
@@ -112,7 +85,8 @@ const PanelQuestionnaire = {
             }
             grouped[key].questions.push({
                 id: row.id,
-                question_text: row.question_text
+                question_text: row.question_text,
+                options: row.options
             });
         }
 
@@ -120,10 +94,23 @@ const PanelQuestionnaire = {
     },
 
     update: async (id, data) => {
-        const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
+        const fields = [];
+        const values = [];
+
+        for (const key of Object.keys(data)) {
+            if (key === 'options') {
+                fields.push('options = ?');
+                values.push(JSON.stringify(data.options || []));
+            } else {
+                fields.push(`${key} = ?`);
+                values.push(data[key]);
+            }
+        }
+
+        values.push(id);
         const [result] = await db.execute(
-            `UPDATE panel_questionnaire SET ${fields}, updated_at = NOW() WHERE id = ?`,
-            [...Object.values(data), id]
+            `UPDATE panel_questionnaire SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+            values
         );
         return result;
     },

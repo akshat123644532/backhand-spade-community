@@ -7,6 +7,11 @@ const Panelist = {
         return rows[0] || null;
     },
 
+    findById: async (id) => {
+        const [rows] = await db.execute(`SELECT * FROM panelists WHERE id = ? AND deleted_at IS NULL`, [id]);
+        return rows[0] || null;
+    },
+
     create: async (data) => {
         const { name, email, password, activation_token, activation_token_expires, questionnaire_url } = data;
         const [result] = await db.execute(
@@ -40,6 +45,13 @@ const Panelist = {
             [questionnaire_url]
         );
         return rows[0] || null;
+    },
+
+    setQuestionnaireUrl: async (id, questionnaire_url) => {
+        await db.execute(
+            `UPDATE panelists SET questionnaire_url = ? WHERE id = ?`,
+            [questionnaire_url, id]
+        );
     },
 
     markQuestionnaireCompleted: async (id) => {

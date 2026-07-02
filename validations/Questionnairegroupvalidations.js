@@ -10,21 +10,21 @@ export const validate = (req, res, next) => {
 };
 
 export const validateAddQuestionnaireGroup = [
-    body('group_title').notEmpty().withMessage('Group title is required').isLength({ max: 255 }).withMessage('Group title too long'),
+    body('surveyTitle').notEmpty().withMessage('Survey title is required').isLength({ max: 255 }).withMessage('Survey title too long'),
     body('language').notEmpty().withMessage('Language is required').isLength({ max: 50 }).withMessage('Language too long'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
-    body('question_library_ids').optional().isArray().withMessage('question_library_ids must be an array'),
-    body('question_library_ids.*').optional().isInt({ min: 1 }).withMessage('Each question library ID must be a valid integer'),
+    body('questionIds').optional().isArray().withMessage('questionIds must be an array'),
+    body('questionIds.*').optional().isInt({ min: 1 }).withMessage('Each question ID must be a valid integer'),
     validate
 ];
 
 export const validateUpdateQuestionnaireGroup = [
     param('id').isInt({ min: 1 }).withMessage('Invalid questionnaire group ID'),
-    body('group_title').optional().isLength({ max: 255 }).withMessage('Group title too long'),
+    body('surveyTitle').optional().isLength({ max: 255 }).withMessage('Survey title too long'),
     body('language').optional().isLength({ max: 50 }).withMessage('Language too long'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
-    body('question_library_ids').optional().isArray().withMessage('question_library_ids must be an array'),
-    body('question_library_ids.*').optional().isInt({ min: 1 }).withMessage('Each question library ID must be a valid integer'),
+    body('questionIds').optional().isArray().withMessage('questionIds must be an array'),
+    body('questionIds.*').optional().isInt({ min: 1 }).withMessage('Each question ID must be a valid integer'),
     validate
 ];
 

@@ -2,22 +2,18 @@ import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 
 export const addPanelQuestion = async (req, res) => {
     try {
-        const { language, question_title, question_text, question_type, is_required, options, sort_order, status } = req.body;
+        const { language, question_title, question_text, question_type, options, is_required, sort_order, status } = req.body;
 
         if (!language || !question_title || !question_text || !question_type) {
             return res.status(400).json({ success: false, message: "Language, question title, question text and question type are required!" });
         }
 
-        const question_id = await PanelQuestionnaire.create({ language, question_title, question_text, question_type, is_required, sort_order, status });
-
-        if (options && options.length > 0) {
-            await PanelQuestionnaire.addOptions(question_id, options);
-        }
+        const question_id = await PanelQuestionnaire.create({ language, question_title, question_text, question_type, options, is_required, sort_order, status });
 
         return res.status(201).json({
             success: true,
             message: "Question added successfully!",
-            data: { id: question_id, question_title, language, question_type }
+            data: { id: question_id, question_title, language, question_type, options: options || [] }
         });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -75,7 +71,7 @@ export const getPanelQuestionsByLanguage = async (req, res) => {
 export const updatePanelQuestion = async (req, res) => {
     try {
         const { id } = req.params;
-        const { language, question_title, question_text, question_type, is_required, options, sort_order, status } = req.body;
+        const { language, question_title, question_text, question_type, options, is_required, sort_order, status } = req.body;
 
         const question = await PanelQuestionnaire.getById(id);
         if (!question) return res.status(404).json({ success: false, message: "Question not found!" });
@@ -85,16 +81,12 @@ export const updatePanelQuestion = async (req, res) => {
         if (question_title) updateData.question_title = question_title;
         if (question_text) updateData.question_text = question_text;
         if (question_type) updateData.question_type = question_type;
+        if (options) updateData.options = options;
         if (is_required !== undefined) updateData.is_required = is_required;
         if (sort_order !== undefined) updateData.sort_order = sort_order;
         if (status) updateData.status = status;
 
         if (Object.keys(updateData).length > 0) await PanelQuestionnaire.update(id, updateData);
-
-        if (options && options.length > 0) {
-            await PanelQuestionnaire.deleteOptions(id);
-            await PanelQuestionnaire.addOptions(id, options);
-        }
 
         return res.status(200).json({ success: true, message: "Question updated successfully!" });
     } catch (error) {

@@ -1,6 +1,7 @@
 import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 import PanelistSubmissionResponse from '../models/panelistSubmissionResponseModel.js';
+import { decryptId } from '../utils/Encryptionhelper.js';
 
 // Points credited to a panelist's balance when they complete the questionnaire.
 // Change this value if sir wants a different reward amount.
@@ -8,9 +9,20 @@ const QUESTIONNAIRE_COMPLETION_POINTS = 50.00;
 
 export const getQuestionnaireByUrl = async (req, res) => {
     try {
-        const { token } = req.params;
+        const { Userid } = req.query;
 
-        const panelist = await Panelist.findByQuestionnaireUrl(token);
+        if (!Userid) {
+            return res.status(400).json({ success: false, message: "Userid is required!" });
+        }
+
+        let panelistId;
+        try {
+            panelistId = decryptId(Userid);
+        } catch (err) {
+            return res.status(400).json({ success: false, message: "Invalid or tampered link!" });
+        }
+
+        const panelist = await Panelist.findById(panelistId);
         if (!panelist) {
             return res.status(404).json({ success: false, message: "Invalid questionnaire link!" });
         }
@@ -41,14 +53,25 @@ export const getQuestionnaireByUrl = async (req, res) => {
 
 export const submitQuestionnaire = async (req, res) => {
     try {
-        const { token } = req.params;
+        const { Userid } = req.query;
         const { answers } = req.body; // [{ question_id, answer }, ...]
+
+        if (!Userid) {
+            return res.status(400).json({ success: false, message: "Userid is required!" });
+        }
 
         if (!answers || !Array.isArray(answers) || answers.length === 0) {
             return res.status(400).json({ success: false, message: "Answers are required!" });
         }
 
-        const panelist = await Panelist.findByQuestionnaireUrl(token);
+        let panelistId;
+        try {
+            panelistId = decryptId(Userid);
+        } catch (err) {
+            return res.status(400).json({ success: false, message: "Invalid or tampered link!" });
+        }
+
+        const panelist = await Panelist.findById(panelistId);
         if (!panelist) {
             return res.status(404).json({ success: false, message: "Invalid questionnaire link!" });
         }

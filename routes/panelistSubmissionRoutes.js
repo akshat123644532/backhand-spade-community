@@ -4,7 +4,7 @@ import { getQuestionnaireByUrl, submitQuestionnaire } from '../controllers/Panel
 const router = express.Router();
 
 
-router.get('/:token', getQuestionnaireByUrl);
-router.post('/:token/submit', submitQuestionnaire);
+router.get('/', getQuestionnaireByUrl);
+router.post('/submit', submitQuestionnaire);
 
 export default router;

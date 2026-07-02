@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
 import transporter from '../config/mailer.js';
+import { encryptId } from '../utils/Encryptionhelper.js';
 
 export const signup = async (req, res) => {
     try {
@@ -22,23 +23,24 @@ export const signup = async (req, res) => {
         const activation_token = crypto.randomBytes(32).toString('hex');
         const activation_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        // unique token used for the panelist's questionnaire link
-        const questionnaire_url = crypto.randomBytes(20).toString('hex');
-
         const panelistId = await Panelist.create({
             name,
             email,
             password: hashedPassword,
             activation_token,
             activation_token_expires,
-            questionnaire_url
+            questionnaire_url: null // filled in right after, once we have the real ID
         });
 
+        // encrypt the real panelist ID so it can safely go in a public URL
+        const encryptedUserId = encryptId(panelistId);
+        await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
+
         const activationLink = `https://spade-community.com/activate/${activation_token}`;
-        const questionnaireLink = `https://spade-community.com/questionnaire/${questionnaire_url}`;
+        const questionnaireLink = `https://spade-community-ui-1blg.vercel.app/community-users?Userid=${encryptedUserId}`;
 
         await transporter.sendMail({
-            from: `"Spade Community" <${process.env.USER_EMAIL}>`,
+            from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: "Activate Your Spade Community Account",
             html: `
@@ -58,10 +60,11 @@ export const signup = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Signup successful! Please check your email to activate your account.",
-            data: { questionnaire_url: `/questionnaire/${questionnaire_url}` }
+            data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
     } catch (error) {
+        console.error("SIGNUP ERROR:", error);
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };

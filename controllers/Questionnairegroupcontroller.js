@@ -2,22 +2,18 @@ import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
 
 export const addQuestionnaireGroup = async (req, res) => {
     try {
-        const { group_title, language, status, question_library_ids } = req.body;
+        const { surveyTitle, language, status, questionIds } = req.body;
 
-        if (!group_title || !language) {
-            return res.status(400).json({ success: false, message: "Group title and language are required!" });
+        if (!surveyTitle || !language) {
+            return res.status(400).json({ success: false, message: "Survey title and language are required!" });
         }
 
-        const questionnaire_group_id = await QuestionnaireGroup.create({ group_title, language, status });
-
-        if (question_library_ids && question_library_ids.length > 0) {
-            await QuestionnaireGroup.addQuestions(questionnaire_group_id, question_library_ids);
-        }
+        const questionnaire_group_id = await QuestionnaireGroup.create({ surveyTitle, language, status, questionIds });
 
         return res.status(201).json({
             success: true,
             message: "Questionnaire group added successfully!",
-            data: { id: questionnaire_group_id, group_title, language }
+            data: { id: questionnaire_group_id, surveyTitle, language, questionIds: questionIds || [] }
         });
 
     } catch (error) {
@@ -55,22 +51,18 @@ export const getQuestionnaireGroupById = async (req, res) => {
 export const updateQuestionnaireGroup = async (req, res) => {
     try {
         const { id } = req.params;
-        const { group_title, language, status, question_library_ids } = req.body;
+        const { surveyTitle, language, status, questionIds } = req.body;
 
         const group = await QuestionnaireGroup.getById(id);
         if (!group) return res.status(404).json({ success: false, message: "Questionnaire group not found!" });
 
         const updateData = {};
-        if (group_title) updateData.group_title = group_title;
+        if (surveyTitle) updateData.surveyTitle = surveyTitle;
         if (language) updateData.language = language;
         if (status) updateData.status = status;
+        if (questionIds) updateData.questionIds = questionIds;
 
         if (Object.keys(updateData).length > 0) await QuestionnaireGroup.update(id, updateData);
-
-        if (question_library_ids && question_library_ids.length > 0) {
-            await QuestionnaireGroup.deleteQuestions(id);
-            await QuestionnaireGroup.addQuestions(id, question_library_ids);
-        }
 
         return res.status(200).json({ success: true, message: "Questionnaire group updated successfully!" });
     } catch (error) {
