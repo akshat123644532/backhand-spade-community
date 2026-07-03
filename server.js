@@ -19,7 +19,7 @@ import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
 import salesLogRoutes from './routes/salesLogRoutes.js';
 import surveyPageRoutes from './routes/surveyPageRoutes.js';
 import activityLogRoutes from './routes/activityLogRoutes.js';
-import emailRoutes from './routes/emailRoutes.js';
+import emailTemplateRoutes from './routes/Emailtemplateroutes.js';
 import invoiceSettingsRoutes from './routes/invoiceSettingsRoutes.js';
 import homePageRoutes from './routes/homePageRoutes.js';
 import panelQuestionnaireRoutes from './routes/Panelquestionnaireroutes.js';
@@ -27,6 +27,7 @@ import rewardSettingRoutes from './routes/rewardSettingRoutes.js';
 import rewardHistoryRoutes from './routes/rewardHistoryRoutes.js';
 import panelistRoutes from './routes/Panelistroutes.js';
 import panelistSubmissionRoutes from './routes/panelistSubmissionRoutes.js';
+
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -50,11 +51,9 @@ app.use((req, res, next) => {
         express.urlencoded({ limit: "10mb", extended: true })(req, res, next);
     });
 });
-
 app.get('/health', (req, res) => {
     res.status(200).json({ success: true, message: "Server is running!" });
 });
-
 app.use('/api/admin', adminRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/partner', partnerRoutes);
@@ -69,7 +68,7 @@ app.use('/api/sales/log', salesLogRoutes);
 app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
 app.use('/api/survey-pages', surveyPageRoutes);
 app.use('/api/activity', activityLogRoutes);
-app.use('/api/emails', emailRoutes);
+app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/invoice/settings', invoiceSettingsRoutes);
 app.use('/api/homepage', homePageRoutes);
 app.use('/api/panel-questionnaire', panelQuestionnaireRoutes);
@@ -77,7 +76,6 @@ app.use('/api/reward-settings', rewardSettingRoutes);
 app.use('/api/reward-history', rewardHistoryRoutes);
 app.use('/api/panelist', panelistRoutes);
 app.use('/api/questionnaire', panelistSubmissionRoutes);
-
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
