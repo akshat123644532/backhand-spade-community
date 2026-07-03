@@ -2,18 +2,18 @@ import EmailTemplate from '../models/Emailtemplatemodel.js';
 
 export const addEmailTemplate = async (req, res) => {
     try {
-        const { template_key, title, subject, body, status } = req.body;
+        const { template_key, slug, title, description, subject, body, status } = req.body;
 
         if (!template_key || !title || !subject || !body) {
             return res.status(400).json({ success: false, message: "template_key, title, subject and body are required!" });
         }
 
-        const id = await EmailTemplate.create({ template_key, title, subject, body, status });
+        const id = await EmailTemplate.create({ template_key, slug, title, description, subject, body, status });
 
         return res.status(201).json({ success: true, message: "Email template added successfully!", data: { id, template_key } });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(409).json({ success: false, message: "template_key already exists!" });
+            return res.status(409).json({ success: false, message: "template_key or slug already exists!" });
         }
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -58,13 +58,15 @@ export const getEmailTemplateByKey = async (req, res) => {
 export const updateEmailTemplate = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, subject, body, status } = req.body;
+        const { slug, title, description, subject, body, status } = req.body;
 
         const template = await EmailTemplate.getById(id);
         if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
 
         const updateData = {};
+        if (slug) updateData.slug = slug;
         if (title) updateData.title = title;
+        if (description !== undefined) updateData.description = description;
         if (subject) updateData.subject = subject;
         if (body) updateData.body = body;
         if (status) updateData.status = status;

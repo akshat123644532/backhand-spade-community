@@ -3,10 +3,10 @@ import { db } from '../config/db.js';
 const EmailTemplate = {
 
     create: async (data) => {
-        const { template_key, title, subject, body, status } = data;
+        const { template_key, slug, title, description, subject, body, status } = data;
         const [result] = await db.execute(
-            `INSERT INTO email_templates (template_key, title, subject, body, status) VALUES (?, ?, ?, ?, ?)`,
-            [template_key, title, subject, body, status || 'active']
+            `INSERT INTO email_templates (template_key, slug, title, description, subject, body, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [template_key, slug || template_key, title, description || null, subject, body, status || 'active']
         );
         return result.insertId;
     },
@@ -19,8 +19,8 @@ const EmailTemplate = {
         const params = [];
 
         if (search) {
-            where += ` AND (title LIKE ? OR template_key LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`);
+            where += ` AND (title LIKE ? OR template_key LIKE ? OR slug LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
         if (status) {
             where += ` AND status = ?`;
@@ -44,6 +44,11 @@ const EmailTemplate = {
 
     getByKey: async (template_key) => {
         const [rows] = await db.execute(`SELECT * FROM email_templates WHERE template_key = ? AND status = 'active'`, [template_key]);
+        return rows[0] || null;
+    },
+
+    getBySlug: async (slug) => {
+        const [rows] = await db.execute(`SELECT * FROM email_templates WHERE slug = ? AND status = 'active'`, [slug]);
         return rows[0] || null;
     },
 
