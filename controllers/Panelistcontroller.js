@@ -158,3 +158,18 @@ export const login = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+export const getAllPanelists = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const is_verified = req.query.is_verified !== undefined ? req.query.is_verified : '';
+        const questionnaire = req.query.questionnaire || '';
+
+        const result = await Panelist.getAll({ page, limit, search, status, is_verified, questionnaire });
+        return res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};

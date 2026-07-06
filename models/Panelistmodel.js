@@ -37,8 +37,6 @@ const Panelist = {
         );
     },
 
-    // ===== Questionnaire flow =====
-
     findByQuestionnaireUrl: async (questionnaire_url) => {
         const [rows] = await db.execute(
             `SELECT * FROM panelists WHERE questionnaire_url = ? AND deleted_at IS NULL`,
@@ -66,7 +64,51 @@ const Panelist = {
             `UPDATE panelists SET balance_point = balance_point + ?, updated_at = NOW() WHERE id = ?`,
             [points, id]
         );
-    }
+    },
+
+    getAll: async ({ page = 1, limit = 10, search = '', status = '', is_verified = '', questionnaire = '' } = {}) => {
+        const p = parseInt(page) || 1;
+        const l = parseInt(limit) || 10;
+        const offset = (p - 1) * l;
+        let where = `WHERE deleted_at IS NULL`;
+        const params = [];
+
+        if (search) {
+            where += ` AND (name LIKE ? OR email LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`);
+        }
+        if (status) {
+            where += ` AND status = ?`;
+            params.push(status);
+        }
+        if (is_verified !== '') {
+            where += ` AND is_verified = ?`;
+            params.push(is_verified);
+        }
+        if (questionnaire) {
+            where += ` AND questionnaire = ?`;
+            params.push(questionnaire);
+        }
+
+        const [rows] = await db.query(
+            `SELECT id, name, email, status, is_verified, questionnaire, balance_point, created_at
+             FROM panelists ${where}
+             ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [...params, Number(l), Number(offset)]
+        );
+
+        const [countResult] = await db.query(
+            `SELECT COUNT(*) as total FROM panelists ${where}`, params
+        );
+
+        return {
+            data: rows,
+            total: countResult[0].total || 0,
+            page: p,
+            limit: l,
+            totalPages: Math.ceil((countResult[0].total || 0) / l)
+        };
+    },
 };
 
 export default Panelist;
