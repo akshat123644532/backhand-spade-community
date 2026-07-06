@@ -4,22 +4,33 @@ const QuestionnaireGroup = {
 
     create: async (data) => {
         const { surveyTitle, language, status, questionIds } = data;
+
         const [result] = await db.execute(
-            `INSERT INTO questionnaire_groups (surveyTitle, language, status, questionIds) VALUES (?, ?, ?, ?)`,
-            [surveyTitle, language, status || 'active', JSON.stringify(questionIds || [])]
+            `INSERT INTO questionnaire_groups (group_title, language, status) VALUES (?, ?, ?)`,
+            [surveyTitle, language, status || 'active']
         );
-        return result.insertId;
+        const groupId = result.insertId;
+
+        if (Array.isArray(questionIds) && questionIds.length > 0) {
+            const values = questionIds.map(qId => [groupId, qId]);
+            await db.query(
+                `INSERT INTO questionnaire_group_questions (questionnaire_group_id, question_library_id) VALUES ?`,
+                [values]
+            );
+        }
+
+        return groupId;
     },
 
     getAll: async ({ page = 1, limit = 10, search = '', status = '', language = '' } = {}) => {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        let where = `WHERE 1=1`;
+        let where = `WHERE deleted_at IS NULL`;
         const params = [];
 
         if (search) {
-            where += ` AND surveyTitle LIKE ?`;
+            where += ` AND group_title LIKE ?`;
             params.push(`%${search}%`);
         }
         if (status) {
@@ -32,7 +43,8 @@ const QuestionnaireGroup = {
         }
 
         const [rows] = await db.query(
-            `SELECT id, surveyTitle, language, status, questionIds, createdAt FROM questionnaire_groups ${where} ORDER BY createdAt DESC LIMIT ? OFFSET ?`,
+            `SELECT id, group_title AS surveyTitle, language, status, created_at AS createdAt
+             FROM questionnaire_groups ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM questionnaire_groups ${where}`, params);
@@ -43,13 +55,19 @@ const QuestionnaireGroup = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM questionnaire_groups WHERE id = ?`, [id]
+            `SELECT id, group_title AS surveyTitle, language, status, created_at AS createdAt, updated_at AS updatedAt
+             FROM questionnaire_groups WHERE id = ? AND deleted_at IS NULL`,
+            [id]
         );
         if (!rows[0]) return null;
 
         const group = rows[0];
-        // mysql2 auto-parses JSON columns, but guard in case it comes back as a string
-        const questionIds = typeof group.questionIds === 'string' ? JSON.parse(group.questionIds) : (group.questionIds || []);
+
+        const [qLinkRows] = await db.execute(
+            `SELECT question_library_id FROM questionnaire_group_questions WHERE questionnaire_group_id = ?`,
+            [id]
+        );
+        const questionIds = qLinkRows.map(r => r.question_library_id);
 
         let questions = [];
         if (questionIds.length > 0) {
@@ -70,24 +88,35 @@ const QuestionnaireGroup = {
         const fields = [];
         const values = [];
 
-        if (data.surveyTitle !== undefined) { fields.push('surveyTitle = ?'); values.push(data.surveyTitle); }
+        if (data.surveyTitle !== undefined) { fields.push('group_title = ?'); values.push(data.surveyTitle); }
         if (data.language !== undefined) { fields.push('language = ?'); values.push(data.language); }
         if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
-        if (data.questionIds !== undefined) { fields.push('questionIds = ?'); values.push(JSON.stringify(data.questionIds)); }
 
-        if (fields.length === 0) return null;
+        if (fields.length > 0) {
+            values.push(id);
+            await db.execute(
+                `UPDATE questionnaire_groups SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL`,
+                values
+            );
+        }
 
-        values.push(id);
-        const [result] = await db.execute(
-            `UPDATE questionnaire_groups SET ${fields.join(', ')}, updatedAt = NOW() WHERE id = ?`,
-            values
-        );
-        return result;
+        if (data.questionIds !== undefined) {
+            await db.execute(`DELETE FROM questionnaire_group_questions WHERE questionnaire_group_id = ?`, [id]);
+            if (Array.isArray(data.questionIds) && data.questionIds.length > 0) {
+                const values2 = data.questionIds.map(qId => [id, qId]);
+                await db.query(
+                    `INSERT INTO questionnaire_group_questions (questionnaire_group_id, question_library_id) VALUES ?`,
+                    [values2]
+                );
+            }
+        }
+
+        return true;
     },
 
     toggleStatus: async (id, status) => {
         const [result] = await db.execute(
-            `UPDATE questionnaire_groups SET status = ?, updatedAt = NOW() WHERE id = ?`,
+            `UPDATE questionnaire_groups SET status = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL`,
             [status, id]
         );
         return result;
@@ -95,7 +124,8 @@ const QuestionnaireGroup = {
 
     delete: async (id) => {
         const [result] = await db.execute(
-            `DELETE FROM questionnaire_groups WHERE id = ?`, [id]
+            `UPDATE questionnaire_groups SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL`,
+            [id]
         );
         return result;
     }
