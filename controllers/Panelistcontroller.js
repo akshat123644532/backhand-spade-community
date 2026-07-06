@@ -14,14 +14,13 @@ export const signup = async (req, res) => {
             return res.status(400).json({ success: false, message: "Name, email and password are required!" });
         }
 
-        if (!recaptchaToken) {
-            return res.status(400).json({ success: false, message: "reCAPTCHA verification is required!" });
-        }
-
-        const isHuman = await verifyRecaptcha(recaptchaToken);
-        if (!isHuman) {
-            return res.status(400).json({ success: false, message: "reCAPTCHA verification failed. Please try again!" });
-        }
+        // if (!recaptchaToken) {
+        //     return res.status(400).json({ success: false, message: "reCAPTCHA verification is required!" });
+        // }
+        // const isHuman = await verifyRecaptcha(recaptchaToken);
+        // if (!isHuman) {
+        //     return res.status(400).json({ success: false, message: "reCAPTCHA verification failed. Please try again!" });
+        // }
 
         const existingPanelist = await Panelist.findByEmail(email);
         if (existingPanelist) {
@@ -31,7 +30,7 @@ export const signup = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const activation_token = crypto.randomBytes(32).toString('hex');
-        const activation_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const activation_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
         const panelistId = await Panelist.create({
             name,
@@ -39,28 +38,23 @@ export const signup = async (req, res) => {
             password: hashedPassword,
             activation_token,
             activation_token_expires,
-            questionnaire_url: null // filled in right after, once we have the real ID
+            questionnaire_url: null
         });
 
-        // encrypt the real panelist ID so it can safely go in a public URL
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
-        // registration bonus — direct balance_point increase
         await Panelist.addBalancePoints(panelistId, 200);
 
         const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
-        // respond immediately — do NOT wait for the email to send.
-        // sending mail over SMTP can take several seconds and was making signup feel slow / time out.
         res.status(201).json({
             success: true,
             message: "Signup successful! Please check your email to activate your account.",
             data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
-        // fire-and-forget: send the email AFTER responding, log failures, never block the response
         transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
