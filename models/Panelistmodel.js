@@ -109,6 +109,30 @@ const Panelist = {
             totalPages: Math.ceil((countResult[0].total || 0) / l)
         };
     },
+
+    update: async (id, data) => {
+        const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
+        const [result] = await db.execute(
+            `UPDATE panelists SET ${fields}, updated_at = NOW() WHERE id = ?`,
+            [...Object.values(data), id]
+        );
+        return result;
+    },
+
+    delete: async (id) => {
+        const [result] = await db.execute(
+            `UPDATE panelists SET deleted_at = NOW() WHERE id = ?`, [id]
+        );
+        return result;
+    },
+
+    toggleStatus: async (id, status) => {
+        const [result] = await db.execute(
+            `UPDATE panelists SET status = ?, updated_at = NOW() WHERE id = ?`,
+            [status, id]
+        );
+        return result;
+    },
 };
 
 export default Panelist;

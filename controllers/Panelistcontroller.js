@@ -28,7 +28,6 @@ export const signup = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-
         const activation_token = crypto.randomBytes(32).toString('hex');
         const activation_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -43,7 +42,6 @@ export const signup = async (req, res) => {
 
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
-
         await Panelist.addBalancePoints(panelistId, 200);
 
         const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
@@ -95,7 +93,6 @@ export const activateAccount = async (req, res) => {
         }
 
         await Panelist.activatePanelist(panelist.id);
-
         return res.status(200).json({ success: true, message: "Account activated successfully! You can now login." });
 
     } catch (error) {
@@ -120,7 +117,6 @@ export const login = async (req, res) => {
             return res.status(403).json({ success: false, message: "Please verify your email before logging in!" });
         }
 
-        // registration isn't considered complete until the panel questionnaire is filled
         if (panelist.questionnaire !== 'yes') {
             return res.status(403).json({
                 success: false,
@@ -158,6 +154,7 @@ export const login = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
 export const getAllPanelists = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -169,6 +166,63 @@ export const getAllPanelists = async (req, res) => {
 
         const result = await Panelist.getAll({ page, limit, search, status, is_verified, questionnaire });
         return res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const updatePanelist = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, email, status } = req.body;
+
+        const panelist = await Panelist.findById(id);
+        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
+
+        const updateData = {};
+        if (name !== undefined) updateData.name = name;
+        if (email !== undefined) updateData.email = email;
+        if (status !== undefined) updateData.status = status;
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ success: false, message: "Nothing to update!" });
+        }
+
+        await Panelist.update(id, updateData);
+        return res.status(200).json({ success: true, message: "Panelist updated successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const deletePanelist = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const panelist = await Panelist.findById(id);
+        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
+
+        await Panelist.delete(id);
+        return res.status(200).json({ success: true, message: "Panelist deleted successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const toggleStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!['active', 'inactive'].includes(status)) {
+            return res.status(400).json({ success: false, message: "Status must be active or inactive!" });
+        }
+
+        const panelist = await Panelist.findById(id);
+        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
+
+        await Panelist.toggleStatus(id, status);
+        return res.status(200).json({ success: true, message: `Status updated to ${status}!` });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
