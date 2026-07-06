@@ -2,7 +2,6 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
-import RewardTransaction from '../models/Rewardtransactionmodel.js';
 import transporter from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
@@ -47,30 +46,21 @@ export const signup = async (req, res) => {
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
-        // log the registration bonus in the reward ledger (also updates balance_point)
-        await RewardTransaction.addTransaction({
-            panelist_id: panelistId,
-            points: 200,
-            transaction_type: 'Cr',
-            transaction_by: 'Admin',
-            remark: 'Registration Reward',
-            reference_id: null
-        });
+        // registration bonus — direct balance_point increase
+        await Panelist.addBalancePoints(panelistId, 200);
 
         const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
-        // respond to the client immediately — do NOT wait for the email to send.
-        // sending mail over SMTP can take several seconds and was causing the
-        // signup request to feel slow / time out.
+        // respond immediately — do NOT wait for the email to send.
+        // sending mail over SMTP can take several seconds and was making signup feel slow / time out.
         res.status(201).json({
             success: true,
             message: "Signup successful! Please check your email to activate your account.",
             data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
-        // fire-and-forget: send the email AFTER responding, log any failure but
-        // never let a slow/failed email affect the signup response
+        // fire-and-forget: send the email AFTER responding, log failures, never block the response
         transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
