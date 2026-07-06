@@ -2,15 +2,26 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
+import RewardTransaction from '../models/Rewardtransactionmodel.js';
 import transporter from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
+import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
 
 export const signup = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, recaptchaToken } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({ success: false, message: "Name, email and password are required!" });
+        }
+
+        if (!recaptchaToken) {
+            return res.status(400).json({ success: false, message: "reCAPTCHA verification is required!" });
+        }
+
+        const isHuman = await verifyRecaptcha(recaptchaToken);
+        if (!isHuman) {
+            return res.status(400).json({ success: false, message: "reCAPTCHA verification failed. Please try again!" });
         }
 
         const existingPanelist = await Panelist.findByEmail(email);
@@ -36,10 +47,31 @@ export const signup = async (req, res) => {
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
+        // log the registration bonus in the reward ledger (also updates balance_point)
+        await RewardTransaction.addTransaction({
+            panelist_id: panelistId,
+            points: 200,
+            transaction_type: 'Cr',
+            transaction_by: 'Admin',
+            remark: 'Registration Reward',
+            reference_id: null
+        });
+
         const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
-        await transporter.sendMail({
+        // respond to the client immediately — do NOT wait for the email to send.
+        // sending mail over SMTP can take several seconds and was causing the
+        // signup request to feel slow / time out.
+        res.status(201).json({
+            success: true,
+            message: "Signup successful! Please check your email to activate your account.",
+            data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
+        });
+
+        // fire-and-forget: send the email AFTER responding, log any failure but
+        // never let a slow/failed email affect the signup response
+        transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: "Activate Your Spade Community Account",
@@ -55,12 +87,8 @@ export const signup = async (req, res) => {
                 <p>By clicking above you will be helping to ensure the highest deliverability of future emails. If you ever change your mind, just let us know by sending mail to support@spade-community.com and we'll stop sending you emails immediately.</p>
                 <p>Thank You,<br/>Spade Community</p>
             `
-        });
-
-        return res.status(201).json({
-            success: true,
-            message: "Signup successful! Please check your email to activate your account.",
-            data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
+        }).catch((err) => {
+            console.error("SIGNUP EMAIL SEND FAILED:", err);
         });
 
     } catch (error) {
@@ -108,6 +136,15 @@ export const login = async (req, res) => {
             return res.status(403).json({ success: false, message: "Please verify your email before logging in!" });
         }
 
+        // registration isn't considered complete until the panel questionnaire is filled
+        if (panelist.questionnaire !== 'yes') {
+            return res.status(403).json({
+                success: false,
+                message: "Please complete your panel questionnaire to finish registration before logging in!",
+                data: { questionnaire_url: `/community-users?Userid=${panelist.questionnaire_url}` }
+            });
+        }
+
         const isMatch = await bcrypt.compare(password, panelist.password);
         if (!isMatch) {
             return res.status(401).json({ success: false, message: "Invalid email or password!" });
@@ -129,7 +166,7 @@ export const login = async (req, res) => {
                 email: panelist.email,
                 balance_point: panelist.balance_point,
                 questionnaire: panelist.questionnaire,
-                questionnaire_url: `/questionnaire/${panelist.questionnaire_url}`
+                questionnaire_url: `/community-users?Userid=${panelist.questionnaire_url}`
             }
         });
 
