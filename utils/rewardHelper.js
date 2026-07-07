@@ -17,7 +17,6 @@ export const addRewardPoints = async ({ user_id, points, transaction_type = 'cre
         );
     }
 
-    // 2. reward_transactions mein entry
     await RewardTransaction.create({
         user_id,
         reward_points: points,
@@ -29,7 +28,7 @@ export const addRewardPoints = async ({ user_id, points, transaction_type = 'cre
         comment
     });
 
-    // 3. reward_history mein bhi entry ✅
+  
     await RewardHistory.create({
         user_id,
         reward_points: points,
