@@ -27,6 +27,7 @@ import rewardSettingRoutes from './routes/rewardSettingRoutes.js';
 import rewardHistoryRoutes from './routes/rewardHistoryRoutes.js';
 import panelistRoutes from './routes/Panelistroutes.js';
 import panelistSubmissionRoutes from './routes/panelistSubmissionRoutes.js';
+import rewardRoutes from './routes/rewardRoutes.js';
 
 
 if (!fs.existsSync('uploads')) {
@@ -76,6 +77,7 @@ app.use('/api/reward-settings', rewardSettingRoutes);
 app.use('/api/reward-history', rewardHistoryRoutes);
 app.use('/api/panelist', panelistRoutes);
 app.use('/api/questionnaire', panelistSubmissionRoutes);
+app.use('/api/rewards', rewardRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

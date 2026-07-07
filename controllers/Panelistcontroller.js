@@ -5,6 +5,7 @@ import Panelist from '../models/Panelistmodel.js';
 import transporter from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
+import { addRewardPoints } from '../utils/rewardHelper.js';
 
 export const signup = async (req, res) => {
     try {
@@ -42,7 +43,17 @@ export const signup = async (req, res) => {
 
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
-        await Panelist.addBalancePoints(panelistId, 200);
+
+        // ✅ Auto reward transaction
+        await addRewardPoints({
+            user_id: panelistId,
+            points: 200,
+            transaction_type: 'credit',
+            transaction_by: 'Admin',
+            remark: 'Registration Reward',
+            reference_id: null,
+            comment: 'Welcome bonus on signup'
+        });
 
         const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
