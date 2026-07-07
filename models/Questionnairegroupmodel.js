@@ -11,6 +11,12 @@ const QuestionnaireGroup = {
         );
         const groupId = result.insertId;
 
+        const website_url = `https://spade-community-client-ui.vercel.app/questionnaire/${groupId}`;
+        await db.execute(
+            `UPDATE questionnaire_groups SET website_url = ? WHERE id = ?`,
+            [website_url, groupId]
+        );
+
         if (Array.isArray(questionIds) && questionIds.length > 0) {
             const values = questionIds.map(qId => [groupId, qId]);
             await db.query(
@@ -43,11 +49,13 @@ const QuestionnaireGroup = {
         }
 
         const [rows] = await db.query(
-            `SELECT id, group_title AS surveyTitle, language, status, created_at AS createdAt
+            `SELECT id, group_title AS surveyTitle, language, website_url, status, created_at AS createdAt
              FROM questionnaire_groups ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM questionnaire_groups ${where}`, params);
+        const [countResult] = await db.query(
+            `SELECT COUNT(*) as total FROM questionnaire_groups ${where}`, params
+        );
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
@@ -55,7 +63,7 @@ const QuestionnaireGroup = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT id, group_title AS surveyTitle, language, status, created_at AS createdAt, updated_at AS updatedAt
+            `SELECT id, group_title AS surveyTitle, language, website_url, status, created_at AS createdAt, updated_at AS updatedAt
              FROM questionnaire_groups WHERE id = ? AND deleted_at IS NULL`,
             [id]
         );
@@ -101,7 +109,9 @@ const QuestionnaireGroup = {
         }
 
         if (data.questionIds !== undefined) {
-            await db.execute(`DELETE FROM questionnaire_group_questions WHERE questionnaire_group_id = ?`, [id]);
+            await db.execute(
+                `DELETE FROM questionnaire_group_questions WHERE questionnaire_group_id = ?`, [id]
+            );
             if (Array.isArray(data.questionIds) && data.questionIds.length > 0) {
                 const values2 = data.questionIds.map(qId => [id, qId]);
                 await db.query(

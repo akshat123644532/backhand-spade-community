@@ -9,11 +9,18 @@ export const addQuestionnaireGroup = async (req, res) => {
         }
 
         const questionnaire_group_id = await QuestionnaireGroup.create({ surveyTitle, language, status, questionIds });
+        const group = await QuestionnaireGroup.getById(questionnaire_group_id);
 
         return res.status(201).json({
             success: true,
             message: "Questionnaire group added successfully!",
-            data: { id: questionnaire_group_id, surveyTitle, language, questionIds: questionIds || [] }
+            data: {
+                id: questionnaire_group_id,
+                surveyTitle,
+                language,
+                website_url: group.website_url,
+                questionIds: questionIds || []
+            }
         });
 
     } catch (error) {
@@ -43,6 +50,27 @@ export const getQuestionnaireGroupById = async (req, res) => {
         const group = await QuestionnaireGroup.getById(id);
         if (!group) return res.status(404).json({ success: false, message: "Questionnaire group not found!" });
         return res.status(200).json({ success: true, data: group });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const getGroupQuestions = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const group = await QuestionnaireGroup.getById(id);
+        if (!group) return res.status(404).json({ success: false, message: "Questionnaire group not found!" });
+        if (group.status === 'inactive') return res.status(403).json({ success: false, message: "This questionnaire is not active!" });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                id: group.id,
+                surveyTitle: group.surveyTitle,
+                language: group.language,
+                questions: group.questions
+            }
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
