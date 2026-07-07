@@ -20,7 +20,7 @@ const RewardHistory = {
         const params = [];
 
         if (search) {
-            where += ` AND (u.name LIKE ? OR rh.reward_type LIKE ?)`;
+            where += ` AND (p.name LIKE ? OR rh.reward_type LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`);
         }
         if (status) {
@@ -37,17 +37,18 @@ const RewardHistory = {
         }
 
         const [rows] = await db.query(
-            `SELECT rh.id, u.id AS user_id, u.name AS user_name, rh.reward_points,
+            `SELECT rh.id, p.id AS user_id, p.name AS user_name, rh.reward_points,
                     rh.transaction_type, rh.reward_type, rh.status, rh.created_at
              FROM reward_history rh
-             LEFT JOIN users u ON rh.user_id = u.id
+             LEFT JOIN panelists p ON rh.user_id = p.id
              ${where}
              ORDER BY rh.created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
 
         const [countResult] = await db.query(
-            `SELECT COUNT(*) as total FROM reward_history rh LEFT JOIN users u ON rh.user_id = u.id ${where}`,
+            `SELECT COUNT(*) as total FROM reward_history rh
+             LEFT JOIN panelists p ON rh.user_id = p.id ${where}`,
             params
         );
         const total = countResult[0].total || 0;
@@ -56,7 +57,8 @@ const RewardHistory = {
             `SELECT
                 SUM(CASE WHEN rh.transaction_type = 'credit' THEN rh.reward_points ELSE 0 END) AS total_credit,
                 SUM(CASE WHEN rh.transaction_type = 'debit' THEN rh.reward_points ELSE 0 END) AS total_debit
-             FROM reward_history rh LEFT JOIN users u ON rh.user_id = u.id ${where}`,
+             FROM reward_history rh
+             LEFT JOIN panelists p ON rh.user_id = p.id ${where}`,
             params
         );
 
@@ -79,9 +81,9 @@ const RewardHistory = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT rh.*, u.name AS user_name
+            `SELECT rh.*, p.name AS user_name
              FROM reward_history rh
-             LEFT JOIN users u ON rh.user_id = u.id
+             LEFT JOIN panelists p ON rh.user_id = p.id
              WHERE rh.id = ?`,
             [id]
         );
