@@ -238,3 +238,13 @@ export const toggleStatus = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+export const getPanelistById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const panelist = await Panelist.findById(id);
+        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
+        return res.status(200).json({ success: true, data: panelist });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
