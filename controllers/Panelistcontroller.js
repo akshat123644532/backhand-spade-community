@@ -44,7 +44,7 @@ export const signup = async (req, res) => {
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
-        // ✅ Auto reward transaction
+        // ✅ Auto reward transaction dono tables mein
         await addRewardPoints({
             user_id: panelistId,
             points: 200,
@@ -55,8 +55,8 @@ export const signup = async (req, res) => {
             comment: 'Welcome bonus on signup'
         });
 
+        // ✅ Sirf ek link — activation link
         const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
-        const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
         res.status(201).json({
             success: true,
@@ -64,6 +64,7 @@ export const signup = async (req, res) => {
             data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
+        
         transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
@@ -74,8 +75,6 @@ export const signup = async (req, res) => {
                 <p>Please click on the Activation link below to verify your email id.</p>
                 <p><a href="${activationLink}">Click here to activate your account.</a></p>
                 <p>Activation link: ${activationLink}</p>
-                <p>Once activated, you can fill out your panel questionnaire here to start earning points:</p>
-                <p><a href="${questionnaireLink}">Click here to fill your questionnaire.</a></p>
                 <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
                 <p>By clicking above you will be helping to ensure the highest deliverability of future emails. If you ever change your mind, just let us know by sending mail to support@spade-community.com and we'll stop sending you emails immediately.</p>
                 <p>Thank You,<br/>Spade Community</p>
@@ -104,7 +103,15 @@ export const activateAccount = async (req, res) => {
         }
 
         await Panelist.activatePanelist(panelist.id);
-        return res.status(200).json({ success: true, message: "Account activated successfully! You can now login." });
+
+      
+        return res.status(200).json({
+            success: true,
+            message: "Account activated successfully!",
+            data: {
+                questionnaire_url: `/community-users?Userid=${panelist.questionnaire_url}`
+            }
+        });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -182,6 +189,17 @@ export const getAllPanelists = async (req, res) => {
     }
 };
 
+export const getPanelistById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const panelist = await Panelist.findById(id);
+        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
+        return res.status(200).json({ success: true, data: panelist });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const updatePanelist = async (req, res) => {
     try {
         const { id } = req.params;
@@ -234,16 +252,6 @@ export const toggleStatus = async (req, res) => {
 
         await Panelist.toggleStatus(id, status);
         return res.status(200).json({ success: true, message: `Status updated to ${status}!` });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
-    }
-};
-export const getPanelistById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const panelist = await Panelist.findById(id);
-        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
-        return res.status(200).json({ success: true, data: panelist });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
