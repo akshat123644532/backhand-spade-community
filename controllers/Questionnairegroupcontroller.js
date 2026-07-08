@@ -113,6 +113,35 @@ export const toggleStatus = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+export const submitGroupAnswers = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { panelist_id, answers } = req.body;
+
+        if (!answers || !Array.isArray(answers) || answers.length === 0) {
+            return res.status(400).json({ success: false, message: "Answers are required!" });
+        }
+
+        const group = await QuestionnaireGroup.getById(id);
+        if (!group) return res.status(404).json({ success: false, message: "Questionnaire group not found!" });
+        if (group.status === 'inactive') return res.status(403).json({ success: false, message: "This questionnaire is not active!" });
+
+        const submission_id = await QuestionnaireGroup.submitAnswers({
+            questionnaire_group_id: id,
+            panelist_id: panelist_id || null,
+            answers
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Answers submitted successfully!",
+            data: { submission_id }
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
 
 export const deleteQuestionnaireGroup = async (req, res) => {
     try {

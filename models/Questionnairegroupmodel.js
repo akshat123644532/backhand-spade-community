@@ -131,6 +131,15 @@ const QuestionnaireGroup = {
         );
         return result;
     },
+    submitAnswers: async (data) => {
+    const { questionnaire_group_id, panelist_id, answers } = data;
+    const [result] = await db.execute(
+        `INSERT INTO questionnaire_submissions (questionnaire_group_id, panelist_id, answers)
+         VALUES (?, ?, ?)`,
+        [questionnaire_group_id, panelist_id || null, JSON.stringify(answers)]
+    );
+    return result.insertId;
+},
 
     delete: async (id) => {
         const [result] = await db.execute(
@@ -140,5 +149,6 @@ const QuestionnaireGroup = {
         return result;
     }
 };
+
 
 export default QuestionnaireGroup;
