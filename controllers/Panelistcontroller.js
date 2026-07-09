@@ -7,21 +7,31 @@ import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
 
+const resolvePanelistImageUrl = (imageUrl, req) => {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('/uploads/')) {
+        return `${req.protocol}://${req.get('host')}${imageUrl}`;
+    }
+    return imageUrl;
+};
+
+const serializePanelistImage = (panelist, req) => ({
+    ...panelist,
+    photo: resolvePanelistImageUrl(panelist.photo, req)
+});
+
+const buildPanelistPhotoPath = (req) => {
+    if (!req.file) return null;
+    return `/uploads/${req.file.filename}`;
+};
+
 export const signup = async (req, res) => {
     try {
-        const { name, email, password, recaptchaToken } = req.body;
+        const { name, email, password, phone, recaptchaToken } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({ success: false, message: "Name, email and password are required!" });
         }
-
-        // if (!recaptchaToken) {
-        //     return res.status(400).json({ success: false, message: "reCAPTCHA verification is required!" });
-        // }
-        // const isHuman = await verifyRecaptcha(recaptchaToken);
-        // if (!isHuman) {
-        //     return res.status(400).json({ success: false, message: "reCAPTCHA verification failed. Please try again!" });
-        // }
 
         const existingPanelist = await Panelist.findByEmail(email);
         if (existingPanelist) {
@@ -31,10 +41,13 @@ export const signup = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const activation_token = crypto.randomBytes(32).toString('hex');
         const activation_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const photoPath = buildPanelistPhotoPath(req);
 
         const panelistId = await Panelist.create({
             name,
             email,
+            phone: phone || null,
+            photo: photoPath,
             password: hashedPassword,
             activation_token,
             activation_token_expires,
@@ -44,7 +57,6 @@ export const signup = async (req, res) => {
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
-        // ✅ Auto reward transaction dono tables mein
         await addRewardPoints({
             user_id: panelistId,
             points: 200,
@@ -55,7 +67,6 @@ export const signup = async (req, res) => {
             comment: 'Welcome bonus on signup'
         });
 
-        // ✅ Sirf ek link — activation link
         const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
 
         res.status(201).json({
@@ -64,7 +75,6 @@ export const signup = async (req, res) => {
             data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
-        
         transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
@@ -104,7 +114,6 @@ export const activateAccount = async (req, res) => {
 
         await Panelist.activatePanelist(panelist.id);
 
-      
         return res.status(200).json({
             success: true,
             message: "Account activated successfully!",
@@ -162,6 +171,8 @@ export const login = async (req, res) => {
                 id: panelist.id,
                 name: panelist.name,
                 email: panelist.email,
+                phone: panelist.phone,
+                photo: resolvePanelistImageUrl(panelist.photo, req),
                 balance_point: panelist.balance_point,
                 questionnaire: panelist.questionnaire,
                 questionnaire_url: `/community-users?Userid=${panelist.questionnaire_url}`
@@ -183,6 +194,7 @@ export const getAllPanelists = async (req, res) => {
         const questionnaire = req.query.questionnaire || '';
 
         const result = await Panelist.getAll({ page, limit, search, status, is_verified, questionnaire });
+        result.data = result.data.map((panelist) => serializePanelistImage(panelist, req));
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -194,7 +206,7 @@ export const getPanelistById = async (req, res) => {
         const { id } = req.params;
         const panelist = await Panelist.findById(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
-        return res.status(200).json({ success: true, data: panelist });
+        return res.status(200).json({ success: true, data: serializePanelistImage(panelist, req) });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -203,7 +215,7 @@ export const getPanelistById = async (req, res) => {
 export const updatePanelist = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, status } = req.body;
+        const { name, email, phone, status } = req.body;
 
         const panelist = await Panelist.findById(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
@@ -211,7 +223,9 @@ export const updatePanelist = async (req, res) => {
         const updateData = {};
         if (name !== undefined) updateData.name = name;
         if (email !== undefined) updateData.email = email;
+        if (phone !== undefined) updateData.phone = phone;
         if (status !== undefined) updateData.status = status;
+        if (req.file) updateData.photo = buildPanelistPhotoPath(req);
 
         if (Object.keys(updateData).length === 0) {
             return res.status(400).json({ success: false, message: "Nothing to update!" });

@@ -12,12 +12,12 @@ const Panelist = {
         return rows[0] || null;
     },
 
-    create: async (data) => {
-        const { name, email, password, activation_token, activation_token_expires, questionnaire_url } = data;
+ create: async (data) => {
+        const { name, email, phone, photo, password, activation_token, activation_token_expires, questionnaire_url } = data;
         const [result] = await db.execute(
-            `INSERT INTO panelists (name, email, password, activation_token, activation_token_expires, questionnaire_url)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [name, email, password, activation_token, activation_token_expires, questionnaire_url]
+            `INSERT INTO panelists (name, email, phone, photo, password, activation_token, activation_token_expires, questionnaire_url)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [name, email, phone || null, photo || null, password, activation_token, activation_token_expires, questionnaire_url]
         );
         return result.insertId;
     },
