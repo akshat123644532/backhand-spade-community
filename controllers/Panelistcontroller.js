@@ -67,27 +67,21 @@ export const signup = async (req, res) => {
             comment: 'Welcome bonus on signup'
         });
 
-        const activationLink = `https://spade-community-client-ui.vercel.app/activate/${activation_token}`;
+        const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
         res.status(201).json({
             success: true,
-            message: "Signup successful! Please check your email to activate your account.",
+            message: "Signup successful! Please check your email.",
             data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
         transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
-            subject: "Activate Your Spade Community Account",
+            subject: "Complete Your Questionnaire - Spade Community",
             html: `
-                <p>Dear ${name},</p>
-                <p>You recently signed up with Spade Community.</p>
-                <p>Please click on the Activation link below to verify your email id.</p>
-                <p><a href="${activationLink}">Click here to activate your account.</a></p>
-                <p>Activation link: ${activationLink}</p>
-                <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
-                <p>By clicking above you will be helping to ensure the highest deliverability of future emails. If you ever change your mind, just let us know by sending mail to support@spade-community.com and we'll stop sending you emails immediately.</p>
-                <p>Thank You,<br/>Spade Community</p>
+                <p>Click this link to fill questions and get reward:</p>
+                <p><a href="${questionnaireLink}">Click Here</a></p>
             `
         }).catch((err) => {
             console.error("SIGNUP EMAIL SEND FAILED:", err);
