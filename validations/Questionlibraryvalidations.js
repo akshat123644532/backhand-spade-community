@@ -9,10 +9,12 @@ export const validate = (req, res, next) => {
     next();
 };
 
+const ALLOWED_QUESTION_TYPES = ['textbox', 'textarea', 'checkbox', 'dropdown', 'radio', 'number', 'date', 'time', 'datetime'];
+
 export const validateAddLibraryQuestion = [
     body('language').notEmpty().withMessage('Language is required').isLength({ max: 50 }).withMessage('Language too long'),
     body('question_title').notEmpty().withMessage('Question title is required').isLength({ max: 500 }).withMessage('Question title too long'),
-    body('question_type').notEmpty().withMessage('Question type is required').isIn(['textbox', 'textarea', 'checkbox', 'dropdown', 'radio']).withMessage('Invalid question type'),
+    body('question_type').notEmpty().withMessage('Question type is required').isIn(ALLOWED_QUESTION_TYPES).withMessage('Invalid question type'),
     body('options').optional().isArray({ min: 1 }).withMessage('At least one option is required'),
     body('right_answer').optional().isLength({ max: 255 }).withMessage('Right answer too long'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
@@ -24,7 +26,7 @@ export const validateUpdateLibraryQuestion = [
     param('id').isInt({ min: 1 }).withMessage('Invalid library question ID'),
     body('language').optional().isLength({ max: 50 }).withMessage('Language too long'),
     body('question_title').optional().isLength({ max: 500 }).withMessage('Question title too long'),
-    body('question_type').optional().isIn(['textbox', 'textarea', 'checkbox', 'dropdown', 'radio']).withMessage('Invalid question type'),
+    body('question_type').optional().isIn(ALLOWED_QUESTION_TYPES).withMessage('Invalid question type'),
     body('options').optional().isArray({ min: 1 }).withMessage('At least one option is required'),
     body('right_answer').optional().isLength({ max: 255 }).withMessage('Right answer too long'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
@@ -54,6 +56,10 @@ export const validateGetAllLibraryQuestions = [
     query('language').optional().custom(value => {
         if (value === '' || value.length <= 50) return true;
         throw new Error('Language filter too long');
+    }),
+    query('question_type').optional().custom(value => {
+        if (value === '' || ALLOWED_QUESTION_TYPES.includes(value)) return true;
+        throw new Error('Invalid question type filter');
     }),
     validate
 ];
