@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-    host: 'smtppro.zoho.com',
-    port: 465,
+    host: process.env.EMAIL_HOST,
+    port: Number(process.env.EMAIL_PORT),
     secure: true, // SSL
     auth: {
         user: process.env.EMAIL_USER,
