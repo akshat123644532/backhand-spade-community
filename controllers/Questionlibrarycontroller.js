@@ -31,8 +31,9 @@ export const getAllLibraryQuestions = async (req, res) => {
         const search = req.query.search || '';
         const status = req.query.status || '';
         const language = req.query.language || '';
+        const question_type = req.query.question_type || '';
 
-        const result = await QuestionLibrary.getAll({ page, limit, search, status, language });
+        const result = await QuestionLibrary.getAll({ page, limit, search, status, language, question_type });
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });

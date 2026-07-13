@@ -11,7 +11,7 @@ const QuestionLibrary = {
         return result.insertId;
     },
 
-    getAll: async ({ page = 1, limit = 10, search = '', status = '', language = '' } = {}) => {
+    getAll: async ({ page = 1, limit = 10, search = '', status = '', language = '', question_type = '' } = {}) => {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
@@ -29,6 +29,10 @@ const QuestionLibrary = {
         if (language) {
             where += ` AND language = ?`;
             params.push(language);
+        }
+        if (question_type) {
+            where += ` AND question_type = ?`;
+            params.push(question_type);
         }
 
         const [rows] = await db.query(
