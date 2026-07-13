@@ -265,8 +265,6 @@ export const toggleStatus = async (req, res) => {
 
         const panelist = await Panelist.findById(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
-
-        
         await Panelist.toggleStatus(id, status);
         return res.status(200).json({ success: true, message: `Status updated to ${status}!` });
     } catch (error) {
