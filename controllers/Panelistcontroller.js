@@ -67,6 +67,7 @@ export const signup = async (req, res) => {
             comment: 'Welcome bonus on signup'
         });
 
+        // ✅ Sirf questionnaire link
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
         res.status(201).json({
@@ -80,9 +81,16 @@ export const signup = async (req, res) => {
             to: email,
             subject: "Complete Your Questionnaire - Spade Community",
             html: `
-                <p>Click this link to fill questions and get reward:</p>
-                <p><a href="${questionnaireLink}">Click Here</a></p>
+                <p>Dear ${name},</p>
+                <p>You recently signed up with Spade Community.</p>
+                <p>Please click on the link below to fill your questionnaire and get your reward points.</p>
+                <p><a href="${questionnaireLink}">Click here to fill your questionnaire.</a></p>
+                <p>Questionnaire link: ${questionnaireLink}</p>
+                <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
+                <p>Thank You,<br/>Spade Community</p>
             `
+        }).then(() => {
+            console.log(`EMAIL SENT TO: ${email} ✅`);
         }).catch((err) => {
             console.error("SIGNUP EMAIL SEND FAILED:", err);
         });
