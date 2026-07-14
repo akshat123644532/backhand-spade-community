@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
+import PanelQuestionnaireResponse from '../models/panelistSubmissionResponseModel.js';
 import transporter from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
@@ -203,12 +204,26 @@ export const getAllPanelists = async (req, res) => {
     }
 };
 
+// ─────────────────────────────────────────────────────────
+// ✅ FIXED — now returns filled questionnaire (question + answer) too
+// ─────────────────────────────────────────────────────────
 export const getPanelistById = async (req, res) => {
     try {
         const { id } = req.params;
+
         const panelist = await Panelist.findById(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
-        return res.status(200).json({ success: true, data: serializePanelistImage(panelist, req) });
+
+        // fetch filled questionnaire answers (question + answer joined)
+        const questionnaire_answers = await PanelQuestionnaireResponse.getByPanelist(id);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                ...serializePanelistImage(panelist, req),
+                questionnaire_answers
+            }
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -271,5 +286,4 @@ export const toggleStatus = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
-
 
