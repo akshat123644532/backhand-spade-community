@@ -142,12 +142,25 @@ export const addProjectUrl = async (req, res) => {
     }
 };
 
+export const getProjectUrlList = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const urlList = await ProjectUrl.getByProjectId(id);
+        return res.status(200).json({ success: true, data: urlList });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const updateProjectUrl = async (req, res) => {
     try {
         const { urlId } = req.params;
         const urlInfo = await ProjectUrl.getById(urlId);
         if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });
-        await ProjectUrl.update(urlId, req.body);
+        await ProjectUrl.update(urlId, { ...req.body, updated_by: req.user?.id || null });
         return res.status(200).json({ success: true, message: "Project URL updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -159,7 +172,7 @@ export const deleteProjectUrl = async (req, res) => {
         const { urlId } = req.params;
         const urlInfo = await ProjectUrl.getById(urlId);
         if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });
-        await ProjectUrl.delete(urlId);
+        await ProjectUrl.delete(urlId, req.user?.id || null);
         return res.status(200).json({ success: true, message: "Project URL deleted successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
