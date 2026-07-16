@@ -25,7 +25,6 @@ const ProjectMultipleUrl = {
         );
         return rows[0] || null;
     },
-
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(
@@ -42,5 +41,4 @@ const ProjectMultipleUrl = {
         return result;
     }
 };
-
 export default ProjectMultipleUrl;
