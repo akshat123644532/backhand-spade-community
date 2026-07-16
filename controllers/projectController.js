@@ -232,11 +232,15 @@ export const uploadMultipleUrlCsv = async (req, res) => {
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        const urlInfoRows = await ProjectUrl.getByProjectId(id);
-        if (!urlInfoRows || !urlInfoRows.length) {
-            return res.status(400).json({ success: false, message: "Add Project URL Info first before uploading multiple URLs!" });
+        // frontend sends project_url_id directly in form-data; fall back to auto-lookup if not sent
+        let project_url_id = req.body.project_url_id || null;
+        if (!project_url_id) {
+            const urlInfoRows = await ProjectUrl.getByProjectId(id);
+            if (!urlInfoRows || !urlInfoRows.length) {
+                return res.status(400).json({ success: false, message: "Add Project URL Info first before uploading multiple URLs!" });
+            }
+            project_url_id = urlInfoRows[0].id;
         }
-        const project_url_id = urlInfoRows[0].id;
 
         const fileContent = fs.readFileSync(req.file.path);
         const rows = parse(fileContent, {
@@ -268,6 +272,34 @@ export const uploadMultipleUrlCsv = async (req, res) => {
             message: `${inserted} row(s) uploaded successfully!`,
             project_url_id
         });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// Multiple URLs — list all rows for a project (Project Multi URL Records)
+export const getMultipleUrlList = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const records = await ProjectMultipleUrl.getByProjectId(id);
+        return res.status(200).json({ success: true, data: records });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// Multiple URLs — download a blank CSV template for the "Download CSV Template" button
+export const downloadCsvTemplate = async (req, res) => {
+    try {
+        const headers = 'Live_Link,VenderURL,Venderid_Userid,UserType,Status\n';
+        const sampleRow = 'https://spade.com/startsurvey?projectid=sp1234,www.adsurver.com?projectid=1234,XXXX/XYG,adsurver,active\n';
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="multi_url_template.csv"');
+        return res.status(200).send(headers + sampleRow);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
