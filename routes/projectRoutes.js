@@ -1,10 +1,12 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
+import csvUploadMiddleware from '../middleware/csvUploadMiddleware.js';
 import {
     addProject, getAllProjects, getProjectById,
     updateProject, deleteProject, toggleProjectStatus,
     addProjectUrl, updateProjectUrl, deleteProjectUrl,
-    addMultipleUrl, updateMultipleUrl, deleteMultipleUrl
+    addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
+    uploadMultipleUrlCsv
 } from '../controllers/projectController.js';
 
 const router = express.Router();
@@ -26,5 +28,8 @@ router.delete('/url/:urlId',        verifyToken, deleteProjectUrl);
 router.post('/:id/multiple-url',    verifyToken, addMultipleUrl);
 router.put('/multiple-url/:urlId',  verifyToken, updateMultipleUrl);
 router.delete('/multiple-url/:urlId', verifyToken, deleteMultipleUrl);
+
+// Multiple URLs — CSV bulk upload
+router.post('/:id/multiple-url/csv-upload', verifyToken, csvUploadMiddleware.single('file'), uploadMultipleUrlCsv);
 
 export default router;

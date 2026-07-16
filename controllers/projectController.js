@@ -1,3 +1,5 @@
+import fs from 'fs';
+import { parse } from 'csv-parse/sync';
 import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
@@ -17,14 +19,15 @@ export const addProject = async (req, res) => {
         });
 
         // URL Info add karo
+        let urlInfoId = null;
         if (urlInfo) {
-            await ProjectUrl.create({ ...urlInfo, project_id: id, action_by: req.user?.id || null });
+            urlInfoId = await ProjectUrl.create({ ...urlInfo, project_id: id, action_by: req.user?.id || null });
         }
 
         // Multiple URLs add karo
         if (multipleUrls && Array.isArray(multipleUrls) && multipleUrls.length > 0) {
             for (const url of multipleUrls) {
-                await ProjectMultipleUrl.create({ ...url, project_id: id });
+                await ProjectMultipleUrl.create({ ...url, project_id: id, project_url_id: urlInfoId });
             }
         }
 
@@ -170,7 +173,10 @@ export const addMultipleUrl = async (req, res) => {
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        const urlId = await ProjectMultipleUrl.create({ ...req.body, project_id: id });
+        const urlInfoRows = await ProjectUrl.getByProjectId(id);
+        const project_url_id = urlInfoRows?.[0]?.id || null;
+
+        const urlId = await ProjectMultipleUrl.create({ ...req.body, project_id: id, project_url_id });
         return res.status(201).json({ success: true, message: "Multiple URL added successfully!", data: { id: urlId } });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -196,6 +202,59 @@ export const deleteMultipleUrl = async (req, res) => {
         if (!url) return res.status(404).json({ success: false, message: "URL not found!" });
         await ProjectMultipleUrl.delete(urlId);
         return res.status(200).json({ success: true, message: "Multiple URL deleted successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// Multiple URLs — CSV bulk upload
+export const uploadMultipleUrlCsv = async (req, res) => {
+    try {
+        const { id } = req.params; // project_id
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "CSV file is required!" });
+        }
+
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const urlInfoRows = await ProjectUrl.getByProjectId(id);
+        if (!urlInfoRows || !urlInfoRows.length) {
+            return res.status(400).json({ success: false, message: "Add Project URL Info first before uploading multiple URLs!" });
+        }
+        const project_url_id = urlInfoRows[0].id;
+
+        const fileContent = fs.readFileSync(req.file.path);
+        const rows = parse(fileContent, {
+            columns: true,
+            skip_empty_lines: true,
+            trim: true
+        });
+
+        if (!rows.length) {
+            return res.status(400).json({ success: false, message: "CSV file is empty!" });
+        }
+
+        let inserted = 0;
+        for (const row of rows) {
+            await ProjectMultipleUrl.create({
+                project_id: id,
+                project_url_id,
+                Live_Link: row.Live_Link || row.live_link || null,
+                VenderURL: row.VenderURL || row.vendor_url || null,
+                Venderid_Userid: row.Venderid_Userid || row.venderid_userid || null,
+                UserType: row.UserType || row.user_type || null,
+                Status: row.Status || row.status || 'active'
+            });
+            inserted++;
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `${inserted} row(s) uploaded successfully!`,
+            project_url_id
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
