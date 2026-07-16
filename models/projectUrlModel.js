@@ -53,10 +53,24 @@ const ProjectUrl = {
     },
 
     update: async (id, data) => {
-        const fields = Object.keys(data).map(k => `\`${k}\` = ?`).join(', ');
+        // map friendly keys to actual DB column names (LOI -> `LOI(Minute)`, IR -> `IR(%)`)
+        const columnMap = {
+            LOI: '`LOI(Minute)`',
+            IR: '`IR(%)`'
+        };
+
+        const setClauses = [];
+        const values = [];
+        for (const key of Object.keys(data)) {
+            const column = columnMap[key] || `\`${key}\``;
+            setClauses.push(`${column} = ?`);
+            values.push(data[key]);
+        }
+        if (!setClauses.length) return null;
+
         const [result] = await db.execute(
-            `UPDATE project_url_Info SET ${fields}, updated_at = NOW() WHERE id = ?`,
-            [...Object.values(data), id]
+            `UPDATE project_url_Info SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = ?`,
+            [...values, id]
         );
         return result;
     },
