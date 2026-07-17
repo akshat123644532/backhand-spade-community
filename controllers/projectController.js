@@ -26,6 +26,7 @@ export const addProject = async (req, res) => {
 
         // Multiple URLs add karo
         if (multipleUrls && Array.isArray(multipleUrls) && multipleUrls.length > 0) {
+            // Comment - instead of using for loop use bulk insert query
             for (const url of multipleUrls) {
                 await ProjectMultipleUrl.create({ ...url, project_id: id, project_url_id: urlInfoId });
             }

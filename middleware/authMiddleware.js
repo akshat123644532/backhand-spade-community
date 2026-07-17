@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 
+// Comment: Unify with panelistAuthMiddleware into one auth middleware with role checks to avoid duplicate patterns and behavior drift.
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -9,6 +10,7 @@ const verifyToken = (req, res, next) => {
     }
 
     try {
+        // Comment - remove the fall back secret key always keep it in .env file.
         const verified = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key_123_secured');
         req.user = verified;
         next();

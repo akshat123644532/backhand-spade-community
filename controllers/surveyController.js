@@ -1,5 +1,6 @@
 import Survey from '../models/surveyModel.js';
 import SurveyGroupProject from '../models/surveyGroupProjectModel.js';
+// Comment: Controllers should not import db directly — move SQL into a model/repository and keep controllers HTTP-only (controller -> service -> model).
 import { db } from '../config/db.js';
 import { logActivity } from '../utils/activityLogger.js';
 
@@ -128,6 +129,7 @@ export const searchSurveys = async (req, res) => {
         const search = req.query.q || '';
         if (!search) return res.status(400).json({ success: false, message: "Search query is required!" });
 
+        // Comment: Move this raw SQL into Survey model/service; also replace hardcoded PaperWardb schema with env-configured DB name for portability.
         const [rows] = await db.execute(
             `SELECT s.id, s.survey_id, s.project_name, s.project_country, s.loi, s.ir, s.sample_size, s.currency, s.cpi, s.start_date, s.end_date, s.link_type, s.term_point, s.comp_point, s.status, c.name AS client_name, c.id AS client_id, pm.name AS project_manager_name, pm.id AS project_manager_id FROM surveys s LEFT JOIN PaperWardb.clients c ON s.client_id = c.id LEFT JOIN project_managers pm ON s.project_manager_id = pm.id WHERE s.deleted_at IS NULL AND (s.project_name LIKE ? OR s.survey_id LIKE ?) ORDER BY s.created_at DESC LIMIT 10`,
             [`%${search}%`, `%${search}%`]

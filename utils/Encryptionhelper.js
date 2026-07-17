@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-
+// Comment - remove the fall back secret key always keep it in .env file
 const SALT = process.env.URL_ENCRYPT_SALT || 'abxcsdfds234242424234435';
 const ALGORITHM = 'aes-256-cbc';
 const KEY = crypto.createHash('sha256').update(SALT).digest(); // 32 bytes for aes-256

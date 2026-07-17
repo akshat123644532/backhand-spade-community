@@ -131,6 +131,7 @@ export const changePassword = async (req, res) => {
         const panelist = await PanelistPortal.getDashboard(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
 
+        // Comment: Controllers should not run SQL or dynamic-import db — move password lookup into PanelistPortal model (controller -> service -> model).
         const [fullPanelist] = await (await import('../config/db.js')).db.execute(
             `SELECT password FROM panelists WHERE id = ?`, [id]
         );
@@ -183,6 +184,7 @@ export const submitRedeemRequest = async (req, res) => {
         const panelist = await PanelistPortal.getDashboard(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
 
+        // Comment: Redeem validation and payout rules belong in a service layer, not the controller
         const settings = await RewardSetting.get();
         const minimum_payout = settings?.minimum_payout || 500;
 

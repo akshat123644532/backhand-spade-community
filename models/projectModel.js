@@ -64,6 +64,7 @@ const Project = {
     },
 
     update: async (id, data) => {
+        // Comment: Fragile dynamic SQL — reject empty payloads and centralize a safe update builder (empty keys produce invalid SET clauses).
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(
             `UPDATE project_Info SET ${fields}, updated_at = NOW() WHERE id = ?`,

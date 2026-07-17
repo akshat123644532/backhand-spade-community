@@ -227,6 +227,7 @@ export const forgotPassword = async (req, res) => {
         const admin = await Admin.findByEmail(email);
         if (!admin) return res.status(404).json({ success: false, message: "Email not registered!" });
 
+        // Comment - instead of hardcoding the otp, we should generate a random hashed otp, store it till session expiry
         const otp = "123456";
         const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
         await OTP.create(email, otp, otpExpiry);

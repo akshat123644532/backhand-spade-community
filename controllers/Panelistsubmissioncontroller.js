@@ -79,8 +79,9 @@ export const submitQuestionnaire = async (req, res) => {
         if (panelist.questionnaire === 'yes') {
             return res.status(409).json({ success: false, message: "Questionnaire already submitted!" });
         }
-
+        // Comment - use transaction to save response 
         await PanelistSubmissionResponse.saveResponses(panelist.id, answers);
+        // Comment - since both query are pointing to same table combine both query in single transaction.
         await Panelist.markQuestionnaireCompleted(panelist.id);
         await Panelist.addBalancePoints(panelist.id, QUESTIONNAIRE_COMPLETION_POINTS);
 

@@ -54,6 +54,7 @@ const Survey = {
             params.push(status);
         }
 
+        // Comment: Replace hardcoded PaperWardb.* schema names with env-configured DB/schema for portability across environments.
         const [rows] = await db.query(
             `SELECT s.id, s.survey_id, s.project_name, s.start_date, s.end_date, s.status,
              s.loi, s.ir, s.sample_size, s.cpi, s.currency, s.form_url,
@@ -100,6 +101,7 @@ const Survey = {
     },
 
     update: async (id, data) => {
+        // Comment: Guard empty update payloads and use a shared safe SQL update helper to avoid invalid dynamic SET clauses.
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(
             `UPDATE surveys SET ${fields}, updated_at = NOW() WHERE id = ?`,

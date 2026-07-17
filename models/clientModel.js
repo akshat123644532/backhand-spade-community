@@ -3,6 +3,7 @@ import { db } from '../config/db.js';
 const Client = {
     create: async (clientData) => {
         const { name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body, status } = clientData;
+        // Comment: Replace hardcoded PaperWardb schema with env-configured DB/schema name for env portability.
         const [result] = await db.execute(
             `INSERT INTO PaperWardb.clients (name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [name || null, email || null, country || null, contact_no || null, admin_id || null, website_url || null, api_base_url || null, api_secret_key || null, api_body || null, status || 'active']
@@ -69,9 +70,11 @@ const Client = {
         if (api_body !== undefined) { fields.push('api_body = ?'); values.push(api_body); }
         if (status !== undefined) { fields.push('status = ?'); values.push(status); }
 
+        // Comment: Guard empty update payloads — if fields is empty this builds invalid SQL (`SET  WHERE id = ?`); use a shared safe SQL update helper.
         values.push(id);
 
         const [result] = await db.execute(
+            // Comment: Use DB name from .env file for portability.
             `UPDATE PaperWardb.clients SET ${fields.join(', ')} WHERE id = ?`,
             values
         );

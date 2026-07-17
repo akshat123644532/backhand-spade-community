@@ -95,6 +95,7 @@ const Admin = {
     },
    
 
+// Comment: Duplicate method definition — remove one getByIdWithPassword; the second silently overrides the first.
 getByIdWithPassword: async (id) => {
     const [rows] = await db.execute(
         `SELECT id, name, email, password FROM admins WHERE id = ?`,

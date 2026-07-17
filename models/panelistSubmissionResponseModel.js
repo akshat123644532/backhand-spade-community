@@ -5,6 +5,7 @@ const PanelQuestionnaireResponse = {
     // saves one answer row per question
     saveResponses: async (panelist_id, answers) => {
         // answers = [{ question_id, answer }, ...]
+        // Comment - use bulk insert query to save multiple answers at once.
         for (const ans of answers) {
             await db.execute(
                 `INSERT INTO panel_questionnaire_responses (panelist_id, question_id, answer) VALUES (?, ?, ?)`,
