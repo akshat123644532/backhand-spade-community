@@ -166,6 +166,9 @@ export const signupAdmin = async (req, res) => {
     }
 };
 
+// FIX: ab update ke baad fresh admin data (naya image_url sahit) fetch karke
+// serialize karke response me bhej rahe hain, taaki frontend turant naya photo
+// dikha sake bina manual reload / dobara fetch kiye.
 export const updateAdmin = async (req, res) => {
     const { id } = req.params;
     const { name, permission_type, status, permissions } = req.body;
@@ -195,7 +198,17 @@ export const updateAdmin = async (req, res) => {
             ip_address: req.ip
         });
 
-        res.status(200).json({ success: true, message: "Admin updated successfully!" });
+        // Naya data DB se nikalo aur response me bhejo
+        const updatedAdmin = await Admin.getById(id);
+        if (!updatedAdmin) {
+            return res.status(404).json({ success: false, message: "Admin not found after update!" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin updated successfully!",
+            data: serializeAdminImage(updatedAdmin, req)
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: "Failed to update admin", error: error.message });
     }
