@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import SalesManager from '../models/salesManagerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
+import transporter from '../config/mailer.js';
 
 export const addSalesManager = async (req, res) => {
     try {
@@ -19,7 +20,31 @@ export const addSalesManager = async (req, res) => {
 
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'SalesManager', description: `Sales Manager "${name}" added`, ip_address: req.ip });
 
-        return res.status(201).json({ success: true, message: "Sales Manager added successfully!", data: { code, name, email } });
+        res.status(201).json({ success: true, message: "Sales Manager added successfully!", data: { code, name, email } });
+
+        // welcome email with login credentials — fire-and-forget so API response isn't delayed
+        transporter.sendMail({
+            from: `"Spade Community" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: "Welcome to Spade Community - Your Login Credentials",
+            html: `
+                <p>Hi ${name},</p>
+                <p>Welcome to the Spade Community!</p>
+                <p>Your account has been created for Spade Community as Sales Manager.</p>
+                <p>From now on, please log into your account using your email address and password.</p>
+                <p>Use the below link to log in:<br/>
+                <a href="https://spade-community-ui.vercel.app/sales/sales-manager">https://spade-community-ui.vercel.app/sales/sales-manager</a></p>
+                <p>Your Login Credentials are:-<br/>
+                Email - ${email}<br/>
+                Password - ${password}</p>
+                <p>Thank You,<br/>Spade Community</p>
+            `
+        }).then(() => {
+            console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
+        }).catch((err) => {
+            console.error("SALES MANAGER WELCOME EMAIL FAILED:", err);
+        });
+
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
