@@ -23,8 +23,11 @@ export const addSalesManager = async (req, res) => {
         res.status(201).json({ success: true, message: "Sales Manager added successfully!", data: { code, name, email } });
 
         // welcome email with login credentials — fire-and-forget so API response isn't delayed
+        // FIX: 'from' ab process.env.EMAIL_FROM (Resend verified sender) use kar raha hai,
+        // pehle EMAIL_USER (Gmail address) use ho raha tha jo Resend reject kar raha tha
+        // kyunki gmail.com domain Resend pe verified nahi hai.
         transporter.sendMail({
-            from: `"Spade Community" <${process.env.EMAIL_USER}>`,
+            from: `"Spade Community" <${process.env.EMAIL_FROM}>`,
             to: email,
             subject: "Welcome to Spade Community - Your Login Credentials",
             html: `
@@ -77,13 +80,20 @@ export const getSalesManagerById = async (req, res) => {
 export const updateSalesManager = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, new_password } = req.body;
+        const { name, email, new_password, code } = req.body;
         const manager = await SalesManager.getById(id);
         if (!manager) return res.status(404).json({ success: false, message: "Sales Manager not found!" });
+
+        // Agar code change kar rahe hain to check karo koi aur manager same code use to nahi kar raha
+        if (code && code !== manager.code) {
+            const codeExists = await SalesManager.findByCode(code);
+            if (codeExists) return res.status(400).json({ success: false, message: "This code is already in use!" });
+        }
 
         const updateData = {};
         if (name) updateData.name = name;
         if (email) updateData.email = email;
+        if (code) updateData.code = code;
         if (req.file) updateData.profile_image = `/uploads/${req.file.filename}`;
         if (new_password) updateData.password = await bcrypt.hash(new_password, 10);
 
@@ -91,7 +101,17 @@ export const updateSalesManager = async (req, res) => {
 
         await logActivity({ admin_id: req.user?.id, action: 'UPDATE', module: 'SalesManager', description: `Sales Manager ID ${id} updated`, ip_address: req.ip });
 
-        return res.status(200).json({ success: true, message: "Sales Manager updated successfully!" });
+        // FIX: fresh data return kar rahe hain (jaisa admin controller me kiya tha)
+        // taaki frontend turant naya image/name/email dikha sake bina reload ke
+        const updatedManager = await SalesManager.getById(id);
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const { profile_image, ...data } = updatedManager;
+
+        return res.status(200).json({
+            success: true,
+            message: "Sales Manager updated successfully!",
+            data: { ...data, image_url: profile_image ? `${baseUrl}${profile_image}` : null }
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

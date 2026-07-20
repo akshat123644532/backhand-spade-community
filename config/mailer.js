@@ -1,23 +1,28 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+
+const nodemailerTransport = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: 587, 
+    secure: false, // true for 465, false for 587
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
 
 const transporter = {
     sendMail: async ({ from, to, subject, html, text }) => {
-        const { data, error } = await resend.emails.send({
-            from: from || `Spade Community <${process.env.EMAIL_FROM}>`,
+        const info = await nodemailerTransport.sendMail({
+            from: from || `"Spade Community" <${process.env.EMAIL_USER}>`,
             to,
             subject,
             html,
             text
         });
-
-        if (error) {
-            throw new Error(error.message || 'Resend email failed');
-        }
-        return data;
+        return info;
     }
 };
 
