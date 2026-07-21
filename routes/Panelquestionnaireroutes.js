@@ -11,7 +11,6 @@ import {
     togglePanelQuestionStatus,
     deletePanelQuestion
 } from '../controllers/Panelquestionnairecontroller.js';
-
 const router = express.Router();
 
 router.post('/add',                     verifyToken, addPanelQuestion);
