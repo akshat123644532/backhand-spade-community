@@ -28,7 +28,7 @@ import {
     validateGetAllAdmins,
     validateChangePassword
 } from '../validations/adminValidations.js';
-
+import { logout } from '../controllers/authController.js';
 const router = express.Router();
 
 router.get('/me', verifyToken, getSelf);
@@ -51,5 +51,6 @@ router.get('/:id', verifyToken, validateAdminId, getAdminById);
 
 router.put('/change-password', verifyToken, validateChangePassword, changePassword);
 
+router.post('/logout', verifyToken, logout);
 export default router;
 
