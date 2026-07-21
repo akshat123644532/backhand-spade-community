@@ -71,13 +71,8 @@ export const signup = async (req, res) => {
         // ✅ Sirf questionnaire link
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
-        res.status(201).json({
-            success: true,
-            message: "Signup successful! Please check your email.",
-            data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
-        });
-
-        transporter.sendMail({
+        // Send email first so Render logs/HTTP errors show up in real time.
+        await transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: "Complete Your Questionnaire - Spade Community",
@@ -90,10 +85,14 @@ export const signup = async (req, res) => {
                 <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
                 <p>Thank You,<br/>Spade Community</p>
             `
-        }).then(() => {
-            console.log(`EMAIL SENT TO: ${email} ✅`);
-        }).catch((err) => {
-            console.error("SIGNUP EMAIL SEND FAILED:", err);
+        });
+
+        console.log(`EMAIL SENT TO: ${email} ✅`);
+
+        return res.status(201).json({
+            success: true,
+            message: "Signup successful! Please check your email.",
+            data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
     } catch (error) {

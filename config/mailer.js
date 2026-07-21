@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Render free tier blocks SMTP ports 25/465/587 — use Resend (HTTPS) in production
 const useResend = Boolean(process.env.RESEND_API_KEY);
 const verifiedSender = process.env.EMAIL_FROM;
@@ -47,6 +49,14 @@ if (!useResend) {
 
 const transporter = {
     sendMail: async ({ from, to, subject, html, text }) => {
+        // On Render (prod), SMTP is frequently blocked; don't silently fail.
+        if (!useResend && isProduction) {
+            throw new Error(
+                '[mailer] RESEND_API_KEY is not set in production. Render commonly blocks SMTP; ' +
+                'set RESEND_API_KEY (and EMAIL_FROM if you configured it) in the Render service environment variables.'
+            );
+        }
+
         if (useResend) {
             const { data, error } = await resend.emails.send({
                 from: normalizeFrom(from),

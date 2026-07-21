@@ -22,10 +22,8 @@ export const addProjectManager = async (req, res) => {
 
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'ProjectManager', description: `Project Manager "${name}" added`, ip_address: req.ip });
 
-        res.status(201).json({ success: true, message: "Project Manager added successfully!", data: { code, name, email } });
-
-        // welcome email with login credentials — fire-and-forget so API response isn't delayed
-        transporter.sendMail({
+        // Send email before responding so Render doesn't silently fail.
+        await transporter.sendMail({
             from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: "Welcome to Spade Community - Your Login Credentials",
@@ -41,11 +39,11 @@ export const addProjectManager = async (req, res) => {
                 Password - ${password}</p>
                 <p>Thank You,<br/>Spade Community</p>
             `
-        }).then(() => {
-            console.log(`PROJECT MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
-        }).catch((err) => {
-            console.error("PROJECT MANAGER WELCOME EMAIL FAILED:", err);
         });
+
+        console.log(`PROJECT MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
+
+        return res.status(201).json({ success: true, message: "Project Manager added successfully!", data: { code, name, email } });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
