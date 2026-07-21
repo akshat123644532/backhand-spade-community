@@ -2,16 +2,19 @@ import { db } from '../config/db.js';
 
 const PanelQuestionnaireResponse = {
 
-    // saves one answer row per question
+    // comment saves all answers in a single bulk insert query
     saveResponses: async (panelist_id, answers) => {
         // answers = [{ question_id, answer }, ...]
-        // Comment - use bulk insert query to save multiple answers at once.
-        for (const ans of answers) {
-            await db.execute(
-                `INSERT INTO panel_questionnaire_responses (panelist_id, question_id, answer) VALUES (?, ?, ?)`,
-                [panelist_id, ans.question_id, ans.answer]
-            );
-        }
+        if (!answers || answers.length === 0) return;
+
+        const values = answers.map(ans => [panelist_id, ans.question_id, ans.answer]);
+        const placeholders = values.map(() => '(?, ?, ?)').join(', ');
+        const flatValues = values.flat();
+
+        await db.execute(
+            `INSERT INTO panel_questionnaire_responses (panelist_id, question_id, answer) VALUES ${placeholders}`,
+            flatValues
+        );
     },
 
     hasResponded: async (panelist_id) => {

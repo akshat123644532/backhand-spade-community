@@ -1,11 +1,34 @@
 import { db } from '../config/db.js';
 
+// DB name .env se aayega, portability ke liye (dev/staging/prod alag ho sakta hai)
+const DB_NAME = process.env.DB_NAME || 'PaperWardb';
+
+// Shared safe-update helper — empty update payload pe invalid SQL banne se rokta hai
+const buildUpdateQuery = (table, updateData, whereClause, whereParams = []) => {
+    const fields = [];
+    const values = [];
+
+    for (const [key, value] of Object.entries(updateData)) {
+        if (value !== undefined) {
+            fields.push(`${key} = ?`);
+            values.push(value);
+        }
+    }
+
+    if (fields.length === 0) {
+        throw new Error("No fields provided to update!");
+    }
+
+    const sql = `UPDATE ${table} SET ${fields.join(', ')} WHERE ${whereClause}`;
+    return { sql, values: [...values, ...whereParams] };
+};
+
 const Client = {
     create: async (clientData) => {
         const { name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body, status } = clientData;
-        // Comment: Replace hardcoded PaperWardb schema with env-configured DB/schema name for env portability.
+
         const [result] = await db.execute(
-            `INSERT INTO PaperWardb.clients (name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO ${DB_NAME}.clients (name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [name || null, email || null, country || null, contact_no || null, admin_id || null, website_url || null, api_base_url || null, api_secret_key || null, api_body || null, status || 'active']
         );
         return result;
@@ -29,12 +52,16 @@ const Client = {
 
         const [rows] = await db.query(
             `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.status, c.created_at, c.admin_id, a.name AS admin_name
-             FROM PaperWardb.clients c
-             LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
+             FROM ${DB_NAME}.clients c
+             LEFT JOIN ${DB_NAME}.admins a ON c.admin_id = a.id
              ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM PaperWardb.clients c ${where}`, params);
+
+        const [countResult] = await db.query(
+            `SELECT COUNT(*) as total FROM ${DB_NAME}.clients c ${where}`,
+            params
+        );
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
@@ -43,8 +70,8 @@ const Client = {
     getById: async (id) => {
         const [rows] = await db.execute(
             `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.api_base_url, c.api_secret_key, c.api_body, c.status, c.created_at, c.admin_id, a.name AS admin_name
-             FROM PaperWardb.clients c
-             LEFT JOIN PaperWardb.admins a ON c.admin_id = a.id
+             FROM ${DB_NAME}.clients c
+             LEFT JOIN ${DB_NAME}.admins a ON c.admin_id = a.id
              WHERE c.id = ?`,
             [id]
         );
@@ -52,37 +79,32 @@ const Client = {
     },
 
     findByEmail: async (email) => {
-        const [rows] = await db.execute(`SELECT id, email FROM PaperWardb.clients WHERE email = ?`, [email]);
+        const [rows] = await db.execute(
+            `SELECT id, email FROM ${DB_NAME}.clients WHERE email = ?`,
+            [email]
+        );
         return rows[0];
     },
 
     update: async (id, updateData) => {
         const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status } = updateData;
-        const fields = [];
-        const values = [];
 
-        if (name !== undefined) { fields.push('name = ?'); values.push(name); }
-        if (country !== undefined) { fields.push('country = ?'); values.push(country); }
-        if (contact_no !== undefined) { fields.push('contact_no = ?'); values.push(contact_no); }
-        if (website_url !== undefined) { fields.push('website_url = ?'); values.push(website_url); }
-        if (api_base_url !== undefined) { fields.push('api_base_url = ?'); values.push(api_base_url); }
-        if (api_secret_key !== undefined) { fields.push('api_secret_key = ?'); values.push(api_secret_key); }
-        if (api_body !== undefined) { fields.push('api_body = ?'); values.push(api_body); }
-        if (status !== undefined) { fields.push('status = ?'); values.push(status); }
-
-        // Comment: Guard empty update payloads — if fields is empty this builds invalid SQL (`SET  WHERE id = ?`); use a shared safe SQL update helper.
-        values.push(id);
-
-        const [result] = await db.execute(
-            // Comment: Use DB name from .env file for portability.
-            `UPDATE PaperWardb.clients SET ${fields.join(', ')} WHERE id = ?`,
-            values
+        const { sql, values } = buildUpdateQuery(
+            `${DB_NAME}.clients`,
+            { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status },
+            `id = ?`,
+            [id]
         );
+
+        const [result] = await db.execute(sql, values);
         return result;
     },
 
     delete: async (id) => {
-        const [result] = await db.execute(`DELETE FROM PaperWardb.clients WHERE id = ?`, [id]);
+        const [result] = await db.execute(
+            `DELETE FROM ${DB_NAME}.clients WHERE id = ?`,
+            [id]
+        );
         return result;
     }
 };
