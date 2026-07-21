@@ -46,6 +46,9 @@ export const getClientById = async (req, res) => {
 export const updateClient = async (req, res) => {
     const { id } = req.params;
     try {
+        const client = await Client.getById(id);
+        if (!client) return res.status(404).json({ success: false, message: "Client not found!" });
+
         const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status } = req.body;
 
         const updateData = { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status };
@@ -57,6 +60,9 @@ export const updateClient = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Client updated successfully" });
     } catch (error) {
+        if (error.message === "No fields provided to update!") {
+            return res.status(400).json({ success: false, message: "No fields provided to update!" });
+        }
         res.status(500).json({ success: false, error: error.message });
     }
 };
@@ -64,6 +70,9 @@ export const updateClient = async (req, res) => {
 export const deleteClient = async (req, res) => {
     const { id } = req.params;
     try {
+        const client = await Client.getById(id);
+        if (!client) return res.status(404).json({ success: false, message: "Client not found!" });
+
         await Client.delete(id);
 
         await logActivity({ admin_id: req.user?.id, action: 'DELETE', module: 'Client', description: `Client ID ${id} deleted`, ip_address: req.ip });

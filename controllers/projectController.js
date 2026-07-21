@@ -24,12 +24,14 @@ export const addProject = async (req, res) => {
             urlInfoId = await ProjectUrl.create({ ...urlInfo, project_id: id, action_by: req.user?.id || null });
         }
 
-        // Multiple URLs add karo
+        // Multiple URLs add karo — bulk insert (single query, no loop) comment solved
         if (multipleUrls && Array.isArray(multipleUrls) && multipleUrls.length > 0) {
-            // Comment - instead of using for loop use bulk insert query
-            for (const url of multipleUrls) {
-                await ProjectMultipleUrl.create({ ...url, project_id: id, project_url_id: urlInfoId });
-            }
+            const rows = multipleUrls.map(url => ({
+                ...url,
+                project_id: id,
+                project_url_id: urlInfoId
+            }));
+            await ProjectMultipleUrl.bulkCreate(rows);
         }
 
         return res.status(201).json({
@@ -41,7 +43,6 @@ export const addProject = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
-
 export const getAllProjects = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
