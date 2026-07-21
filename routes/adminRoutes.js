@@ -34,9 +34,8 @@ const router = express.Router();
 router.get('/me', verifyToken, getSelf);
 
 // Comment: Protect admin creation routes with verifyToken + role checks; open /signup and /add-user allow unauthorized admin creation.
-// as both point to same controller and same validation so combine both in single route.
-router.post('/signup',   upload.single('image'), validateImageFile, validateSignup, signupAdmin);
-router.post('/add-user', upload.single('image'), validateImageFile, validateSignup, signupAdmin);
+// commment solved cobine into one route with array of paths
+router.post(['/signup', '/add-user'], upload.single('image'), validateImageFile, validateSignup, signupAdmin);
 router.post('/login', validateLogin, loginAdmin);
 router.post('/searchemail', validateSearchEmail, searchEmail);
 
