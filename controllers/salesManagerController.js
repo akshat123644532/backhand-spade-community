@@ -1,7 +1,59 @@
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import SalesManager from '../models/salesManagerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import transporter from '../config/mailer.js';
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
+}
+
+export const loginSalesManager = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Email and password are required!" });
+        }
+
+        const manager = await SalesManager.findByEmailForLogin(email);
+        if (!manager) {
+            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+        }
+
+        if (manager.status !== 'active') {
+            return res.status(403).json({ success: false, message: "Your account is inactive. Please contact admin." });
+        }
+
+        const isMatch = await bcrypt.compare(password, manager.password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+        }
+
+        const token = jwt.sign(
+            { id: manager.id, email: manager.email, role: 'sales_manager' },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful!",
+            token,
+            data: {
+                id: manager.id,
+                code: manager.code,
+                name: manager.name,
+                email: manager.email,
+                image_url: manager.profile_image ? `${baseUrl}${manager.profile_image}` : null
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
 
 export const addSalesManager = async (req, res) => {
     try {
@@ -74,6 +126,18 @@ export const getSalesManagerById = async (req, res) => {
     }
 };
 
+export const getSelfSalesManager = async (req, res) => {
+    try {
+        const manager = await SalesManager.getById(req.user.id);
+        if (!manager) return res.status(404).json({ success: false, message: "Sales Manager not found!" });
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const { profile_image, ...data } = manager;
+        return res.status(200).json({ success: true, data: { ...data, image_url: profile_image ? `${baseUrl}${profile_image}` : null } });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const updateSalesManager = async (req, res) => {
     try {
         const { id } = req.params;
@@ -98,8 +162,7 @@ export const updateSalesManager = async (req, res) => {
 
         await logActivity({ admin_id: req.user?.id, action: 'UPDATE', module: 'SalesManager', description: `Sales Manager ID ${id} updated`, ip_address: req.ip });
 
-        // FIX: fresh data return kar rahe hain (jaisa admin controller me kiya tha)
-        // taaki frontend turant naya image/name/email dikha sake bina reload ke
+        // fresh data return kar rahe hain taaki frontend turant naya image/name/email dikha sake bina reload ke
         const updatedManager = await SalesManager.getById(id);
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         const { profile_image, ...data } = updatedManager;
@@ -110,6 +173,9 @@ export const updateSalesManager = async (req, res) => {
             data: { ...data, image_url: profile_image ? `${baseUrl}${profile_image}` : null }
         });
     } catch (error) {
+        if (error.message === "No fields provided to update!") {
+            return res.status(400).json({ success: false, message: "No fields provided to update!" });
+        }
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };

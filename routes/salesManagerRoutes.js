@@ -1,11 +1,15 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
+import { allowRoles } from '../middleware/roleMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js';
-import { addSalesManager, getAllSalesManagers, getSalesManagerById, updateSalesManager, toggleStatus, deleteSalesManager } from '../controllers/salesManagerController.js';
+import { loginSalesManager, addSalesManager, getAllSalesManagers, getSalesManagerById, getSelfSalesManager, updateSalesManager, toggleStatus, deleteSalesManager } from '../controllers/salesManagerController.js';
 import { validateAddSalesManager, validateUpdateSalesManager, validateSalesManagerId, validateToggleStatus, validateGetAllSalesManagers } from '../validations/salesManagerValidations.js';
 import { validateImageFile } from '../middleware/imageValidationMiddleware.js';
 
 const router = express.Router();
+
+router.post('/login',       loginSalesManager);
+router.get('/me',           verifyToken, allowRoles('sales_manager'),                                                   getSelfSalesManager);
 
 router.post('/',            verifyToken, upload.single('profile_image'), validateImageFile, validateAddSalesManager,    addSalesManager);
 router.get('/list',         verifyToken, validateGetAllSalesManagers,                                                   getAllSalesManagers);
@@ -15,4 +19,3 @@ router.patch('/status/:id', verifyToken, validateToggleStatus,                  
 router.delete('/:id',       verifyToken, validateSalesManagerId,                                                        deleteSalesManager);
 
 export default router;
-

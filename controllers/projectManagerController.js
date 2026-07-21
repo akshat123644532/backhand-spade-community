@@ -1,9 +1,61 @@
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import ProjectManager from '../models/projectManagerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import transporter from '../config/mailer.js';
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
+}
+
 const BASE_URL = (req) => `${req.protocol}://${req.get('host')}`;
+
+export const loginProjectManager = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Email and password are required!" });
+        }
+
+        const manager = await ProjectManager.findByEmailForLogin(email);
+        if (!manager) {
+            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+        }
+
+        if (manager.status !== 'active') {
+            return res.status(403).json({ success: false, message: "Your account is inactive. Please contact admin." });
+        }
+
+        const isMatch = await bcrypt.compare(password, manager.password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+        }
+
+        const token = jwt.sign(
+            { id: manager.id, email: manager.email, role: 'project_manager' },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        const baseUrl = BASE_URL(req);
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful!",
+            token,
+            data: {
+                id: manager.id,
+                code: manager.code,
+                name: manager.name,
+                email: manager.email,
+                image_url: manager.profile_image ? `${baseUrl}${manager.profile_image}` : null
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
 
 export const addProjectManager = async (req, res) => {
     try {
@@ -59,7 +111,7 @@ export const getAllProjectManagers = async (req, res) => {
         const search = req.query.search || '';
         const status = req.query.status || '';
         const result = await ProjectManager.getAll({ page, limit, search, status });
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const baseUrl = BASE_URL(req);
         result.data = result.data.map(m => ({ ...m, profile_image: m.profile_image ? `${baseUrl}${m.profile_image}` : null }));
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
@@ -71,6 +123,18 @@ export const getProjectManagerById = async (req, res) => {
     try {
         const { id } = req.params;
         const manager = await ProjectManager.getById(id);
+        if (!manager) return res.status(404).json({ success: false, message: "Project Manager not found!" });
+        const baseUrl = BASE_URL(req);
+        manager.profile_image = manager.profile_image ? `${baseUrl}${manager.profile_image}` : null;
+        return res.status(200).json({ success: true, data: manager });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const getSelfProjectManager = async (req, res) => {
+    try {
+        const manager = await ProjectManager.getById(req.user.id);
         if (!manager) return res.status(404).json({ success: false, message: "Project Manager not found!" });
         const baseUrl = BASE_URL(req);
         manager.profile_image = manager.profile_image ? `${baseUrl}${manager.profile_image}` : null;
@@ -104,6 +168,9 @@ export const updateProjectManager = async (req, res) => {
 
         return res.status(200).json({ success: true, message: "Project Manager updated successfully!" });
     } catch (error) {
+        if (error.message === "No fields provided to update!") {
+            return res.status(400).json({ success: false, message: "No fields provided to update!" });
+        }
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
