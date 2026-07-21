@@ -23,11 +23,8 @@ export const addSalesManager = async (req, res) => {
         res.status(201).json({ success: true, message: "Sales Manager added successfully!", data: { code, name, email } });
 
         // welcome email with login credentials — fire-and-forget so API response isn't delayed
-        // FIX: 'from' ab process.env.EMAIL_FROM (Resend verified sender) use kar raha hai,
-        // pehle EMAIL_USER (Gmail address) use ho raha tha jo Resend reject kar raha tha
-        // kyunki gmail.com domain Resend pe verified nahi hai.
         transporter.sendMail({
-            from: `"Spade Community" <${process.env.EMAIL_FROM}>`,
+            from: `"Spade Community" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: "Welcome to Spade Community - Your Login Credentials",
             html: `
@@ -45,7 +42,7 @@ export const addSalesManager = async (req, res) => {
         }).then(() => {
             console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
         }).catch((err) => {
-            console.error("SALES MANAGER WELCOME EMAIL FAILED:", err);
+            console.error("SALES MANAGER WELCOME EMAIL FAILED:", err?.message || err);
         });
 
     } catch (error) {

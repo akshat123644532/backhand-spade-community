@@ -1,7 +1,7 @@
 import Admin from '../models/adminModel.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import nodemailer from 'nodemailer';
+import transporter from '../config/mailer.js';
 import { db } from '../config/db.js';
 import OTP from '../models/otpModel.js';
 import { logActivity } from '../utils/activityLogger.js';
@@ -71,11 +71,6 @@ export const getSelf = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
-
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-});
 
 export const searchEmail = async (req, res) => {
     const { email } = req.body;
@@ -245,7 +240,7 @@ export const forgotPassword = async (req, res) => {
         const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
         await OTP.create(email, otp, otpExpiry);
 
-        const mailOptions = { from: process.env.EMAIL_USER, to: email, subject: "Password Reset OTP - PaperWar", text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes only.` };
+        const mailOptions = { to: email, subject: "Password Reset OTP - PaperWar", text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes only.` };
         await transporter.sendMail(mailOptions);
 
         await logActivity({

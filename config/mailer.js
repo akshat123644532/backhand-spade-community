@@ -1,16 +1,22 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
+const smtpPort = Number(process.env.EMAIL_PORT) === 465 ? 465 : 587;
 
 const nodemailerTransport = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: 587, 
-    secure: false, // true for 465, false for 587
+    port: smtpPort,
+    secure: smtpPort === 465,
     auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
+        pass: process.env.EMAIL_PASS?.replace(/\s/g, ''),
+    },
+    // Corporate proxy / antivirus SSL inspection breaks cert chain on this machine
+    tls: {
+        rejectUnauthorized: false,
+    },
 });
 
 const transporter = {
@@ -20,10 +26,10 @@ const transporter = {
             to,
             subject,
             html,
-            text
+            text,
         });
         return info;
-    }
+    },
 };
 
 export default transporter;
