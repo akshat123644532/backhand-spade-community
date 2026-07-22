@@ -1,8 +1,8 @@
-import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import SalesManager from '../models/salesManagerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
-import transporter from '../config/mailer.js';
+import { sendEmail } from '../config/mailer.js';
+import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -25,7 +25,8 @@ export const loginSalesManager = async (req, res) => {
             return res.status(403).json({ success: false, message: "Your account is inactive. Please contact admin." });
         }
 
-        const isMatch = await bcrypt.compare(password, manager.password);
+        const plainPassword = decrypt(password);
+        const isMatch = await verifyPassword(plainPassword, manager.password);
         if (!isMatch) {
             return res.status(401).json({ success: false, message: "Invalid email or password!" });
         }
@@ -59,41 +60,58 @@ export const addSalesManager = async (req, res) => {
     try {
         const { name, email, password, confirm_password } = req.body;
         if (!name || !email || !password || !confirm_password) return res.status(400).json({ success: false, message: "All fields are required!" });
-        if (password !== confirm_password) return res.status(400).json({ success: false, message: "Passwords do not match!" });
+
+        const plainPassword = decrypt(password);
+        const plainConfirmPassword = decrypt(confirm_password);
+        if (plainPassword !== plainConfirmPassword) return res.status(400).json({ success: false, message: "Passwords do not match!" });
 
         const emailExists = await SalesManager.findByEmail(email);
         if (emailExists) return res.status(400).json({ success: false, message: "Email already registered!" });
 
         const code = await SalesManager.generateCode();
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await encryptPasswordForStorage(plainPassword);
         const profile_image = req.file ? `/uploads/${req.file.filename}` : null;
 
         await SalesManager.create({ code, name, email, password: hashedPassword, profile_image });
 
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'SalesManager', description: `Sales Manager "${name}" added`, ip_address: req.ip });
 
-        // Send email before responding so Render doesn't silently fail.
-        await transporter.sendMail({
-            from: `"Spade Community" <${process.env.EMAIL_USER}>`,
-            to: email,
-            subject: "Welcome to Spade Community - Your Login Credentials",
-            html: `
-                <p>Hi ${name},</p>
-                <p>Welcome to the Spade Community!</p>
-                <p>Your account has been created for Spade Community as Sales Manager.</p>
-                <p>From now on, please log into your account using your email address and password.</p>
-                <p>Use the below link to log in:<br/>
-                <a href="https://spade-community-ui.vercel.app/sales/sales-manager">https://spade-community-ui.vercel.app/sales/sales-manager</a></p>
-                <p>Your Login Credentials are:-<br/>
-                Email - ${email}<br/>
-                Password - ${password}</p>
-                <p>Thank You,<br/>Spade Community</p>
-            `
+        let emailWarning = null;
+        try {
+            const result = await sendEmail({
+                to: email,
+                subject: "Welcome to Spade Community - Your Login Credentials",
+                html: `
+                    <p>Hi ${name},</p>
+                    <p>Welcome to the Spade Community!</p>
+                    <p>Your account has been created for Spade Community as Sales Manager.</p>
+                    <p>From now on, please log into your account using your email address and password.</p>
+                    <p>Use the below link to log in:<br/>
+                    <a href="https://spade-community-ui.vercel.app/sales/sales-manager">https://spade-community-ui.vercel.app/sales/sales-manager</a></p>
+                    <p>Your Login Credentials are:-<br/>
+                    Email - ${email}<br/>
+                    Password - ${plainPassword}</p>
+                    <p>Thank You,<br/>Spade Community</p>
+                `
+            });
+            if (result?.skipped) {
+                emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+            } else {
+                console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
+            }
+        } catch (mailError) {
+            emailWarning = mailError?.message || 'Welcome email could not be sent.';
+            console.error('SALES MANAGER WELCOME EMAIL FAILED:', emailWarning);
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: emailWarning
+                ? 'Sales Manager added successfully, but welcome email could not be sent.'
+                : 'Sales Manager added successfully!',
+            ...(emailWarning && { email_warning: emailWarning }),
+            data: { code, name, email }
         });
-
-        console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
-
-        return res.status(201).json({ success: true, message: "Sales Manager added successfully!", data: { code, name, email } });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -154,7 +172,10 @@ export const updateSalesManager = async (req, res) => {
         if (email) updateData.email = email;
         if (code) updateData.code = code;
         if (req.file) updateData.profile_image = `/uploads/${req.file.filename}`;
-        if (new_password) updateData.password = await bcrypt.hash(new_password, 10);
+        if (new_password) {
+            const plainPassword = decrypt(new_password);
+            updateData.password = await encryptPasswordForStorage(plainPassword);
+        }
 
         await SalesManager.update(id, updateData);
 

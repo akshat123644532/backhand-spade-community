@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaireResponse from '../models/panelistSubmissionResponseModel.js';
-import transporter from '../config/mailer.js';
+import { sendEmail } from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
@@ -71,27 +71,37 @@ export const signup = async (req, res) => {
         // ✅ Sirf questionnaire link
         const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
 
-        // Send email first so Render logs/HTTP errors show up in real time.
-        await transporter.sendMail({
-            from: `"Spade Community" <${process.env.EMAIL_USER}>`,
-            to: email,
-            subject: "Complete Your Questionnaire - Spade Community",
-            html: `
-                <p>Dear ${name},</p>
-                <p>You recently signed up with Spade Community.</p>
-                <p>Please click on the link below to fill your questionnaire and get your reward points.</p>
-                <p><a href="${questionnaireLink}">Click here to fill your questionnaire.</a></p>
-                <p>Questionnaire link: ${questionnaireLink}</p>
-                <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
-                <p>Thank You,<br/>Spade Community</p>
-            `
-        });
-
-        console.log(`EMAIL SENT TO: ${email} ✅`);
+        let emailWarning = null;
+        try {
+            const result = await sendEmail({
+                to: email,
+                subject: "Complete Your Questionnaire - Spade Community",
+                html: `
+                    <p>Dear ${name},</p>
+                    <p>You recently signed up with Spade Community.</p>
+                    <p>Please click on the link below to fill your questionnaire and get your reward points.</p>
+                    <p><a href="${questionnaireLink}">Click here to fill your questionnaire.</a></p>
+                    <p>Questionnaire link: ${questionnaireLink}</p>
+                    <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
+                    <p>Thank You,<br/>Spade Community</p>
+                `
+            });
+            if (result?.skipped) {
+                emailWarning = 'SMTP is not configured. Signup email was skipped.';
+            } else {
+                console.log(`EMAIL SENT TO: ${email} ✅`);
+            }
+        } catch (mailError) {
+            emailWarning = mailError?.message || 'Signup email could not be sent.';
+            console.error('SIGNUP EMAIL SEND FAILED:', emailWarning);
+        }
 
         return res.status(201).json({
             success: true,
-            message: "Signup successful! Please check your email.",
+            message: emailWarning
+                ? 'Signup successful, but we could not send the questionnaire email.'
+                : 'Signup successful! Please check your email.',
+            ...(emailWarning && { email_warning: emailWarning }),
             data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
         });
 
