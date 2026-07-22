@@ -1,88 +1,96 @@
 import nodemailer from 'nodemailer';
-import { Resend } from 'resend';
-import dotenv from 'dotenv';
+import { smtpConfig } from './smtp.js';
 
-dotenv.config();
+let transporter;
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isSmtpConfigured = () =>
+    Boolean(smtpConfig.host && smtpConfig.user && smtpConfig.pass);
 
-// Render free tier blocks SMTP ports 25/465/587 — use Resend (HTTPS) in production
-const useResend = Boolean(process.env.RESEND_API_KEY);
-const verifiedSender = process.env.EMAIL_FROM;
-const gmailUser = process.env.EMAIL_USER;
-
-const defaultFrom = useResend && verifiedSender
-    ? `"Spade Community" <${verifiedSender}>`
-    : `"Spade Community" <${gmailUser}>`;
-
-const normalizeFrom = (from) => {
-    if (!from) return defaultFrom;
-
-    if (useResend && verifiedSender) {
-        const displayNameMatch = from.match(/^(.+?)\s*<[^>]+>$/);
-        const displayName = displayNameMatch?.[1]?.trim() || 'Spade Community';
-        return `${displayName} <${verifiedSender}>`;
-    }
-
-    return from;
+const isRetryableSmtpError = (error) => {
+    const code = error?.code;
+    return (
+        code === 'ETIMEDOUT' ||
+        code === 'ECONNECTION' ||
+        code === 'ESOCKET' ||
+        code === 'ECONNRESET' ||
+        code === 'EENVELOPE'
+    );
 };
 
-const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null;
+const getTransporter = () => {
+    if (!isSmtpConfigured()) {
+        return null;
+    }
 
-let smtpTransport = null;
-if (!useResend) {
-    const smtpPort = Number(process.env.EMAIL_PORT) === 465 ? 465 : 587;
-    smtpTransport = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-            user: gmailUser,
-            pass: process.env.EMAIL_PASS?.replace(/\s/g, ''),
-        },
-        // Local dev only — corporate proxy/antivirus may break cert chain
-        tls: {
-            rejectUnauthorized: false,
-        },
-    });
-}
+    if (!transporter) {
+        transporter = nodemailer.createTransport({
+            host: smtpConfig.host,
+            port: smtpConfig.port,
+            secure: smtpConfig.secure,
+            auth: {
+                user: smtpConfig.user,
+                pass: smtpConfig.pass,
+            },
+            tls: {
+                rejectUnauthorized: smtpConfig.rejectUnauthorized,
+            },
+            // Prefer IPv4 — IPv6 / flaky routes to Gmail often cause ETIMEDOUT on Windows
+            family: 4,
+            connectionTimeout: 30_000,
+            greetingTimeout: 30_000,
+            socketTimeout: 30_000,
+        });
+    }
 
-const transporter = {
-    sendMail: async ({ from, to, subject, html, text }) => {
-        // On Render (prod), SMTP is frequently blocked; don't silently fail.
-        if (!useResend && isProduction) {
-            throw new Error(
-                '[mailer] RESEND_API_KEY is not set in production. Render commonly blocks SMTP; ' +
-                'set RESEND_API_KEY (and EMAIL_FROM if you configured it) in the Render service environment variables.'
-            );
-        }
+    return transporter;
+};
 
-        if (useResend) {
-            const { data, error } = await resend.emails.send({
-                from: normalizeFrom(from),
-                to: Array.isArray(to) ? to : [to],
+export const sendEmail = async ({ to, subject, html, text, from }, { retries = 2 } = {}) => {
+    const mailTransporter = getTransporter();
+
+    if (!mailTransporter) {
+        console.warn(
+            'SMTP is not configured. Skipping email send. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in .env.'
+        );
+        return { skipped: true };
+    }
+
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+            const info = await mailTransporter.sendMail({
+                from: from || smtpConfig.from,
+                to,
                 subject,
                 html,
                 text,
             });
-
-            if (error) {
-                throw new Error(error.message || JSON.stringify(error));
+            return { skipped: false, messageId: info.messageId };
+        } catch (error) {
+            lastError = error;
+            if (attempt < retries && isRetryableSmtpError(error)) {
+                console.warn(
+                    `SMTP send attempt ${attempt + 1} failed (${error.code}). Retrying...`
+                );
+                await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+                continue;
             }
-
-            return data;
+            throw error;
         }
+    }
 
-        return smtpTransport.sendMail({
-            from: from || defaultFrom,
-            to,
-            subject,
-            html,
-            text,
-        });
-    },
+    throw lastError;
 };
 
-console.log(useResend ? 'Email provider: Resend API (HTTPS)' : 'Email provider: SMTP');
+// Backward-compatible wrapper for existing transporter.sendMail(...) call sites
+const mailer = {
+    sendMail: async (options) => sendEmail(options),
+};
 
-export default transporter;
+console.log(
+    isSmtpConfigured()
+        ? `Email provider: SMTP (${smtpConfig.host}:${smtpConfig.port})`
+        : 'Email provider: SMTP (not configured)'
+);
+
+export default mailer;

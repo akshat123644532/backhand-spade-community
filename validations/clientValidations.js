@@ -20,7 +20,7 @@ export const validateAddClient = [
     body('contact_no').optional().isMobilePhone().withMessage('Invalid contact number'),
     body('website_url').optional().isURL().withMessage('Invalid website URL'),
     body('api_base_url').optional().isURL().withMessage('Invalid API base URL'),
-    body('api_secret_key').optional().isLength({ max: 255 }).withMessage('API secret key too long'),
+    body('api_secret_key').optional().isLength({ max: 2000 }).withMessage('API secret key too long'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
     validate
 ];
@@ -32,7 +32,7 @@ export const validateUpdateClient = [
     body('contact_no').optional().isMobilePhone().withMessage('Invalid contact number'),
     body('website_url').optional().isURL().withMessage('Invalid website URL'),
     body('api_base_url').optional().isURL().withMessage('Invalid API base URL'),
-    body('api_secret_key').optional().isLength({ max: 255 }).withMessage('API secret key too long'),
+    body('api_secret_key').optional().isLength({ max: 2000 }).withMessage('API secret key too long'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
     validate
 ];

@@ -30,6 +30,7 @@ import panelistSubmissionRoutes from './routes/panelistSubmissionRoutes.js';
 import rewardRoutes from './routes/rewardRoutes.js';
 import panelistPortalRoutes from './routes/panelistPortalRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
+// import {encrypt} from './utils/cryptoHelper.js';
 import findUserRoutes from './routes/findUserRoutes.js';
 
 if (!fs.existsSync('uploads')) {
@@ -44,7 +45,7 @@ app.use(helmet({
 app.use(cors());
 app.use('/uploads', express.static('uploads'));
 app.set("trust proxy", 2);
-
+// console.log(encrypt("123456"));
 app.use((req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
