@@ -1,0 +1,124 @@
+import FindUser from '../models/FindUserModel.js';
+import Project from '../models/projectModel.js';
+import ProjectInvitedUser from '../models/ProjectInvitedUserModel.js';
+import EmailTemplate from '../models/Emailtemplatemodel.js';
+import Panelist from '../models/Panelistmodel.js';
+import transporter from '../config/mailer.js';
+
+export const getFilterQuestions = async (req, res) => {
+    try {
+        const language = req.query.language || 'english';
+        const questions = await FindUser.getFilterQuestions(language);
+        return res.status(200).json({ success: true, data: questions });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const getAnswerOptions = async (req, res) => {
+    try {
+        const { questionId } = req.params;
+        const question = await FindUser.getAnswerOptions(questionId);
+        if (!question) return res.status(404).json({ success: false, message: "Question not found!" });
+        return res.status(200).json({ success: true, data: question });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const searchUsers = async (req, res) => {
+    try {
+        const { id } = req.params; // project_id
+        const { filters, page, limit } = req.body; // filters = [{ question_id, answer }, ...]
+
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        if (!filters || !Array.isArray(filters) || filters.length === 0) {
+            return res.status(400).json({ success: false, message: "At least one filter is required!" });
+        }
+
+        const result = await FindUser.search(filters, { page, limit });
+
+        const panelistIds = result.data.map(r => r.id);
+        const inviteMap = await ProjectInvitedUser.getMapByProject(id, panelistIds);
+
+        result.data = result.data.map(row => ({
+            ...row,
+            invite_status: inviteMap[row.id]?.invite_status || 'not_invited',
+            message: inviteMap[row.id]?.message || null,
+            earned_points: row.balance_point
+        }));
+
+        return res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const inviteUsers = async (req, res) => {
+    try {
+        const { id } = req.params; // project_id
+        const { panelist_ids, email_template_id } = req.body;
+
+        if (!panelist_ids || !Array.isArray(panelist_ids) || panelist_ids.length === 0) {
+            return res.status(400).json({ success: false, message: "panelist_ids array is required!" });
+        }
+        if (!email_template_id) {
+            return res.status(400).json({ success: false, message: "email_template_id is required!" });
+        }
+
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const template = await EmailTemplate.getById(email_template_id);
+        if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
+
+        let invited = 0;
+        for (const panelistId of panelist_ids) {
+            const panelist = await Panelist.findById(panelistId);
+            if (!panelist) continue;
+
+            const rendered = EmailTemplate.render(template, {
+                name: panelist.name,
+                project_name: project.Project_Name,
+                survey_link: `https://spade-community-client-ui.vercel.app/survey/${id}`
+            });
+
+        
+        transporter.sendMail({
+    to: panelist.email,
+    subject: rendered.subject,
+    html: rendered.body
+}).catch(err => console.error('Invite email failed:', err.message));
+
+            await ProjectInvitedUser.create({
+                project_id: id,
+                panelist_id: panelistId,
+                email_template_id,
+                message: rendered.subject
+            });
+            invited++;
+        }
+
+        return res.status(200).json({ success: true, message: `${invited} user(s) invited successfully!` });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const listInvitedUsers = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const result = await ProjectInvitedUser.getByProject(id, { page, limit });
+        return res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};

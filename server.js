@@ -30,6 +30,7 @@ import panelistSubmissionRoutes from './routes/panelistSubmissionRoutes.js';
 import rewardRoutes from './routes/rewardRoutes.js';
 import panelistPortalRoutes from './routes/panelistPortalRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
+import findUserRoutes from './routes/findUserRoutes.js';
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -81,6 +82,7 @@ app.use('/api/questionnaire', panelistSubmissionRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/panelist-portal', panelistPortalRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/find-user', findUserRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
