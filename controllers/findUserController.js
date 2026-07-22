@@ -7,8 +7,7 @@ import transporter from '../config/mailer.js';
 
 export const getFilterQuestions = async (req, res) => {
     try {
-        const language = req.query.language || 'english';
-        const questions = await FindUser.getFilterQuestions(language);
+        const questions = await FindUser.getFilterQuestions(); // no groupId needed
         return res.status(200).json({ success: true, data: questions });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });

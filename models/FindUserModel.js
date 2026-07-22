@@ -3,16 +3,15 @@ import { db } from '../config/db.js';
 const FindUser = {
 
     // Question Filter dropdown
-    getFilterQuestions: async (language = 'english') => {
-        const [rows] = await db.execute(
-            `SELECT id, question_title, question_text, options
-             FROM panel_questionnaire
-             WHERE language = ? AND deleted_at IS NULL AND status = 'active'
-             ORDER BY question_title ASC, sort_order ASC`,
-            [language]
-        );
-        return rows;
-    },
+   getFilterQuestions: async () => {
+    const [rows] = await db.execute(
+        `SELECT id, question_title, question_type, options
+         FROM question_library
+         WHERE deleted_at IS NULL AND status = 'active'
+         ORDER BY sort_order ASC`
+    );
+    return rows;
+},
 
     // Answer Filter options (from the selected question's `options` JSON)
     getAnswerOptions: async (question_id) => {

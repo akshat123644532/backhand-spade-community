@@ -8,5 +8,5 @@ router.get('/questions/:questionId/answers', getAnswerOptions);
 router.post('/:id/search', searchUsers);
 router.post('/:id/invite', inviteUsers);
 router.get('/:id/invited', listInvitedUsers);
-
+router.get('/questions', getFilterQuestions);  // no :id needed anymore
 export default router;
