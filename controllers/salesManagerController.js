@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import SalesManager from '../models/salesManagerModel.js';
+import EmailTemplate from '../models/Emailtemplatemodel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { sendEmail } from '../config/mailer.js';
 import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
@@ -8,6 +9,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
 }
+
+const SALES_MANAGER_LOGIN_URL = 'https://spade-community-ui.vercel.app/sales/sales-manager';
+const SALES_MANAGER_WELCOME_TEMPLATE_KEY = 'sales_manager_welcome';
 
 export const loginSalesManager = async (req, res) => {
     try {
@@ -78,26 +82,28 @@ export const addSalesManager = async (req, res) => {
 
         let emailWarning = null;
         try {
-            const result = await sendEmail({
-                to: email,
-                subject: "Welcome to Spade Community - Your Login Credentials",
-                html: `
-                    <p>Hi ${name},</p>
-                    <p>Welcome to the Spade Community!</p>
-                    <p>Your account has been created for Spade Community as Sales Manager.</p>
-                    <p>From now on, please log into your account using your email address and password.</p>
-                    <p>Use the below link to log in:<br/>
-                    <a href="https://spade-community-ui.vercel.app/sales/sales-manager">https://spade-community-ui.vercel.app/sales/sales-manager</a></p>
-                    <p>Your Login Credentials are:-<br/>
-                    Email - ${email}<br/>
-                    Password - ${plainPassword}</p>
-                    <p>Thank You,<br/>Spade Community</p>
-                `
-            });
-            if (result?.skipped) {
-                emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+            // Template DB se fetch karo instead of static HTML
+            const template = await EmailTemplate.getByKey(SALES_MANAGER_WELCOME_TEMPLATE_KEY);
+
+            if (!template) {
+                // Template missing -> email skip karo but manager creation fail mat karo
+                emailWarning = `Email template "${SALES_MANAGER_WELCOME_TEMPLATE_KEY}" not found. Welcome email was skipped.`;
+                console.error('SALES MANAGER WELCOME EMAIL SKIPPED:', emailWarning);
             } else {
-                console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
+                const { subject, body } = EmailTemplate.render(template, {
+                    name,
+                    email,
+                    password: plainPassword,
+                    login_url: SALES_MANAGER_LOGIN_URL
+                });
+
+                const result = await sendEmail({ to: email, subject, html: body });
+
+                if (result?.skipped) {
+                    emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+                } else {
+                    console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
+                }
             }
         } catch (mailError) {
             emailWarning = mailError?.message || 'Welcome email could not be sent.';
