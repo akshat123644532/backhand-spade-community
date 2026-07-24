@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import verifyToken from '../middleware/authMiddleware.js';
 import { signup, activateAccount, login, getAllPanelists, getPanelistById, updatePanelist, deletePanelist, toggleStatus } from '../controllers/Panelistcontroller.js';
+import { logout } from '../controllers/authController.js';
 
 const upload = multer({ dest: 'uploads/' });
 const router = express.Router();
@@ -14,5 +15,5 @@ router.get('/:id',             verifyToken, getPanelistById);
 router.put('/:id',             verifyToken, upload.single('photo'), updatePanelist);
 router.delete('/:id',          verifyToken, deletePanelist);
 router.patch('/:id/status',    verifyToken, toggleStatus);
-
+router.post('/logout', verifyToken, logout);
 export default router;

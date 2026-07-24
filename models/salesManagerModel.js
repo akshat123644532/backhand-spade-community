@@ -1,10 +1,11 @@
 import { db } from '../config/db.js';
+import { buildUpdateQuery } from '../utils/sqlHelper.js';
 
 const SalesManager = {
 
     generateCode: async () => {
         const [rows] = await db.execute(`SELECT code FROM sales_managers ORDER BY id DESC LIMIT 1`);
-        if (!rows.length) return 'SM001'; // SM prefix for Sales Manager
+        if (!rows.length) return 'SM001';
         const num = parseInt(rows[0].code.replace('SM', '')) + 1;
         return `SM${String(num).padStart(3, '0')}`;
     },
@@ -22,7 +23,7 @@ const SalesManager = {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        
+
         let where = `WHERE deleted_at IS NULL`;
         const params = [];
 
@@ -36,7 +37,7 @@ const SalesManager = {
         }
 
         const sql = `SELECT id, code, name, email, profile_image, status, created_at FROM sales_managers ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-        
+
         const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM sales_managers ${where}`, params);
         const total = countResult[0].total || 0;
@@ -57,9 +58,18 @@ const SalesManager = {
         return rows[0] || null;
     },
 
+    // Login ke liye alag method — password aur status bhi chahiye
+    findByEmailForLogin: async (email) => {
+        const [rows] = await db.execute(
+            `SELECT id, code, name, email, password, profile_image, status FROM sales_managers WHERE email = ? AND deleted_at IS NULL`,
+            [email]
+        );
+        return rows[0] || null;
+    },
+
     update: async (id, data) => {
-        const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-        const [result] = await db.execute(`UPDATE sales_managers SET ${fields}, updated_at = NOW() WHERE id = ?`, [...Object.values(data), id]);
+        const { sql, values } = buildUpdateQuery('sales_managers', data, 'id = ?', [id], 'updated_at = NOW()');
+        const [result] = await db.execute(sql, values);
         return result;
     },
 

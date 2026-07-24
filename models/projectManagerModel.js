@@ -1,4 +1,5 @@
 import { db } from '../config/db.js';
+import { buildUpdateQuery } from '../utils/sqlHelper.js';
 
 const ProjectManager = {
 
@@ -22,7 +23,7 @@ const ProjectManager = {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        
+
         let where = `WHERE deleted_at IS NULL`;
         const params = [];
 
@@ -35,24 +36,13 @@ const ProjectManager = {
             params.push(status);
         }
 
-
-        
         const sql = `SELECT id, code, name, email, profile_image, status, created_at FROM project_managers ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-        
-        // LIMIT aur OFFSET ko strictly Number mein convert karke bheja hai
-        const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
-        
 
+        const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM project_managers ${where}`, params);
         const total = countResult[0].total || 0;
 
-        return { 
-            data: rows, 
-            total: total, 
-            page: p, 
-            limit: l, 
-            totalPages: Math.ceil(total / l) 
-        };
+        return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
     },
 
     getById: async (id) => {
@@ -68,9 +58,18 @@ const ProjectManager = {
         return rows[0] || null;
     },
 
+    // Login ke liye alag method — password aur status bhi chahiye
+    findByEmailForLogin: async (email) => {
+        const [rows] = await db.execute(
+            `SELECT id, code, name, email, password, profile_image, status FROM project_managers WHERE email = ? AND deleted_at IS NULL`,
+            [email]
+        );
+        return rows[0] || null;
+    },
+
     update: async (id, data) => {
-        const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-        const [result] = await db.execute(`UPDATE project_managers SET ${fields}, updated_at = NOW() WHERE id = ?`, [...Object.values(data), id]);
+        const { sql, values } = buildUpdateQuery('project_managers', data, 'id = ?', [id], 'updated_at = NOW()');
+        const [result] = await db.execute(sql, values);
         return result;
     },
 

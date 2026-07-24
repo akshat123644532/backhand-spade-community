@@ -1,4 +1,5 @@
 import { db } from '../config/db.js';
+import { buildUpdateQuery } from '../utils/sqlHelper.js';
 
 const Project = {
 
@@ -26,7 +27,7 @@ const Project = {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        let where = `WHERE isdeleted = 0 OR isdeleted IS NULL`;
+        let where = `WHERE (isdeleted = 0 OR isdeleted IS NULL)`;
         const params = [];
 
         if (search) {
@@ -55,7 +56,7 @@ const Project = {
             totalPages: Math.ceil((countResult[0].total || 0) / l)
         };
     },
-
+// comment solved flash back
     getById: async (id) => {
         const [rows] = await db.execute(
             `SELECT * FROM project_Info WHERE id = ? AND (isdeleted = 0 OR isdeleted IS NULL)`, [id]
@@ -64,12 +65,15 @@ const Project = {
     },
 
     update: async (id, data) => {
-        // Comment: Fragile dynamic SQL — reject empty payloads and centralize a safe update builder (empty keys produce invalid SET clauses).
-        const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-        const [result] = await db.execute(
-            `UPDATE project_Info SET ${fields}, updated_at = NOW() WHERE id = ?`,
-            [...Object.values(data), id]
+        const { sql, values } = buildUpdateQuery(
+            'project_Info',
+            data,
+            'id = ?',
+            [id],
+            'updated_at = NOW()'
         );
+
+        const [result] = await db.execute(sql, values);
         return result;
     },
 

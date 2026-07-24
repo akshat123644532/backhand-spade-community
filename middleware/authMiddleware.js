@@ -1,7 +1,13 @@
 import jwt from 'jsonwebtoken';
+import TokenBlacklist from '../models/tokenBlacklistModel.js';
 
-// Comment: Unify with panelistAuthMiddleware into one auth middleware with role checks to avoid duplicate patterns and behavior drift.
-const verifyToken = (req, res, next) => {
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
+}
+
+const verifyToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
@@ -10,9 +16,14 @@ const verifyToken = (req, res, next) => {
     }
 
     try {
-        // Comment - remove the fall back secret key always keep it in .env file.
-        const verified = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key_123_secured');
+        const blacklisted = await TokenBlacklist.isBlacklisted(token);
+        if (blacklisted) {
+            return res.status(401).json({ success: false, message: "Unauthorized: Token has been logged out!" });
+        }
+
+        const verified = jwt.verify(token, JWT_SECRET);
         req.user = verified;
+        req.token = token;
         next();
     } catch (error) {
         res.status(401).json({ success: false, message: "Unauthorized: Invalid or Expired Token!" });

@@ -21,27 +21,19 @@ const Admin = {
     update: async (id, updateData) => {
         const { name, permission_type, permissions, image_url, image_mime_type, image_file_name, status, updated_by } = updateData;
 
-        const sets = [
-            'name = ?',
-            'permission_type = ?',
-            'permissions = ?',
-            'status = ?',
-            'updated_by = ?'
-        ];
-        const values = [name, permission_type, permissions ?? null, status, updated_by];
+        const sets = [];
+        const values = [];
 
-        if (image_url !== undefined) {
-            sets.push('image_url = ?');
-            values.push(image_url);
-        }
-        if (image_mime_type !== undefined) {
-            sets.push('image_mime_type = ?');
-            values.push(image_mime_type);
-        }
-        if (image_file_name !== undefined) {
-            sets.push('image_file_name = ?');
-            values.push(image_file_name);
-        }
+        if (name !== undefined) { sets.push('name = ?'); values.push(name); }
+        if (permission_type !== undefined) { sets.push('permission_type = ?'); values.push(permission_type); }
+        if (permissions !== undefined) { sets.push('permissions = ?'); values.push(permissions ?? null); }
+        if (status !== undefined) { sets.push('status = ?'); values.push(status); }
+        if (updated_by !== undefined) { sets.push('updated_by = ?'); values.push(updated_by); }
+        if (image_url !== undefined) { sets.push('image_url = ?'); values.push(image_url); }
+        if (image_mime_type !== undefined) { sets.push('image_mime_type = ?'); values.push(image_mime_type); }
+        if (image_file_name !== undefined) { sets.push('image_file_name = ?'); values.push(image_file_name); }
+
+        if (!sets.length) return null; // nothing to update
 
         values.push(id);
         const [result] = await db.execute(
@@ -83,33 +75,22 @@ const Admin = {
         }
 
         const sql = `SELECT id, name, email, permission_type, permissions, image_url, image_mime_type, image_file_name, status, contact_no FROM admins ${where} ORDER BY id DESC LIMIT ? OFFSET ?`;
-        
+
         const [rows] = await db.query(sql, [...params, Number(l), Number(offset)]);
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM admins ${where}`, params);
-        
 
-        
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
     },
-   
 
-// Comment: Duplicate method definition — remove one getByIdWithPassword; the second silently overrides the first.
-getByIdWithPassword: async (id) => {
-    const [rows] = await db.execute(
-        `SELECT id, name, email, password FROM admins WHERE id = ?`,
-        [id]
-    );
-    return rows[0];
-},
-getByIdWithPassword: async (id) => {
-    const [rows] = await db.execute(
-        `SELECT id, name, email, password FROM admins WHERE id = ?`,
-        [id]
-    );
-    return rows[0];
-},
+    getByIdWithPassword: async (id) => {
+        const [rows] = await db.execute(
+            `SELECT id, name, email, password FROM admins WHERE id = ?`,
+            [id]
+        );
+        return rows[0];
+    },
 
     getById: async (id) => {
         const [rows] = await db.execute(

@@ -1,10 +1,10 @@
 import Admin from '../models/adminModel.js';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../config/mailer.js';
 import { db } from '../config/db.js';
 import OTP from '../models/otpModel.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
 
 const toImageBuffer = (value) => {
     if (!value) return null;
@@ -72,11 +72,6 @@ export const getSelf = async (req, res) => {
     }
 };
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-});
-
 export const searchEmail = async (req, res) => {
     const { email } = req.body;
     try {
@@ -92,11 +87,14 @@ export const searchEmail = async (req, res) => {
 export const loginAdmin = async (req, res) => {
     const { email, password } = req.body;
     try {
+        if (!email || !password) return res.status(400).json({ success: false, message: "Email and password are required!" });
+
         const admin = await Admin.findByEmail(email);
         if (!admin) return res.status(404).json({ success: false, message: "Admin not found!" });
         if (admin.status !== 'active') return res.status(403).json({ success: false, message: "Account is inactive!" });
 
-        const isMatch = await bcrypt.compare(password, admin.password);
+        const plainPassword = decrypt(password);
+        const isMatch = await verifyPassword(plainPassword, admin.password);
         if (!isMatch) return res.status(401).json({ success: false, message: "Invalid password!" });
 
         const token = jwt.sign({ id: admin.id, email: admin.email }, process.env.JWT_SECRET, { expiresIn: '1d' });
@@ -129,8 +127,8 @@ export const signupAdmin = async (req, res) => {
         const final_image_url = buildSignupImageUrl(req);
         const image_mime_type = req.file?.mimetype ?? null;
         const image_file_name = buildImageFileName(req);
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        const plainPassword = decrypt(password);
+        const hashedPassword = await encryptPasswordForStorage(plainPassword);
 
         let parsedPermissions = permissions;
         if (typeof permissions === 'string') {
@@ -166,6 +164,9 @@ export const signupAdmin = async (req, res) => {
     }
 };
 
+// FIX: ab update ke baad fresh admin data (naya image_url sahit) fetch karke
+// serialize karke response me bhej rahe hain, taaki frontend turant naya photo
+// dikha sake bina manual reload / dobara fetch kiye.
 export const updateAdmin = async (req, res) => {
     const { id } = req.params;
     const { name, permission_type, status, permissions } = req.body;
@@ -195,7 +196,17 @@ export const updateAdmin = async (req, res) => {
             ip_address: req.ip
         });
 
-        res.status(200).json({ success: true, message: "Admin updated successfully!" });
+        // Naya data DB se nikalo aur response me bhejo
+        const updatedAdmin = await Admin.getById(id);
+        if (!updatedAdmin) {
+            return res.status(404).json({ success: false, message: "Admin not found after update!" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin updated successfully!",
+            data: serializeAdminImage(updatedAdmin, req)
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: "Failed to update admin", error: error.message });
     }
@@ -232,8 +243,11 @@ export const forgotPassword = async (req, res) => {
         const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
         await OTP.create(email, otp, otpExpiry);
 
-        const mailOptions = { from: process.env.EMAIL_USER, to: email, subject: "Password Reset OTP - PaperWar", text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes only.` };
-        await transporter.sendMail(mailOptions);
+        await sendEmail({
+            to: email,
+            subject: "Password Reset OTP - PaperWar",
+            text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes only.`
+        });
 
         await logActivity({
             admin_id: admin.id,
@@ -272,8 +286,8 @@ export const resetPassword = async (req, res) => {
         if (new Date() > new Date(otpRecord.expires_at)) return res.status(400).json({ success: false, message: "OTP has expired!" });
         if (otpRecord.is_verified !== 1) return res.status(400).json({ success: false, message: "OTP not verified!" });
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
+        const plainPassword = decrypt(newPassword);
+        const hashedPassword = await encryptPasswordForStorage(plainPassword);
         await Admin.updatePassword(email, hashedPassword);
 
         await logActivity({
@@ -329,7 +343,11 @@ export const changePassword = async (req, res) => {
             return res.status(400).json({ success: false, message: "All fields are required!" });
         }
 
-        if (newPassword !== confirmPassword) {
+        const plainCurrentPassword = decrypt(currentPassword);
+        const plainNewPassword = decrypt(newPassword);
+        const plainConfirmPassword = decrypt(confirmPassword);
+
+        if (plainNewPassword !== plainConfirmPassword) {
             return res.status(400).json({ success: false, message: "New password and confirm password do not match!" });
         }
 
@@ -338,13 +356,12 @@ export const changePassword = async (req, res) => {
             return res.status(404).json({ success: false, message: "Admin not found!" });
         }
 
-        const isMatch = await bcrypt.compare(currentPassword, admin.password);
+        const isMatch = await verifyPassword(plainCurrentPassword, admin.password);
         if (!isMatch) {
             return res.status(401).json({ success: false, message: "Current password is incorrect!" });
         }
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
+        const hashedPassword = await encryptPasswordForStorage(plainNewPassword);
 
         await Admin.updatePassword(admin.email, hashedPassword);
 

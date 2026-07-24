@@ -14,7 +14,7 @@ import salesProjectRoutes from './routes/salesProjectRoutes.js';
 import salesManagerRoutes from './routes/salesManagerRoutes.js';
 import questionLibraryRoutes from './routes/Questionlibraryroutes.js';
 import questionnaireGroupRoutes from './routes/Questionnairegrouproutes.js';
-import surveyRoutes from './routes/surveyRoutes.js';
+
 import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
 import salesLogRoutes from './routes/salesLogRoutes.js';
 import surveyPageRoutes from './routes/surveyPageRoutes.js';
@@ -30,6 +30,8 @@ import panelistSubmissionRoutes from './routes/panelistSubmissionRoutes.js';
 import rewardRoutes from './routes/rewardRoutes.js';
 import panelistPortalRoutes from './routes/panelistPortalRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
+// import {encrypt} from './utils/cryptoHelper.js';
+import findUserRoutes from './routes/findUserRoutes.js';
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -43,7 +45,7 @@ app.use(helmet({
 app.use(cors());
 app.use('/uploads', express.static('uploads'));
 app.set("trust proxy", 2);
-
+// console.log(encrypt("123456"));
 app.use((req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
@@ -65,7 +67,7 @@ app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
 app.use('/api/question-library', questionLibraryRoutes);
 app.use('/api/questionnaire-group', questionnaireGroupRoutes);
-app.use('/api/survey', surveyRoutes);
+
 app.use('/api/sales/log', salesLogRoutes);
 app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
 app.use('/api/survey-pages', surveyPageRoutes);
@@ -81,6 +83,7 @@ app.use('/api/questionnaire', panelistSubmissionRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/panelist-portal', panelistPortalRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/find-user', findUserRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

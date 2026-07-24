@@ -3,8 +3,7 @@ import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 import PanelistSubmissionResponse from '../models/panelistSubmissionResponseModel.js';
 import { decryptId } from '../utils/Encryptionhelper.js';
 
-// Points credited to a panelist's balance when they complete the questionnaire.
-// Change this value if sir wants a different reward amount.
+
 const QUESTIONNAIRE_COMPLETION_POINTS = 50.00;
 
 export const getQuestionnaireByUrl = async (req, res) => {
