@@ -16,8 +16,8 @@ const Project = {
         const Project_code = await Project.generateProjectCode();
 
         const [result] = await db.execute(
-            `INSERT INTO project_Info (Project_Name, Project_code, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, action_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO project_Info (Project_Name, Project_code, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, action_by, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
             [Project_Name, Project_code, Clients || null, Project_Manager || null, Sales_Manager || null, RFQ || null, Project_Description || null, Project_Link_Type || null, Notes || null, Status || 'active', action_by || null]
         );
         return { id: result.insertId, Project_code };
