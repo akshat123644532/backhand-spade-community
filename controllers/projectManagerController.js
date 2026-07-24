@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import ProjectManager from '../models/projectManagerModel.js';
+import EmailTemplate from '../models/Emailtemplatemodel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { sendEmail } from '../config/mailer.js';
 import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
@@ -80,26 +81,29 @@ export const addProjectManager = async (req, res) => {
 
         let emailWarning = null;
         try {
-            const result = await sendEmail({
-                to: email,
-                subject: "Welcome to Spade Community - Your Login Credentials",
-                html: `
-                    <p>Hi ${name},</p>
-                    <p>Welcome to the Spade Community!</p>
-                    <p>Your account has been created for Spade Community as Project Manager.</p>
-                    <p>From now on, please log into your account using your email address and password.</p>
-                    <p>Use the below link to log in:<br/>
-                    <a href="https://spade-community-ui.vercel.app/project-managers">https://spade-community-ui.vercel.app/project-managers</a></p>
-                    <p>Your Login Credentials are:-<br/>
-                    Email - ${email}<br/>
-                    Password - ${plainPassword}</p>
-                    <p>Thank You,<br/>Spade Community</p>
-                `
-            });
-            if (result?.skipped) {
-                emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+            const template = await EmailTemplate.getByKey('Project Manager Login');
+            if (!template) {
+                emailWarning = 'Project Manager Login email template not found or inactive.';
             } else {
-                console.log(`PROJECT MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
+                const login_url = `${process.env.BASE_URL}/auth`;
+                const { subject, body } = EmailTemplate.render(template, {
+                    user_name: name,
+                    login_url,
+                    user_email: email,
+                    password: plainPassword
+                });
+
+                const result = await sendEmail({
+                    to: email,
+                    subject,
+                    text: body,
+                    html: body.replace(/\n/g, '<br>')
+                });
+                if (result?.skipped) {
+                    emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+                } else {
+                    console.log(`PROJECT MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
+                }
             }
         } catch (mailError) {
             emailWarning = mailError?.message || 'Welcome email could not be sent.';
