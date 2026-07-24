@@ -14,14 +14,14 @@ const FindUser = {
 },
 
     // Answer Filter options (from the selected question's `options` JSON)
-    getAnswerOptions: async (question_id) => {
-        const [rows] = await db.execute(
-            `SELECT id, question_title, question_text, options
-             FROM panel_questionnaire WHERE id = ? AND deleted_at IS NULL`,
-            [question_id]
-        );
-        return rows[0] || null;
-    },
+ getAnswerOptions: async (question_id) => {
+    const [rows] = await db.execute(
+        `SELECT id, question_title, question_type, options
+         FROM question_library WHERE id = ? AND deleted_at IS NULL`,
+        [question_id]
+    );
+    return rows[0] || null;
+},
 
     // Core search — panelists matching ALL given {question_id, answer} filter pairs
     search: async (filters = [], { page = 1, limit = 10 } = {}) => {
