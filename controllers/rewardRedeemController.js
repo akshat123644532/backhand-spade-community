@@ -1,4 +1,6 @@
 import RewardRedeem from '../models/rewardRedeemModel.js';
+import Panelist from '../models/Panelistmodel.js';
+import { addRewardPoints } from '../utils/rewardHelper.js';
 
 export const addRedeemRequest = async (req, res) => {
     try {
@@ -47,6 +49,41 @@ export const updateRedeemStatus = async (req, res) => {
 
         const request = await RewardRedeem.getById(id);
         if (!request) return res.status(404).json({ success: false, message: "Redeem request not found!" });
+
+        if (request.status !== 'pending') {
+            return res.status(409).json({
+                success: false,
+                message: `Redeem request already ${request.status}!`
+            });
+        }
+
+        if (status === 'approved') {
+            const panelist = await Panelist.findById(request.user_id);
+            if (!panelist) {
+                return res.status(404).json({ success: false, message: "Panelist not found!" });
+            }
+
+            if (Number(panelist.balance_point) < Number(request.reward_points)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Insufficient balance points to approve this redeem request!",
+                    data: {
+                        balance_point: panelist.balance_point,
+                        reward_points: request.reward_points
+                    }
+                });
+            }
+
+            await addRewardPoints({
+                user_id: request.user_id,
+                points: request.reward_points,
+                transaction_type: 'debit',
+                transaction_by: action_by || 'Admin',
+                remark: 'Redeem Request Approved',
+                reference_id: String(id),
+                comment: comment || remark || ''
+            });
+        }
 
         await RewardRedeem.updateStatus(id, { status, action_by, remark, comment });
         return res.status(200).json({ success: true, message: `Redeem request ${status} successfully!` });

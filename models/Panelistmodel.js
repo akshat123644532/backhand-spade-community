@@ -52,16 +52,26 @@ const Panelist = {
         );
     },
 
-    markQuestionnaireCompleted: async (id) => {
-        await db.execute(
+    markQuestionnaireCompleted: async (id, connection = db) => {
+        await connection.execute(
             `UPDATE panelists SET questionnaire = 'yes', updated_at = NOW() WHERE id = ?`,
             [id]
         );
     },
 
-    addBalancePoints: async (id, points) => {
-        await db.execute(
+    addBalancePoints: async (id, points, connection = db) => {
+        await connection.execute(
             `UPDATE panelists SET balance_point = balance_point + ?, updated_at = NOW() WHERE id = ?`,
+            [points, id]
+        );
+    },
+
+    // Combines questionnaire completion + points credit + verify panelist in a single UPDATE
+    completeQuestionnaireWithPoints: async (id, points, connection = db) => {
+        await connection.execute(
+            `UPDATE panelists
+             SET questionnaire = 'yes', is_verified = 1, balance_point = balance_point + ?, updated_at = NOW()
+             WHERE id = ?`,
             [points, id]
         );
     },

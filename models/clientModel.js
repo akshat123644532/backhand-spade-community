@@ -25,11 +25,11 @@ const buildUpdateQuery = (table, updateData, whereClause, whereParams = []) => {
 
 const Client = {
     create: async (clientData) => {
-        const { name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body, status } = clientData;
+        const { name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_header_key, status } = clientData;
 
         const [result] = await db.execute(
-            `INSERT INTO ${DB_NAME}.clients (name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_body, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [name || null, email || null, country || null, contact_no || null, admin_id || null, website_url || null, api_base_url || null, api_secret_key || null, api_body || null, status || 'active']
+            `INSERT INTO ${DB_NAME}.clients (name, email, country, contact_no, admin_id, website_url, api_base_url, api_secret_key, api_header_key, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [name || null, email || null, country || null, contact_no || null, admin_id || null, website_url || null, api_base_url || null, api_secret_key || null, api_header_key || null, status || 'active']
         );
         return result;
     },

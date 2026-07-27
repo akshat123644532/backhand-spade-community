@@ -33,8 +33,6 @@ const router = express.Router();
 
 router.get('/me', verifyToken, getSelf);
 
-// Comment: Protect admin creation routes with verifyToken + role checks; open /signup and /add-user allow unauthorized admin creation.
-// commment solved cobine into one route with array of paths
 router.post(['/signup', '/add-user'], upload.single('image'), validateImageFile, validateSignup, signupAdmin);
 router.post('/login', validateLogin, loginAdmin);
 router.post('/searchemail', validateSearchEmail, searchEmail);

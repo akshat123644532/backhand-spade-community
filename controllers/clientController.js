@@ -26,7 +26,7 @@ const withDecryptedApiSecret = (client) => {
 };
 
 export const addClient = async (req, res) => {
-    const { name, email, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status } = req.body;
+    const { name, email, country, contact_no, website_url, api_base_url, api_secret_key, api_header_key, status } = req.body;
     const adminId = req.user ? req.user.id : null;
     try {
         if (!name || !email) return res.status(400).json({ success: false, message: "Name and email are required" });
@@ -46,7 +46,7 @@ export const addClient = async (req, res) => {
             website_url,
             api_base_url,
             api_secret_key: encryptedApiSecretKey,
-            api_body,
+            api_header_key,
             status,
         });
 

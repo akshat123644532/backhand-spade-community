@@ -1,9 +1,34 @@
 import Partner from '../models/partnerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { decrypt, encrypt } from '../utils/cryptoHelper.js';
+
+const prepareApiSecretKeyForStorage = (apiSecretKey) => {
+    if (apiSecretKey === undefined || apiSecretKey === null || apiSecretKey === '') {
+        return apiSecretKey;
+    }
+    const plainSecret = decrypt(apiSecretKey);
+    return encrypt(plainSecret);
+};
+
+const withDecryptedApiSecret = (partner) => {
+    if (!partner?.api_secret_key) return partner;
+    try {
+        return {
+            ...partner,
+            api_secret_key: decrypt(partner.api_secret_key),
+        };
+    } catch (error) {
+        return partner;
+    }
+};
 
 export const addPartner = async (req, res) => {
     try {
-        const { name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, status } = req.body;
+        const {
+            name, email, contact_no, country, contact_person, website_url, panel_size,
+            complete, terminate, over_quota, quality_term, survey_close, about_partner,
+            status, api_base_url, api_body, api_secret_key
+        } = req.body;
         if (!name || !email) return res.status(400).json({ success: false, message: "Name and email are required!" });
 
         const emailExists = await Partner.findByEmail(email);
@@ -13,7 +38,15 @@ export const addPartner = async (req, res) => {
         const codeExists = await Partner.findByCode(code);
         if (codeExists) return res.status(400).json({ success: false, message: "Code conflict, please try again!" });
 
-        await Partner.create({ name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, code, status });
+        const encryptedApiSecretKey = api_secret_key
+            ? prepareApiSecretKeyForStorage(api_secret_key)
+            : api_secret_key;
+
+        await Partner.create({
+            name, email, contact_no, country, contact_person, website_url, panel_size,
+            complete, terminate, over_quota, quality_term, survey_close, about_partner,
+            code, status, api_base_url, api_body, api_secret_key: encryptedApiSecretKey
+        });
 
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'Partner', description: `Partner "${name}" added with code ${code}`, ip_address: req.ip });
 
@@ -42,7 +75,7 @@ export const getPartnerById = async (req, res) => {
         const { id } = req.params;
         const partner = await Partner.getById(id);
         if (!partner) return res.status(404).json({ success: false, message: "Partner not found!" });
-        return res.status(200).json({ success: true, data: partner });
+        return res.status(200).json({ success: true, data: withDecryptedApiSecret(partner) });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -51,7 +84,11 @@ export const getPartnerById = async (req, res) => {
 export const updatePartner = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, status } = req.body;
+        const {
+            name, email, contact_no, country, contact_person, website_url, panel_size,
+            complete, terminate, over_quota, quality_term, survey_close, about_partner,
+            status, api_base_url, api_body, api_secret_key
+        } = req.body;
 
         const partner = await Partner.getById(id);
         if (!partner) return res.status(404).json({ success: false, message: "Partner not found!" });
@@ -61,8 +98,17 @@ export const updatePartner = async (req, res) => {
             if (emailExists) return res.status(400).json({ success: false, message: "Email already in use!" });
         }
 
-        const updateData = { name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, status };
+        const updateData = {
+            name, email, contact_no, country, contact_person, website_url, panel_size,
+            complete, terminate, over_quota, quality_term, survey_close, about_partner,
+            status, api_base_url, api_body, api_secret_key
+        };
         Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
+
+        if (Object.prototype.hasOwnProperty.call(updateData, 'api_secret_key') && updateData.api_secret_key) {
+            updateData.api_secret_key = prepareApiSecretKeyForStorage(updateData.api_secret_key);
+        }
+
         await Partner.update(id, updateData);
 
         await logActivity({ admin_id: req.user?.id, action: 'UPDATE', module: 'Partner', description: `Partner ID ${id} updated`, ip_address: req.ip });

@@ -24,6 +24,12 @@ const verifyToken = async (req, res, next) => {
         const verified = jwt.verify(token, JWT_SECRET);
         req.user = verified;
         req.token = token;
+
+        // Keep panelist portal controllers working via req.panelist
+        if (verified.role === 'panelist') {
+            req.panelist = verified;
+        }
+
         next();
     } catch (error) {
         res.status(401).json({ success: false, message: "Unauthorized: Invalid or Expired Token!" });
@@ -31,3 +37,4 @@ const verifyToken = async (req, res, next) => {
 };
 
 export default verifyToken;
+export { JWT_SECRET };
