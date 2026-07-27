@@ -200,7 +200,8 @@ export const getAllPanelists = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
-        const search = req.query.search || '';
+        // ✅ FIX: trim search so leading/trailing spaces don't break full-name matches
+        const search = (req.query.search || '').trim();
         const status = req.query.status || '';
         const is_verified = req.query.is_verified !== undefined ? req.query.is_verified : '';
         const questionnaire = req.query.questionnaire || '';
@@ -296,3 +297,115 @@ export const toggleStatus = async (req, res) => {
     }
 };
 
+const buildQuestionnaireEmailHtml = (panelist, questionnaireLink) => `
+    <p>Dear ${panelist.name},</p>
+    <p>This is a reminder to complete your Spade Community questionnaire.</p>
+    <p><a href="${questionnaireLink}">Click here to fill your questionnaire.</a></p>
+    <p>Questionnaire link: ${questionnaireLink}</p>
+    <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
+    <p>Thank You,<br/>Spade Community</p>
+`;
+
+// ✅ Single panelist — resend the questionnaire/invite email
+export const resendInviteEmail = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const panelist = await Panelist.findById(id);
+        if (!panelist) {
+            return res.status(404).json({ success: false, message: "Panelist not found!" });
+        }
+
+        if (panelist.questionnaire === 'yes') {
+            return res.status(409).json({ success: false, message: "This panelist has already completed the questionnaire!" });
+        }
+
+        let encryptedUserId = panelist.questionnaire_url;
+        if (!encryptedUserId) {
+            encryptedUserId = encryptId(panelist.id);
+            await Panelist.setQuestionnaireUrl(panelist.id, encryptedUserId);
+        }
+
+        const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
+
+        const result = await sendEmail({
+            to: panelist.email,
+            subject: "Reminder: Complete Your Questionnaire - Spade Community",
+            html: buildQuestionnaireEmailHtml(panelist, questionnaireLink)
+        });
+
+        if (result?.skipped) {
+            return res.status(200).json({
+                success: true,
+                message: "SMTP is not configured, so the email was skipped.",
+                email_warning: true
+            });
+        }
+
+        return res.status(200).json({ success: true, message: `Invite email resent to ${panelist.email}!` });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// ✅ Multiple panelists — bulk invite/resend, per-panelist error isolation
+export const sendBulkInviteEmails = async (req, res) => {
+    try {
+        const { ids } = req.body; // array of panelist ids, e.g. [80, 82, 85]
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: "ids array is required!" });
+        }
+
+        const panelists = await Panelist.findByIds(ids);
+        const foundIds = panelists.map((p) => p.id);
+        const notFoundIds = ids
+            .map((id) => Number(id))
+            .filter((id) => !foundIds.includes(id));
+
+        const sent = [];
+        const failed = [];
+        const skipped = [];
+
+        for (const panelist of panelists) {
+            if (panelist.questionnaire === 'yes') {
+                skipped.push({ id: panelist.id, email: panelist.email, reason: "Already completed questionnaire" });
+                continue;
+            }
+
+            try {
+                let encryptedUserId = panelist.questionnaire_url;
+                if (!encryptedUserId) {
+                    encryptedUserId = encryptId(panelist.id);
+                    await Panelist.setQuestionnaireUrl(panelist.id, encryptedUserId);
+                }
+
+                const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
+
+                const result = await sendEmail({
+                    to: panelist.email,
+                    subject: "Reminder: Complete Your Questionnaire - Spade Community",
+                    html: buildQuestionnaireEmailHtml(panelist, questionnaireLink)
+                });
+
+                if (result?.skipped) {
+                    failed.push({ id: panelist.id, email: panelist.email, reason: "SMTP not configured" });
+                } else {
+                    sent.push({ id: panelist.id, email: panelist.email });
+                }
+            } catch (mailError) {
+                failed.push({ id: panelist.id, email: panelist.email, reason: mailError.message });
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Bulk invite processed: ${sent.length} sent, ${failed.length} failed, ${skipped.length} skipped, ${notFoundIds.length} not found.`,
+            data: { sent, failed, skipped, not_found_ids: notFoundIds }
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};

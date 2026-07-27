@@ -12,7 +12,7 @@ const Panelist = {
         return rows[0] || null;
     },
 
- create: async (data) => {
+    create: async (data) => {
         const { name, email, phone, photo, password, activation_token, activation_token_expires, questionnaire_url } = data;
         const [result] = await db.execute(
             `INSERT INTO panelists (name, email, phone, photo, password, activation_token, activation_token_expires, questionnaire_url)
@@ -73,9 +73,12 @@ const Panelist = {
         let where = `WHERE deleted_at IS NULL`;
         const params = [];
 
-        if (search) {
-            where += ` AND (name LIKE ? OR email LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`);
+        // ✅ FIX: trim whitespace + case-insensitive match so full-name search works
+        const cleanSearch = (search || '').trim();
+
+        if (cleanSearch) {
+            where += ` AND (LOWER(name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?))`;
+            params.push(`%${cleanSearch}%`, `%${cleanSearch}%`);
         }
         if (status) {
             where += ` AND status = ?`;
@@ -108,6 +111,16 @@ const Panelist = {
             limit: l,
             totalPages: Math.ceil((countResult[0].total || 0) / l)
         };
+    },
+
+    findByIds: async (ids) => {
+        if (!ids || ids.length === 0) return [];
+        const placeholders = ids.map(() => '?').join(', ');
+        const [rows] = await db.execute(
+            `SELECT * FROM panelists WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+            ids
+        );
+        return rows;
     },
 
     update: async (id, data) => {
