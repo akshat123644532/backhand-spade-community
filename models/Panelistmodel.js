@@ -66,11 +66,11 @@ const Panelist = {
         );
     },
 
-    // Combines questionnaire completion + points credit in a single UPDATE
+    // Combines questionnaire completion + points credit + verify panelist in a single UPDATE
     completeQuestionnaireWithPoints: async (id, points, connection = db) => {
         await connection.execute(
             `UPDATE panelists
-             SET questionnaire = 'yes', balance_point = balance_point + ?, updated_at = NOW()
+             SET questionnaire = 'yes', is_verified = 1, balance_point = balance_point + ?, updated_at = NOW()
              WHERE id = ?`,
             [points, id]
         );

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaireResponse from '../models/panelistSubmissionResponseModel.js';
+import EmailTemplate from '../models/Emailtemplatemodel.js';
 import { sendEmail } from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
@@ -68,28 +69,31 @@ export const signup = async (req, res) => {
             comment: 'Welcome bonus on signup'
         });
 
-        // ✅ Sirf questionnaire link
-        const questionnaireLink = `https://spade-community-client-ui.vercel.app/community-users?Userid=${encryptedUserId}`;
+        const baseUrl = (process.env.CLIENT_BASE_URL || '').replace(/\/$/, '');
+        const questionnaireLink = `${baseUrl}/community-users?Userid=${encryptedUserId}`;
 
         let emailWarning = null;
         try {
-            const result = await sendEmail({
-                to: email,
-                subject: "Complete Your Questionnaire - Spade Community",
-                html: `
-                    <p>Dear ${name},</p>
-                    <p>You recently signed up with Spade Community.</p>
-                    <p>Please click on the link below to fill your questionnaire and get your reward points.</p>
-                    <p><a href="${questionnaireLink}">Click here to fill your questionnaire.</a></p>
-                    <p>Questionnaire link: ${questionnaireLink}</p>
-                    <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
-                    <p>Thank You,<br/>Spade Community</p>
-                `
-            });
-            if (result?.skipped) {
-                emailWarning = 'SMTP is not configured. Signup email was skipped.';
+            const template = await EmailTemplate.getByKey('Panelist Questionnaire');
+            if (!template) {
+                emailWarning = 'Panelist Questionnaire email template not found or inactive.';
             } else {
-                console.log(`EMAIL SENT TO: ${email} ✅`);
+                const { subject, body } = EmailTemplate.render(template, {
+                    name,
+                    questionnaire_link: questionnaireLink
+                });
+
+                const result = await sendEmail({
+                    to: email,
+                    subject,
+                    text: body,
+                    html: body.replace(/\n/g, '<br>')
+                });
+                if (result?.skipped) {
+                    emailWarning = 'SMTP is not configured. Signup email was skipped.';
+                } else {
+                    console.log(`EMAIL SENT TO: ${email} ✅`);
+                }
             }
         } catch (mailError) {
             emailWarning = mailError?.message || 'Signup email could not be sent.';
@@ -170,7 +174,7 @@ export const login = async (req, res) => {
         }
 
         const token = jwt.sign(
-            { id: panelist.id, email: panelist.email, name: panelist.name },
+            { id: panelist.id, email: panelist.email, name: panelist.name, role: 'panelist' },
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );

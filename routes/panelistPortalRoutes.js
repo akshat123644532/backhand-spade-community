@@ -18,7 +18,6 @@ const router = express.Router();
 const requirePanelist = [verifyToken, allowRoles('panelist')];
 
 router.post('/login',               login);
-
 router.get('/dashboard',            ...requirePanelist, getDashboard);
 router.get('/profile',              ...requirePanelist, getProfile);
 router.put('/profile',              ...requirePanelist, upload.single('photo'), updateProfile);
