@@ -1,20 +1,35 @@
 import { db } from '../config/db.js';
+import Panelist from './Panelistmodel.js';
 
 const PanelQuestionnaireResponse = {
 
-    // comment saves all answers in a single bulk insert query
-    saveResponses: async (panelist_id, answers) => {
-        // answers = [{ question_id, answer }, ...]
+    saveResponses: async (panelist_id, answers, connection = db) => {
         if (!answers || answers.length === 0) return;
 
         const values = answers.map(ans => [panelist_id, ans.question_id, ans.answer]);
         const placeholders = values.map(() => '(?, ?, ?)').join(', ');
         const flatValues = values.flat();
 
-        await db.execute(
+        await connection.execute(
             `INSERT INTO panel_questionnaire_responses (panelist_id, question_id, answer) VALUES ${placeholders}`,
             flatValues
         );
+    },
+
+    // Saves answers + marks questionnaire complete + credits points in one transaction
+    submitQuestionnaire: async (panelist_id, answers, points) => {
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+            await PanelQuestionnaireResponse.saveResponses(panelist_id, answers, connection);
+            await Panelist.completeQuestionnaireWithPoints(panelist_id, points, connection);
+            await connection.commit();
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
     },
 
     hasResponded: async (panelist_id) => {

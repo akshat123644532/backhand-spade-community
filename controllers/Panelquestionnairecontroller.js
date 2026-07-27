@@ -2,18 +2,20 @@ import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 
 export const addPanelQuestion = async (req, res) => {
     try {
-        const { language, question_title, question_text, question_type, options, is_required, sort_order, status } = req.body;
+        const { language, question_title, question_text, question_type, options, is_required, status } = req.body;
 
         if (!language || !question_title || !question_text || !question_type) {
             return res.status(400).json({ success: false, message: "Language, question title, question text and question type are required!" });
         }
 
-        const question_id = await PanelQuestionnaire.create({ language, question_title, question_text, question_type, options, is_required, sort_order, status });
+        const { id: question_id, sort_order } = await PanelQuestionnaire.create({
+            language, question_title, question_text, question_type, options, is_required, status
+        });
 
         return res.status(201).json({
             success: true,
             message: "Question added successfully!",
-            data: { id: question_id, question_title, language, question_type, options: options || [] }
+            data: { id: question_id, question_title, language, question_type, options: options || [], sort_order }
         });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -96,13 +98,35 @@ export const updatePanelQuestion = async (req, res) => {
 
 export const updatePanelQuestionSortOrder = async (req, res) => {
     try {
-        const { items } = req.body;
-        if (!items || !Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({ success: false, message: "Items array is required!" });
+        const { ordered_ids, items } = req.body;
+
+        if (
+            (!ordered_ids || !Array.isArray(ordered_ids) || ordered_ids.length === 0) &&
+            (!items || !Array.isArray(items) || items.length === 0)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Provide ordered_ids (preferred) or items [{ id, sort_order }]!"
+            });
         }
-        await PanelQuestionnaire.updateSortOrder(items);
-        return res.status(200).json({ success: true, message: "Sort order updated successfully!" });
+
+        const ranks = await PanelQuestionnaire.updateSortOrder({ ordered_ids, items });
+        return res.status(200).json({
+            success: true,
+            message: "Sort order updated successfully!",
+            data: ranks
+        });
     } catch (error) {
+        const clientErrors = [
+            'Provide ordered_ids or items with id and sort_order',
+            'All IDs must be positive integers',
+            'sort_order must be a positive integer',
+            'Duplicate question IDs in sort payload',
+            'One or more questions not found'
+        ];
+        if (clientErrors.includes(error.message)) {
+            return res.status(400).json({ success: false, message: error.message });
+        }
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
@@ -128,9 +152,17 @@ export const deletePanelQuestion = async (req, res) => {
         const { id } = req.params;
         const question = await PanelQuestionnaire.getById(id);
         if (!question) return res.status(404).json({ success: false, message: "Question not found!" });
-        await PanelQuestionnaire.delete(id);
-        return res.status(200).json({ success: true, message: "Question deleted successfully!" });
+
+        const ranks = await PanelQuestionnaire.delete(id);
+        return res.status(200).json({
+            success: true,
+            message: "Question deleted successfully!",
+            data: { ranks }
+        });
     } catch (error) {
+        if (error.message === 'Question not found') {
+            return res.status(404).json({ success: false, message: "Question not found!" });
+        }
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };

@@ -19,6 +19,14 @@ const PanelistPortal = {
         return rows[0] || null;
     },
 
+    getPasswordById: async (id) => {
+        const [rows] = await db.execute(
+            `SELECT password FROM panelists WHERE id = ? AND deleted_at IS NULL`,
+            [id]
+        );
+        return rows[0]?.password || null;
+    },
+
     getRewardHistory: async (id, { page = 1, limit = 10 } = {}) => {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;

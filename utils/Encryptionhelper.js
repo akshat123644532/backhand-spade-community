@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 
-// comment solved move it to .env file and use it from there. This is important for security reasons, as hardcoding sensitive information in the codebase can lead to potential vulnerabilities.
 const SALT = process.env.URL_ENCRYPT_SALT;
 
 if (!SALT) {

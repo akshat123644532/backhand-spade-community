@@ -56,7 +56,7 @@ const Project = {
             totalPages: Math.ceil((countResult[0].total || 0) / l)
         };
     },
-// comment solved flash back
+    
     getById: async (id) => {
         const [rows] = await db.execute(
             `SELECT * FROM project_Info WHERE id = ? AND (isdeleted = 0 OR isdeleted IS NULL)`, [id]

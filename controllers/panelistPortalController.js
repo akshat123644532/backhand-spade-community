@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import PanelistPortal from '../models/panelistPortalModel.js';
-import RewardSetting from '../models/rewardSettingModel.js';
+import { JWT_SECRET } from '../middleware/authMiddleware.js';
+import { submitRedeemRequest as submitRedeemRequestService } from '../services/panelistRedeemService.js';
 
 export const login = async (req, res) => {
     try {
@@ -33,8 +34,8 @@ export const login = async (req, res) => {
         }
 
         const token = jwt.sign(
-            { id: panelist.id, email: panelist.email },
-            process.env.JWT_SECRET,
+            { id: panelist.id, email: panelist.email, role: 'panelist' },
+            JWT_SECRET,
             { expiresIn: '7d' }
         );
 
@@ -131,12 +132,12 @@ export const changePassword = async (req, res) => {
         const panelist = await PanelistPortal.getDashboard(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
 
-        // Comment: Controllers should not run SQL or dynamic-import db — move password lookup into PanelistPortal model (controller -> service -> model).
-        const [fullPanelist] = await (await import('../config/db.js')).db.execute(
-            `SELECT password FROM panelists WHERE id = ?`, [id]
-        );
+        const storedPassword = await PanelistPortal.getPasswordById(id);
+        if (!storedPassword) {
+            return res.status(404).json({ success: false, message: "Panelist not found!" });
+        }
 
-        const isMatch = await bcrypt.compare(old_password, fullPanelist[0].password);
+        const isMatch = await bcrypt.compare(old_password, storedPassword);
         if (!isMatch) {
             return res.status(400).json({ success: false, message: "Old password is incorrect!" });
         }
@@ -174,40 +175,10 @@ export const getRedeemRequests = async (req, res) => {
 
 export const submitRedeemRequest = async (req, res) => {
     try {
-        const id = req.panelist.id;
         const { reward_points, remark, comment } = req.body;
-
-        if (!reward_points) {
-            return res.status(400).json({ success: false, message: "Reward points are required!" });
-        }
-
-        const panelist = await PanelistPortal.getDashboard(id);
-        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
-
-        // Comment: Redeem validation and payout rules belong in a service layer, not the controller
-        const settings = await RewardSetting.get();
-        const minimum_payout = settings?.minimum_payout || 500;
-
-        if (panelist.balance_point < minimum_payout) {
-            return res.status(400).json({
-                success: false,
-                message: `Minimum ${minimum_payout} points required to redeem!`,
-                data: { balance_point: panelist.balance_point, minimum_payout }
-            });
-        }
-
-        if (reward_points > panelist.balance_point) {
-            return res.status(400).json({
-                success: false,
-                message: "Insufficient balance points!",
-                data: { balance_point: panelist.balance_point }
-            });
-        }
-
-        const request_id = await PanelistPortal.submitRedeemRequest({
-            user_id: id,
+        const result = await submitRedeemRequestService({
+            userId: req.panelist.id,
             reward_points,
-            requested_by: panelist.name,
             remark,
             comment
         });
@@ -215,9 +186,16 @@ export const submitRedeemRequest = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Redeem request submitted successfully!",
-            data: { request_id }
+            data: result
         });
     } catch (error) {
+        if (error.status) {
+            return res.status(error.status).json({
+                success: false,
+                message: error.message,
+                ...(error.data && { data: error.data })
+            });
+        }
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
