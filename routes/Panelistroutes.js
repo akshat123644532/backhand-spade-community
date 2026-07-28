@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import verifyToken from '../middleware/authMiddleware.js';
+import { forgotPassword, resetPassword } from '../controllers/panelistPortalController.js';
 import {
     signup,
     activateAccount,
@@ -29,5 +30,7 @@ router.patch('/:id/status',         verifyToken, toggleStatus);
 router.post('/:id/resend-invite',   verifyToken, resendInviteEmail);
 router.post('/bulk-invite',         verifyToken, sendBulkInviteEmails);
 router.post('/logout',              verifyToken, logout);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
 export default router;

@@ -107,7 +107,34 @@ const PanelistPortal = {
             [user_id, reward_points, requested_by, remark || null, comment || null]
         );
         return result.insertId;
+    },
+
+    // ── Forgot / Reset password ──────────────────────────────
+    setResetToken: async (email, token, expires) => {
+        await db.execute(
+            `UPDATE panelists SET reset_token = ?, reset_token_expires = ? WHERE email = ? AND deleted_at IS NULL`,
+            [token, expires, email]
+        );
+    },
+
+    getByResetToken: async (token) => {
+        const [rows] = await db.execute(
+            `SELECT id, name, email, reset_token_expires
+             FROM panelists WHERE reset_token = ? AND deleted_at IS NULL`,
+            [token]
+        );
+        return rows[0] || null;
+    },
+
+    resetPassword: async (id, hashedPassword) => {
+        await db.execute(
+            `UPDATE panelists
+             SET password = ?, reset_token = NULL, reset_token_expires = NULL, updated_at = NOW()
+             WHERE id = ?`,
+            [hashedPassword, id]
+        );
     }
 };
 
 export default PanelistPortal;
+
