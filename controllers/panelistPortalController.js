@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import PanelistPortal from '../models/panelistPortalModel.js';
-import { validateRedeemRequest } from '../services/rewardRedeemService.js';
+import { submitRedeemRequest as submitRedeemRequestService } from '../services/panelistRedeemService.js';
 
 export const login = async (req, res) => {
     try {
@@ -115,7 +115,6 @@ export const updateProfile = async (req, res) => {
     }
 };
 
-
 export const changePassword = async (req, res) => {
     try {
         const id = req.panelist.id;
@@ -173,32 +172,14 @@ export const getRedeemRequests = async (req, res) => {
     }
 };
 
-
 export const submitRedeemRequest = async (req, res) => {
     try {
         const id = req.panelist.id;
         const { reward_points, remark, comment } = req.body;
 
-        if (!reward_points) {
-            return res.status(400).json({ success: false, message: "Reward points are required!" });
-        }
-
-        const panelist = await PanelistPortal.getDashboard(id);
-        if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
-
-        const validation = await validateRedeemRequest(panelist, reward_points);
-        if (!validation.valid) {
-            return res.status(validation.status).json({
-                success: false,
-                message: validation.message,
-                data: validation.data
-            });
-        }
-
-        const request_id = await PanelistPortal.submitRedeemRequest({
-            user_id: id,
+        const result = await submitRedeemRequestService({
+            userId: id,
             reward_points,
-            requested_by: panelist.name,
             remark,
             comment
         });
@@ -206,8 +187,72 @@ export const submitRedeemRequest = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Redeem request submitted successfully!",
-            data: { request_id }
+            data: result
         });
+    } catch (error) {
+        const status = error.status || 500;
+        return res.status(status).json({
+            success: false,
+            message: error.status ? error.message : "Server error!",
+            ...(error.data && { data: error.data }),
+            ...(status === 500 && { error: error.message })
+        });
+    }
+};
+
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Email is required!" });
+        }
+
+        const panelist = await PanelistPortal.getByEmail(email);
+
+        if (!panelist) {
+            return res.status(404).json({ success: false, message: "Email not registered!" });
+        }
+
+        const otp = "123456"; // ⚠️ TEMP for testing — revert to random before going live
+        const otp_expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+        await PanelistPortal.setResetToken(email, otp, otp_expires);
+
+        return res.status(200).json({
+            success: true,
+            message: "OTP has been sent to your registered email."
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const resetPassword = async (req, res) => {
+    try {
+        const { email, otp, new_password, confirm_password } = req.body;
+
+        if (!email || !otp || !new_password || !confirm_password) {
+            return res.status(400).json({ success: false, message: "Email, otp, new_password and confirm_password are required!" });
+        }
+
+        if (new_password !== confirm_password) {
+            return res.status(400).json({ success: false, message: "Passwords do not match!" });
+        }
+
+        const otpRecord = await PanelistPortal.getByResetToken(otp);
+        if (!otpRecord || otpRecord.email !== email) {
+            return res.status(400).json({ success: false, message: "Invalid email or OTP!" });
+        }
+
+        if (new Date(otpRecord.reset_token_expires) < new Date()) {
+            return res.status(400).json({ success: false, message: "OTP has expired!" });
+        }
+
+        const hashedPassword = await bcrypt.hash(new_password, 10);
+        await PanelistPortal.resetPassword(otpRecord.id, hashedPassword);
+
+        return res.status(200).json({ success: true, message: "Password reset successful! Please login with your new password." });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
