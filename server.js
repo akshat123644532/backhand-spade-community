@@ -32,6 +32,8 @@ import panelistPortalRoutes from './routes/panelistPortalRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
 // import {encrypt} from './utils/cryptoHelper.js';
 import findUserRoutes from './routes/findUserRoutes.js';
+import systemSettingRoutes from './routes/systemSettingRoutes.js';
+
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -84,6 +86,7 @@ app.use('/api/rewards', rewardRoutes);
 app.use('/api/panelist-portal', panelistPortalRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/find-user', findUserRoutes);
+app.use('/api/system-settings', systemSettingRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
