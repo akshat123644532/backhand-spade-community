@@ -70,6 +70,7 @@ const Project = {
             totalPages: Math.ceil((countResult[0].total || 0) / l)
         };
     },
+    
 
     getById: async (id) => {
         const [rows] = await db.execute(
@@ -90,6 +91,7 @@ const Project = {
         );
         return rows[0] || null;
     },
+    
 
     update: async (id, data) => {
         const { sql, values } = buildUpdateQuery(
@@ -110,6 +112,9 @@ const Project = {
         );
         return result;
     }
+    
 };
+
+
 
 export default Project;

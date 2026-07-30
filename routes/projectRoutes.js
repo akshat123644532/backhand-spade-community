@@ -1,6 +1,9 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
 import csvUploadMiddleware from '../middleware/csvUploadMiddleware.js';
+import { toggleLinkMode, getActiveSurveyLink } from '../controllers/projectController.js';
+
+
 import {
     addProject, getAllProjects, getProjectById,
     updateProject, deleteProject, toggleProjectStatus,
@@ -34,5 +37,8 @@ router.delete('/multiple-url/:urlId', verifyToken, deleteMultipleUrl);
 // Multiple URLs — CSV bulk upload + template download
 router.get('/multiple-url/csv-template', verifyToken, downloadCsvTemplate);
 router.post('/:id/multiple-url/csv-upload', verifyToken, csvUploadMiddleware.single('file'), uploadMultipleUrlCsv);
+router.patch('/url/:urlId/link-mode', verifyToken, toggleLinkMode);
+router.get('/url/:urlId/active-link', getActiveSurveyLink);
+
 
 export default router;

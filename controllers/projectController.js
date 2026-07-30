@@ -292,6 +292,50 @@ export const getMultipleUrlList = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+// Toggle between test/live mode for a project URL
+export const toggleLinkMode = async (req, res) => {
+    try {
+        const { urlId } = req.params;
+        const { link_mode } = req.body;
+
+        if (!['test', 'live'].includes(link_mode)) {
+            return res.status(400).json({ success: false, message: "link_mode must be 'test' or 'live'!" });
+        }
+
+        const urlInfo = await ProjectUrl.getById(urlId);
+        if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });
+
+        await ProjectUrl.toggleLinkMode(urlId, link_mode);
+
+        return res.status(200).json({
+            success: true,
+            message: `Link mode switched to ${link_mode}!`
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// Get the currently active link (test or live) — respondent redirect ke liye use hoga
+export const getActiveSurveyLink = async (req, res) => {
+    try {
+        const { urlId } = req.params;
+
+        const result = await ProjectUrl.getActiveLink(urlId);
+        if (!result) return res.status(404).json({ success: false, message: "URL info not found!" });
+
+        if (!result.active_link) {
+            return res.status(400).json({
+                success: false,
+                message: `No ${result.link_mode} link configured for this project URL!`
+            });
+        }
+
+        return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
 
 // Multiple URLs — download a blank CSV template for the "Download CSV Template" button
 export const downloadCsvTemplate = async (req, res) => {

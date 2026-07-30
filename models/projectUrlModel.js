@@ -3,7 +3,6 @@ import crypto from 'crypto';
 
 const ProjectUrl = {
 
- 
     generateUrlCode: async () => {
         let code;
         let exists = true;
@@ -34,7 +33,6 @@ const ProjectUrl = {
             action_by
         } = data;
 
-       
         const project_url_code = await ProjectUrl.generateUrlCode();
 
         const [result] = await db.execute(
@@ -109,6 +107,34 @@ const ProjectUrl = {
             [deleted_by || null, id]
         );
         return result;
+    },
+
+    // ── Test / Live link mode ──────────────────────────────
+    toggleLinkMode: async (id, link_mode) => {
+        const [result] = await db.execute(
+            `UPDATE project_url_Info SET link_mode = ?, updated_at = NOW() WHERE id = ?`,
+            [link_mode, id]
+        );
+        return result;
+    },
+
+    getActiveLink: async (id) => {
+        const [rows] = await db.execute(
+            `SELECT id, project_id, link_mode, Test_Link, Live_Link, Status
+             FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
+            [id]
+        );
+        if (!rows.length) return null;
+
+        const urlInfo = rows[0];
+        const activeLink = urlInfo.link_mode === 'live' ? urlInfo.Live_Link : urlInfo.Test_Link;
+
+        return {
+            id: urlInfo.id,
+            project_id: urlInfo.project_id,
+            link_mode: urlInfo.link_mode,
+            active_link: activeLink
+        };
     }
 };
 
