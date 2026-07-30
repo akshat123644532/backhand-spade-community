@@ -39,7 +39,7 @@ const Partner = {
         }
 
         const [rows] = await db.query(
-            `SELECT id, code, name, email, website_url, contact_no, country, status, created_at FROM partners ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT id, code, name, email, website_url, contact_no, country, panel_size, status, created_at FROM partners ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
         const [countResult] = await db.query(`SELECT COUNT(*) as total FROM partners ${where}`, params);
