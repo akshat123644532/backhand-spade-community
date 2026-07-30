@@ -27,25 +27,39 @@ const Project = {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        let where = `WHERE (isdeleted = 0 OR isdeleted IS NULL)`;
+        let where = `WHERE p.isdeleted = 0 OR p.isdeleted IS NULL`;
         const params = [];
 
         if (search) {
-            where += ` AND (Project_Name LIKE ? OR Project_code LIKE ? OR Clients LIKE ?)`;
+            where += ` AND (p.Project_Name LIKE ? OR p.Project_code LIKE ? OR p.Clients LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
         if (status) {
-            where += ` AND Status = ?`;
+            where += ` AND p.Status = ?`;
             params.push(status);
         }
 
+        // Min/Max Start Date subquery se laate hain project_url_Info table se, har project ke liye
         const [rows] = await db.query(
-            `SELECT * FROM project_Info ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT p.*,
+                    u.min_start_date,
+                    u.max_start_date
+             FROM project_Info p
+             LEFT JOIN (
+                 SELECT project_id,
+                        MIN(Start_Date) AS min_start_date,
+                        MAX(Start_Date) AS max_start_date
+                 FROM project_url_Info
+                 WHERE deleted_at IS NULL
+                 GROUP BY project_id
+             ) u ON u.project_id = p.id
+             ${where}
+             ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
 
         const [countResult] = await db.query(
-            `SELECT COUNT(*) as total FROM project_Info ${where}`, params
+            `SELECT COUNT(*) as total FROM project_Info p ${where}`, params
         );
 
         return {
@@ -56,10 +70,23 @@ const Project = {
             totalPages: Math.ceil((countResult[0].total || 0) / l)
         };
     },
-    
+
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM project_Info WHERE id = ? AND (isdeleted = 0 OR isdeleted IS NULL)`, [id]
+            `SELECT p.*,
+                    u.min_start_date,
+                    u.max_start_date
+             FROM project_Info p
+             LEFT JOIN (
+                 SELECT project_id,
+                        MIN(Start_Date) AS min_start_date,
+                        MAX(Start_Date) AS max_start_date
+                 FROM project_url_Info
+                 WHERE deleted_at IS NULL
+                 GROUP BY project_id
+             ) u ON u.project_id = p.id
+             WHERE p.id = ? AND (p.isdeleted = 0 OR p.isdeleted IS NULL)`,
+            [id]
         );
         return rows[0] || null;
     },
