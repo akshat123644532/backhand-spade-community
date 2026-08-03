@@ -13,32 +13,42 @@ const SupplierMapping = {
     create: async (data) => {
         const {
             partnerid, partner_code, projectid, projectUrlId, quota, CPI,
-            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
+            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             status, IsTest, action_by
         } = data;
+        // Note: incoming VenderURL (if any) is ignored — it's auto-generated below
 
         const mapping_code = await SupplierMapping.generateMappingCode();
-
-        // Unique redirect link generate karo — dosurvey/<random-hash>?uid=[identifier]
         const uniqueHash = crypto.randomBytes(16).toString('hex');
-        const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
-        const dynamic_url = `${baseUrl}/dosurvey/${uniqueHash}?uid=[identifier]`;
 
+        // Step 1: pehle insert karo — VenderURL abhi NULL rakhte hain
         const [result] = await db.execute(
             `INSERT INTO supplier_mapping
              (mapping_code, partnerid, partner_code, projectid, projectUrlId, quota, CPI,
-              CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
-              status, IsTest, action_by, dynamic_url)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
+              status, IsTest, action_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 mapping_code, partnerid || null, partner_code || null, projectid || null, projectUrlId || null,
                 quota || null, CPI || null,
                 CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null,
-                SurveyCloseURL || null, VenderURL || null,
-                status || 'active', IsTest || 0, action_by || null, dynamic_url
+                SurveyCloseURL || null,
+                status || 'active', IsTest || 0, action_by || null
             ]
         );
-        return { id: result.insertId, mapping_code, dynamic_url };
+
+        const id = result.insertId;
+
+        // Step 2: ab id mil chuka hai — isko VenderURL ke andar daal ke update karo
+        const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
+        const VenderURL = `${baseUrl}/dosurvey/${uniqueHash}/${id}?uid=[identifier]`;
+
+        await db.execute(
+            `UPDATE supplier_mapping SET VenderURL = ? WHERE id = ?`,
+            [VenderURL, id]
+        );
+
+        return { id, mapping_code, VenderURL };
     },
 
     getAll: async ({ page = 1, limit = 10, search = '', status = '', projectid = '', partnerid = '' } = {}) => {
@@ -101,7 +111,7 @@ const SupplierMapping = {
             `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
              FROM supplier_mapping sm
              LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
-             WHERE sm.dynamic_url LIKE ? AND sm.deleted_at IS NULL`,
+             WHERE sm.VenderURL LIKE ? AND sm.deleted_at IS NULL`,
             [`%/dosurvey/${hash}%`]
         );
         return rows[0] || null;
@@ -110,7 +120,7 @@ const SupplierMapping = {
     update: async (id, data) => {
         const safeData = { ...data };
         delete safeData.mapping_code;
-        delete safeData.dynamic_url; // ye bhi kabhi update nahi hona chahiye
+        delete safeData.VenderURL; // ye ab auto-generated hai — kabhi update nahi hona chahiye
 
         const setClauses = Object.keys(safeData).map(k => `${k} = ?`).join(', ');
         if (!setClauses) return null;
