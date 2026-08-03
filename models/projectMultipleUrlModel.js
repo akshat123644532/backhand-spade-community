@@ -3,11 +3,11 @@ import { db } from '../config/db.js';
 const ProjectMultipleUrl = {
 
     create: async (data) => {
-        const { project_id, project_url_id, Live_Link, VenderURL, Venderid_Userid, UserType, Status } = data;
+        const { project_id, project_url_id, partner_id, Live_Link, VenderURL, Venderid_Userid, UserType, Status } = data;
         const [result] = await db.execute(
-            `INSERT INTO project_mutiple_Url (project_id, project_url_id, Live_Link, VenderURL, Venderid_Userid, UserType, Status)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [project_id, project_url_id || null, Live_Link || null, VenderURL || null, Venderid_Userid || null, UserType || null, Status || 'active']
+            `INSERT INTO project_mutiple_Url (project_id, project_url_id, partner_id, Live_Link, VenderURL, Venderid_Userid, UserType, Status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [project_id, project_url_id || null, partner_id || null, Live_Link || null, VenderURL || null, Venderid_Userid || null, UserType || null, Status || 'active']
         );
         return result.insertId;
     },

@@ -6,8 +6,8 @@ import ProjectUrl from '../models/projectUrlModel.js';
 export const addSupplierMapping = async (req, res) => {
     try {
         const {
-            partnerid, projectid, projectUrlId, quota, CPI,
-            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
+            partnerid, projectid, projectUrlId, quota, CPI, linksToAssign,
+            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             status, IsTest
         } = req.body;
 
@@ -29,8 +29,8 @@ export const addSupplierMapping = async (req, res) => {
             partner_code: partner.code,
             projectid,
             projectUrlId,
-            quota, CPI,
-            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
+            quota, CPI, linksToAssign,
+            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             status, IsTest,
             action_by: req.user?.id || null
         });
@@ -135,6 +135,20 @@ export const handleSupplierRedirect = async (req, res) => {
 
         if (mapping.status !== 'active') {
             return res.redirect(mapping.TerminateURL || '/inactive');
+        }
+
+        // Token se startDate / endDate check (agar present ho)
+        const startDate = mapping.tokenData?.startDate;
+        const endDate = mapping.tokenData?.endDate;
+        if (startDate || endDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (startDate && new Date(startDate) > today) {
+                return res.status(403).send('Survey has not started yet!');
+            }
+            if (endDate && new Date(endDate) < today) {
+                return res.redirect(mapping.SurveyCloseURL || '/closed');
+            }
         }
 
         const targetLink = mapping.IsTest

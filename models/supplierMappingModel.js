@@ -1,5 +1,6 @@
 import { db } from '../config/db.js';
-import crypto from 'crypto';
+import { encryptId, decryptId } from '../utils/Encryptionhelper.js';
+import ProjectMultipleUrl from './projectMultipleUrlModel.js';
 
 const SupplierMapping = {
 
@@ -12,33 +13,93 @@ const SupplierMapping = {
 
     create: async (data) => {
         const {
-            partnerid, partner_code, projectid, projectUrlId, quota, CPI,
-            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
+            partnerid, partner_code, projectid, projectUrlId, quota, CPI, linksToAssign,
+            CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             status, IsTest, action_by
         } = data;
 
         const mapping_code = await SupplierMapping.generateMappingCode();
 
-        // Unique redirect link generate karo — dosurvey/<random-hash>?uid=[identifier]
-        const uniqueHash = crypto.randomBytes(16).toString('hex');
+        // startDate / endDate project_Info se
+        const [projectRows] = await db.execute(
+            `SELECT startDate, endDate FROM project_Info WHERE id = ?`,
+            [projectid]
+        );
+        const startDate = projectRows[0]?.startDate || null;
+        const endDate = projectRows[0]?.endDate || null;
+
+        // Test_Link project_url_Info se → supplier_mapping.VenderURL
+        const [urlRows] = await db.execute(
+            `SELECT Test_Link FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
+            [projectUrlId]
+        );
+        const testLink = (urlRows[0]?.Test_Link || '').replace(/\/$/, '');
+        const VenderURL = testLink || null;
+
+        // Encrypted token as identifier — partner/project details embed
+        const tokenPayload = {
+            partnerid,
+            partner_code,
+            projectUrlId,
+            projectid,
+            startDate,
+            endDate
+        };
+        const token = encryptId(JSON.stringify(tokenPayload));
+
         const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
-        const dynamic_url = `${baseUrl}/dosurvey/${uniqueHash}?uid=[identifier]`;
+        const dynamic_url = `${baseUrl}/dosurvey/${token}?uid=[identifier]`;
 
         const [result] = await db.execute(
             `INSERT INTO supplier_mapping
-             (mapping_code, partnerid, partner_code, projectid, projectUrlId, quota, CPI,
+             (mapping_code, partnerid, partner_code, projectid, projectUrlId, quota, CPI, linksToAssign,
               CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
               status, IsTest, action_by, dynamic_url)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 mapping_code, partnerid || null, partner_code || null, projectid || null, projectUrlId || null,
-                quota || null, CPI || null,
+                quota || null, CPI || null, linksToAssign ?? null,
                 CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null,
-                SurveyCloseURL || null, VenderURL || null,
+                SurveyCloseURL || null, VenderURL,
                 status || 'active', IsTest || 0, action_by || null, dynamic_url
             ]
         );
-        return { id: result.insertId, mapping_code, dynamic_url };
+
+        const mappingId = result.insertId;
+        let assignedLinks = [];
+
+        // linksToAssign ke hisaab se project_mutiple_Url me bulk links
+        const linkCount = parseInt(linksToAssign, 10) || 0;
+        if (linkCount > 0 && testLink) {
+            const ids = await ProjectMultipleUrl.bulkCreatePlaceholders({
+                project_id: projectid,
+                project_url_id: projectUrlId,
+                partner_id: partnerid,
+                count: linkCount
+            });
+
+            const updates = ids.map((rowId) => {
+                const rowToken = encryptId(JSON.stringify({
+                    ...tokenPayload,
+                    multiUrlId: rowId,
+                    mappingId
+                }));
+                const link = `${testLink}/${rowToken}?uid=${rowId}`;
+                return { id: rowId, VenderURL: link };
+            });
+
+            await ProjectMultipleUrl.updateVenderUrls(updates);
+            assignedLinks = updates.map((u) => u.VenderURL);
+        }
+
+        return {
+            id: mappingId,
+            mapping_code,
+            dynamic_url,
+            VenderURL,
+            assignedLinks,
+            linksCreated: assignedLinks.length
+        };
     },
 
     getAll: async ({ page = 1, limit = 10, search = '', status = '', projectid = '', partnerid = '' } = {}) => {
@@ -96,15 +157,34 @@ const SupplierMapping = {
         return rows;
     },
 
-    getByDynamicHash: async (hash) => {
+    getByDynamicHash: async (token) => {
+        let tokenData;
+        try {
+            tokenData = JSON.parse(decryptId(token));
+        } catch {
+            // Fallback: purane random-hash links ke liye LIKE lookup
+            const [rows] = await db.execute(
+                `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
+                 FROM supplier_mapping sm
+                 LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
+                 WHERE sm.dynamic_url LIKE ? AND sm.deleted_at IS NULL`,
+                [`%/dosurvey/${token}%`]
+            );
+            return rows[0] || null;
+        }
+
         const [rows] = await db.execute(
             `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
              FROM supplier_mapping sm
              LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
-             WHERE sm.dynamic_url LIKE ? AND sm.deleted_at IS NULL`,
-            [`%/dosurvey/${hash}%`]
+             WHERE sm.partnerid = ? AND sm.projectid = ? AND sm.projectUrlId = ?
+               AND sm.deleted_at IS NULL
+             ORDER BY sm.id DESC LIMIT 1`,
+            [tokenData.partnerid, tokenData.projectid, tokenData.projectUrlId]
         );
-        return rows[0] || null;
+
+        if (!rows[0]) return null;
+        return { ...rows[0], tokenData };
     },
 
     update: async (id, data) => {

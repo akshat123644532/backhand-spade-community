@@ -6,7 +6,10 @@ import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 
 export const addProject = async (req, res) => {
     try {
-        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, urlInfo, multipleUrls } = req.body;
+        let {
+            Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description,
+            Project_Link_Type, Notes, Status, startDate, endDate, urlInfo, multipleUrls
+        } = req.body;
 
         if (!Project_Name) {
             return res.status(400).json({ success: false, message: "Project name is required!" });
@@ -14,7 +17,7 @@ export const addProject = async (req, res) => {
 
         const { id, Project_code } = await Project.create({
             Project_Name, Clients, Project_Manager, Sales_Manager, RFQ,
-            Project_Description, Project_Link_Type, Notes, Status,
+            Project_Description, Project_Link_Type, Notes, Status, startDate, endDate,
             action_by: req.user?.id || null
         });
 
@@ -24,12 +27,11 @@ export const addProject = async (req, res) => {
             urlInfoId = await ProjectUrl.create({ ...urlInfo, project_id: id, action_by: req.user?.id || null });
         }
 
-        // Multiple URLs add karo — bulk insert (single query, no loop) comment solved
         if (multipleUrls && Array.isArray(multipleUrls) && multipleUrls.length > 0) {
             const rows = multipleUrls.map(url => ({
-                ...url,
-                project_id: id,
-                project_url_id: urlInfoId
+                    ...url,
+                    project_id: id,
+                    project_url_id: urlInfoId
             }));
             await ProjectMultipleUrl.bulkCreate(rows);
         }
@@ -78,7 +80,7 @@ export const getProjectById = async (req, res) => {
 export const updateProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status } = req.body;
+        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, startDate, endDate } = req.body;
 
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
@@ -93,6 +95,8 @@ export const updateProject = async (req, res) => {
         if (Project_Link_Type) updateData.Project_Link_Type = Project_Link_Type;
         if (Notes) updateData.Notes = Notes;
         if (Status) updateData.Status = Status;
+        if (startDate !== undefined) updateData.startDate = startDate;
+        if (endDate !== undefined) updateData.endDate = endDate;
 
         if (Object.keys(updateData).length > 0) await Project.update(id, updateData);
 
@@ -222,7 +226,7 @@ export const deleteMultipleUrl = async (req, res) => {
     }
 };
 
-// Multiple URLs — CSV bulk upload
+// CSV upload — Test_Link only → saves into project_url_Info.Test_Link
 export const uploadMultipleUrlCsv = async (req, res) => {
     try {
         const { id } = req.params; // project_id
@@ -234,7 +238,7 @@ export const uploadMultipleUrlCsv = async (req, res) => {
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        // frontend sends project_url_id directly in form-data; fall back to auto-lookup if not sent
+        // frontend sends project_url_id in form-data; fall back to first url info for project
         let project_url_id = req.body.project_url_id || null;
         if (!project_url_id) {
             const urlInfoRows = await ProjectUrl.getByProjectId(id);

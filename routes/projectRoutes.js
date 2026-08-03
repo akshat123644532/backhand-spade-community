@@ -14,8 +14,16 @@ import {
 
 const router = express.Router();
 
+// Optional CSV on project create — multer only for multipart
+const optionalCsvUpload = (req, res, next) => {
+    if (req.is('multipart/form-data')) {
+        return csvUploadMiddleware.single('file')(req, res, next);
+    }
+    next();
+};
+
 // Project CRUD
-router.post('/add',                 verifyToken, addProject);
+router.post('/add',                 verifyToken, optionalCsvUpload, addProject);
 router.get('/list',                 verifyToken, getAllProjects);
 router.get('/:id',                  verifyToken, getProjectById);
 router.put('/:id',                  verifyToken, updateProject);
