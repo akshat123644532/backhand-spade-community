@@ -9,7 +9,7 @@ import {
     updateProject, deleteProject, toggleProjectStatus,
     addProjectUrl, updateProjectUrl, deleteProjectUrl, getProjectUrlList,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
-    uploadMultipleUrlCsv, getMultipleUrlList, downloadCsvTemplate
+    uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate
 } from '../controllers/projectController.js';
 
 const router = express.Router();
@@ -25,6 +25,7 @@ const optionalCsvUpload = (req, res, next) => {
 // Project CRUD
 router.post('/add',                 verifyToken, optionalCsvUpload, addProject);
 router.get('/list',                 verifyToken, getAllProjects);
+router.get('/:id/multi-link-stats', verifyToken, getMultiLinkStats);
 router.get('/:id',                  verifyToken, getProjectById);
 router.put('/:id',                  verifyToken, updateProject);
 router.delete('/:id',               verifyToken, deleteProject);

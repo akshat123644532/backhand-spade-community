@@ -3,7 +3,7 @@ import crypto from 'crypto';
 
 const ProjectUrl = {
 
-    generateUrlCode: async () => {
+    generateUrlCode: async (conn = db) => {
         let code;
         let exists = true;
 
@@ -13,7 +13,7 @@ const ProjectUrl = {
             const max = Math.pow(10, length) - 1;
             code = String(crypto.randomInt(min, max));
 
-            const [rows] = await db.execute(
+            const [rows] = await conn.execute(
                 `SELECT id FROM project_url_Info WHERE project_url_code = ?`, [code]
             );
             exists = rows.length > 0;
@@ -22,7 +22,7 @@ const ProjectUrl = {
         return code;
     },
 
-    create: async (data) => {
+    create: async (data, conn = db) => {
         const {
             project_id, description, LOI, IR, country, CPI, SampleSize,
             Start_Date, End_Date, Status, Live_Link, Test_Link,
@@ -33,9 +33,9 @@ const ProjectUrl = {
             action_by
         } = data;
 
-        const project_url_code = await ProjectUrl.generateUrlCode();
+        const project_url_code = await ProjectUrl.generateUrlCode(conn);
 
-        const [result] = await db.execute(
+        const [result] = await conn.execute(
             `INSERT INTO project_url_Info
              (project_id, project_url_code, description, \`LOI(Minute)\`, \`IR(%)\`, country, CPI, SampleSize,
               Start_Date, End_Date, Status, Live_Link, Test_Link,
@@ -65,6 +65,16 @@ const ProjectUrl = {
             `SELECT * FROM project_url_Info WHERE project_id = ? AND (deleted_at IS NULL)`, [project_id]
         );
         return rows;
+    },
+
+    getSampleSizeByProjectId: async (project_id) => {
+        const [rows] = await db.execute(
+            `SELECT COALESCE(SUM(SampleSize), 0) AS sampleSize
+             FROM project_url_Info
+             WHERE project_id = ? AND deleted_at IS NULL`,
+            [project_id]
+        );
+        return Number(rows[0]?.sampleSize || 0);
     },
 
     getById: async (id) => {

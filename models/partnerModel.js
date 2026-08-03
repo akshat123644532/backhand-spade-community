@@ -53,6 +53,16 @@ const Partner = {
         return rows[0] || null;
     },
 
+    getAllPanelSizes: async () => {
+        const [rows] = await db.execute(
+            `SELECT id, code, name, COALESCE(panel_size, 0) AS panel_size
+             FROM partners
+             WHERE deleted_at IS NULL
+             ORDER BY name ASC`
+        );
+        return rows;
+    },
+
     findByEmail: async (email) => {
         const [rows] = await db.execute(`SELECT id FROM partners WHERE email = ? AND deleted_at IS NULL`, [email]);
         return rows[0] || null;

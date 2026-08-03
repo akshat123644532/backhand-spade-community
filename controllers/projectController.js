@@ -1,48 +1,156 @@
 import fs from 'fs';
 import { parse } from 'csv-parse/sync';
+import { db } from '../config/db.js';
 import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
+import Partner from '../models/partnerModel.js';
+import SupplierMapping from '../models/supplierMappingModel.js';
+
+const isMultiLink = (type) =>
+    String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
+
+const parseMaybeJson = (val) => {
+    if (typeof val !== 'string') return val;
+    try { return JSON.parse(val); } catch { return val; }
+};
+
+const parseCsvFile = (filePath) => {
+    const fileContent = fs.readFileSync(filePath);
+    return parse(fileContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+    });
+};
+
+const resolvePartnerMeta = async (partner_id) => {
+    if (!partner_id) {
+        return { partner_id: null, Vender_UserName: null, UserType: 'VENDOR' };
+    }
+    const partner = await Partner.getById(partner_id);
+    if (!partner) {
+        const err = new Error('Selected partner not found!');
+        err.statusCode = 404;
+        throw err;
+    }
+    return {
+        partner_id: partner.id,
+        Vender_UserName: partner.name || null,
+        UserType: 'PARTNER'
+    };
+};
+
+const mapCsvRowsToMultiUrls = (csvRows, { project_id, project_url_id, partner_id, Vender_UserName, UserType }) =>
+    csvRows.map((row) => ({
+        project_id,
+        project_url_id,
+        partner_id,
+        Live_Link: row.Live_Link || row.live_link || null,
+        VenderURL: row.VenderURL || row.vendor_url || row.VendorURL || null,
+        Vender_UserName,
+        UserType,
+        Status: 'active'
+    }));
 
 export const addProject = async (req, res) => {
+    const connection = await db.getConnection();
+    let started = false;
     try {
         let {
             Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description,
-            Project_Link_Type, Notes, Status, startDate, endDate, urlInfo, multipleUrls
+            Project_Link_Type, Notes, Status, startDate, endDate, urlInfo, multipleUrls, partner_id
         } = req.body;
+
+        urlInfo = parseMaybeJson(urlInfo);
+        multipleUrls = parseMaybeJson(multipleUrls);
+        partner_id = partner_id || urlInfo?.partner_id || null;
 
         if (!Project_Name) {
             return res.status(400).json({ success: false, message: "Project name is required!" });
         }
 
+        const multiLink = isMultiLink(Project_Link_Type);
+        if (req.file && !multiLink) {
+            return res.status(400).json({
+                success: false,
+                message: "CSV upload is only allowed when Project_Link_Type is 'Multi Link'!"
+            });
+        }
+
+        let csvRows = null;
+        if (req.file && multiLink) {
+            csvRows = parseCsvFile(req.file.path);
+            if (!csvRows.length) {
+                return res.status(400).json({ success: false, message: "CSV file is empty!" });
+            }
+        }
+
+        const partnerMeta = await resolvePartnerMeta(partner_id);
+
+        await connection.beginTransaction();
+        started = true;
+
         const { id, Project_code } = await Project.create({
             Project_Name, Clients, Project_Manager, Sales_Manager, RFQ,
             Project_Description, Project_Link_Type, Notes, Status, startDate, endDate,
             action_by: req.user?.id || null
-        });
+        }, connection);
 
-        // URL Info add karo
         let urlInfoId = null;
         if (urlInfo) {
-            urlInfoId = await ProjectUrl.create({ ...urlInfo, project_id: id, action_by: req.user?.id || null });
+            urlInfoId = await ProjectUrl.create(
+                { ...urlInfo, project_id: id, action_by: req.user?.id || null },
+                connection
+            );
         }
 
-        if (multipleUrls && Array.isArray(multipleUrls) && multipleUrls.length > 0) {
-            const rows = multipleUrls.map(url => ({
-                    ...url,
-                    project_id: id,
-                    project_url_id: urlInfoId
+        let csvInserted = 0;
+        if (csvRows) {
+            if (!urlInfoId) {
+                throw Object.assign(new Error("urlInfo is required before uploading multiple URLs!"), { statusCode: 400 });
+            }
+            const rows = mapCsvRowsToMultiUrls(csvRows, {
+                project_id: id,
+                project_url_id: urlInfoId,
+                ...partnerMeta
+            });
+            csvInserted = await ProjectMultipleUrl.bulkCreate(rows, connection);
+        } else if (multiLink && Array.isArray(multipleUrls) && multipleUrls.length > 0) {
+            const rows = multipleUrls.map((url) => ({
+                ...url,
+                project_id: id,
+                project_url_id: urlInfoId,
+                partner_id: url.partner_id ?? partnerMeta.partner_id,
+                Vender_UserName: url.Vender_UserName ?? partnerMeta.Vender_UserName,
+                UserType: url.UserType ?? partnerMeta.UserType,
+                Status: url.Status || 'active'
             }));
-            await ProjectMultipleUrl.bulkCreate(rows);
+            await ProjectMultipleUrl.bulkCreate(rows, connection);
         }
+
+        await connection.commit();
 
         return res.status(201).json({
             success: true,
-            message: "Project added successfully!",
-            data: { id, Project_code, Project_Name }
+            message: csvInserted
+                ? `Project added successfully with ${csvInserted} multi-URL row(s)!`
+                : "Project added successfully!",
+            data: { id, Project_code, Project_Name, csvInserted }
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        if (started) await connection.rollback();
+        const status = error.statusCode || 500;
+        return res.status(status).json({
+            success: false,
+            message: status === 500 ? "Server error!" : error.message,
+            error: error.message
+        });
+    } finally {
+        connection.release();
+        if (req.file?.path && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch { /* ignore cleanup errors */ }
+        }
     }
 };
 export const getAllProjects = async (req, res) => {
@@ -70,7 +178,7 @@ export const getProjectById = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            data: { ...project, urlInfo, multipleUrls }
+            data: { ...project, urlInfo, multipleUrls, multiLinkCount: multipleUrls.length }
         });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -226,7 +334,7 @@ export const deleteMultipleUrl = async (req, res) => {
     }
 };
 
-// CSV upload — Test_Link only → saves into project_url_Info.Test_Link
+// CSV upload — Live_Link + vendor_url → project_mutiple_Url (Multi Link only)
 export const uploadMultipleUrlCsv = async (req, res) => {
     try {
         const { id } = req.params; // project_id
@@ -238,48 +346,57 @@ export const uploadMultipleUrlCsv = async (req, res) => {
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        // frontend sends project_url_id in form-data; fall back to first url info for project
+        if (!isMultiLink(project.Project_Link_Type)) {
+            return res.status(400).json({
+                success: false,
+                message: "CSV upload is only allowed for Multi Link projects!"
+            });
+        }
+
         let project_url_id = req.body.project_url_id || null;
         if (!project_url_id) {
             const urlInfoRows = await ProjectUrl.getByProjectId(id);
             if (!urlInfoRows || !urlInfoRows.length) {
-                return res.status(400).json({ success: false, message: "Add Project URL Info first before uploading multiple URLs!" });
+                return res.status(400).json({
+                    success: false,
+                    message: "Add Project URL Info first before uploading multiple URLs!"
+                });
             }
             project_url_id = urlInfoRows[0].id;
         }
 
-        const fileContent = fs.readFileSync(req.file.path);
-        const rows = parse(fileContent, {
-            columns: true,
-            skip_empty_lines: true,
-            trim: true
-        });
-
-        if (!rows.length) {
+        const csvRows = parseCsvFile(req.file.path);
+        if (!csvRows.length) {
             return res.status(400).json({ success: false, message: "CSV file is empty!" });
         }
 
-        let inserted = 0;
-        for (const row of rows) {
-            await ProjectMultipleUrl.create({
-                project_id: id,
-                project_url_id,
-                Live_Link: row.Live_Link || row.live_link || null,
-                VenderURL: row.VenderURL || row.vendor_url || null,
-                Venderid_Userid: row.Venderid_Userid || row.venderid_userid || null,
-                UserType: row.UserType || row.user_type || null,
-                Status: row.Status || row.status || 'active'
-            });
-            inserted++;
-        }
+        const partnerMeta = await resolvePartnerMeta(req.body.partner_id || null);
+        const rows = mapCsvRowsToMultiUrls(csvRows, {
+            project_id: id,
+            project_url_id,
+            ...partnerMeta
+        });
+
+        const inserted = await ProjectMultipleUrl.bulkCreate(rows);
 
         return res.status(200).json({
             success: true,
             message: `${inserted} row(s) uploaded successfully!`,
-            project_url_id
+            project_url_id,
+            partner_id: partnerMeta.partner_id,
+            UserType: partnerMeta.UserType
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        const status = error.statusCode || 500;
+        return res.status(status).json({
+            success: false,
+            message: status === 500 ? "Server error!" : error.message,
+            error: error.message
+        });
+    } finally {
+        if (req.file?.path && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch { /* ignore cleanup errors */ }
+        }
     }
 };
 
@@ -292,6 +409,37 @@ export const getMultipleUrlList = async (req, res) => {
 
         const records = await ProjectMultipleUrl.getByProjectId(id);
         return res.status(200).json({ success: true, data: records });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+// Multi-link + sample allocation summary for a project
+export const getMultiLinkStats = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const [{ totalMultiLinkCount, remainingMultiLinkCount }, sampleSize, samplesAdded] = await Promise.all([
+            ProjectMultipleUrl.getStatsByProjectId(id),
+            ProjectUrl.getSampleSizeByProjectId(id),
+            SupplierMapping.getQuotaSumByProjectId(id)
+        ]);
+
+        const addPartner = samplesAdded < sampleSize;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                project_id: Number(id),
+                totalMultiLinkCount,
+                remainingMultiLinkCount,
+                sampleSize,
+                samplesAdded,
+                addPartner
+            }
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -344,8 +492,8 @@ export const getActiveSurveyLink = async (req, res) => {
 // Multiple URLs — download a blank CSV template for the "Download CSV Template" button
 export const downloadCsvTemplate = async (req, res) => {
     try {
-        const headers = 'Live_Link,VenderURL,Venderid_Userid,UserType,Status\n';
-        const sampleRow = 'https://spade.com/startsurvey?projectid=sp1234,www.adsurver.com?projectid=1234,XXXX/XYG,adsurver,active\n';
+        const headers = 'Live_Link,vendor_url\n';
+        const sampleRow = 'https://startSurveyLink?uid=[unique_user_id],www.Vendor/PartnerURL.com\n';
 
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename="multi_url_template.csv"');
