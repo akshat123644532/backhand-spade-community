@@ -488,7 +488,7 @@ export const getMultiLinkStats = async (req, res) => {
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        const { totalMultiLinkCount, remainingMultiLinkCount } = await ProjectMultipleUrl.getStatsByProjectId(id);
+        const { totalMultiLinkCount, remainingMultiLinkCount, completedSurveyCount } = await ProjectMultipleUrl.getStatsByProjectId(id);
         const addPartner = remainingMultiLinkCount > 0;
 
         return res.status(200).json({
@@ -497,6 +497,7 @@ export const getMultiLinkStats = async (req, res) => {
                 project_id: Number(id),
                 totalMultiLinkCount,
                 remainingMultiLinkCount,
+                completedSurveyCount,
                 addPartner
             }
         });

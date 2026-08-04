@@ -100,16 +100,19 @@ const ProjectMultipleUrl = {
         const [rows] = await conn.execute(
             `SELECT
                 COUNT(*) AS totalMultiLinkCount,
-                SUM(CASE WHEN partner_id IS NOT NULL AND Vender_UserName IS NOT NULL AND Vender_UserName != '' THEN 1 ELSE 0 END) AS assignedCount
+                SUM(CASE WHEN partner_id IS NOT NULL AND Vender_UserName IS NOT NULL AND Vender_UserName != '' THEN 1 ELSE 0 END) AS assignedCount,
+                SUM(CASE WHEN partner_id IS NOT NULL AND Vender_UserName IS NOT NULL AND Vender_UserName != '' AND Status = 'completed' THEN 1 ELSE 0 END) AS completedSurveyCount
              FROM project_mutiple_Url
              WHERE project_id = ?`,
             [project_id]
         );
         const total = Number(rows[0]?.totalMultiLinkCount || 0);
         const assigned = Number(rows[0]?.assignedCount || 0);
+        const completedSurvey = Number(rows[0]?.completedSurveyCount || 0);
         return {
             totalMultiLinkCount: total,
-            remainingMultiLinkCount: Math.max(total - assigned, 0)
+            remainingMultiLinkCount: Math.max(total - assigned, 0),
+            completedSurveyCount: completedSurvey
         };
     },
 
