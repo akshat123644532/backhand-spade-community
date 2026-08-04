@@ -96,8 +96,8 @@ const ProjectMultipleUrl = {
         return rows;
     },
 
-    getStatsByProjectId: async (project_id) => {
-        const [rows] = await db.execute(
+    getStatsByProjectId: async (project_id, conn = db) => {
+        const [rows] = await conn.execute(
             `SELECT
                 COUNT(*) AS totalMultiLinkCount,
                 SUM(CASE WHEN partner_id IS NOT NULL AND Vender_UserName IS NOT NULL AND Vender_UserName != '' THEN 1 ELSE 0 END) AS assignedCount
@@ -111,6 +111,52 @@ const ProjectMultipleUrl = {
             totalMultiLinkCount: total,
             remainingMultiLinkCount: Math.max(total - assigned, 0)
         };
+    },
+
+    getUnassignedIds: async (project_id, limit, conn = db) => {
+        const [rows] = await conn.query(
+            `SELECT id FROM project_mutiple_Url
+             WHERE project_id = ?
+               AND (partner_id IS NULL OR Vender_UserName IS NULL OR Vender_UserName = '')
+             ORDER BY id ASC
+             LIMIT ?`,
+            [project_id, Number(limit)]
+        );
+        return rows.map((r) => r.id);
+    },
+
+    assignPartnerToRows: async ({ ids, partner_id, Vender_UserName }, conn = db) => {
+        if (!ids?.length) return 0;
+        const placeholders = ids.map(() => '?').join(',');
+        const [result] = await conn.execute(
+            `UPDATE project_mutiple_Url
+             SET partner_id = ?, Vender_UserName = ?, UserType = 'PARTNER'
+             WHERE id IN (${placeholders})`,
+            [partner_id, Vender_UserName, ...ids]
+        );
+        return result.affectedRows;
+    },
+
+    getAssignedIdsByPartner: async (project_id, partner_id, conn = db) => {
+        const [rows] = await conn.execute(
+            `SELECT id FROM project_mutiple_Url
+             WHERE project_id = ? AND partner_id = ?
+             ORDER BY id ASC`,
+            [project_id, partner_id]
+        );
+        return rows.map((r) => r.id);
+    },
+
+    unassignPartnerFromRows: async (ids, conn = db) => {
+        if (!ids?.length) return 0;
+        const placeholders = ids.map(() => '?').join(',');
+        const [result] = await conn.execute(
+            `UPDATE project_mutiple_Url
+             SET partner_id = NULL, Vender_UserName = NULL, UserType = 'VENDOR'
+             WHERE id IN (${placeholders})`,
+            ids
+        );
+        return result.affectedRows;
     },
 
     getById: async (id) => {

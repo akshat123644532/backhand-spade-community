@@ -14,16 +14,30 @@ import {
 
 const router = express.Router();
 
-// Optional CSV on project create — multer only for multipart
-const optionalCsvUpload = (req, res, next) => {
-    if (req.is('multipart/form-data')) {
-        return csvUploadMiddleware.single('file')(req, res, next);
-    }
-    next();
+// Accept CSV under common field names (file / csv / csvFile)
+const csvUploadFlexible = (req, res, next) => {
+    const upload = csvUploadMiddleware.fields([
+        { name: 'file', maxCount: 1 },
+        { name: 'csv', maxCount: 1 },
+        { name: 'csvFile', maxCount: 1 }
+    ]);
+
+    upload(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ success: false, message: err.message || 'CSV upload failed!' });
+        }
+        req.file =
+            req.file ||
+            req.files?.file?.[0] ||
+            req.files?.csv?.[0] ||
+            req.files?.csvFile?.[0] ||
+            null;
+        next();
+    });
 };
 
 // Project CRUD
-router.post('/add',                 verifyToken, optionalCsvUpload, addProject);
+router.post('/add',                 verifyToken, addProject);
 router.get('/list',                 verifyToken, getAllProjects);
 router.get('/:id/multi-link-stats', verifyToken, getMultiLinkStats);
 router.get('/:id',                  verifyToken, getProjectById);
@@ -31,9 +45,9 @@ router.put('/:id',                  verifyToken, updateProject);
 router.delete('/:id',               verifyToken, deleteProject);
 router.patch('/:id/status',         verifyToken, toggleProjectStatus);
 
-// Project URL Info
+// Project URL Info (+ CSV for Multi Link in same request)
 router.get('/:id/url/list',         verifyToken, getProjectUrlList);
-router.post('/:id/url',             verifyToken, addProjectUrl);
+router.post('/:id/url',             verifyToken, csvUploadFlexible, addProjectUrl);
 router.put('/url/:urlId',           verifyToken, updateProjectUrl);
 router.delete('/url/:urlId',        verifyToken, deleteProjectUrl);
 
@@ -45,7 +59,7 @@ router.delete('/multiple-url/:urlId', verifyToken, deleteMultipleUrl);
 
 // Multiple URLs — CSV bulk upload + template download
 router.get('/multiple-url/csv-template', verifyToken, downloadCsvTemplate);
-router.post('/:id/multiple-url/csv-upload', verifyToken, csvUploadMiddleware.single('file'), uploadMultipleUrlCsv);
+router.post('/:id/multiple-url/csv-upload', verifyToken, csvUploadFlexible, uploadMultipleUrlCsv);
 router.patch('/url/:urlId/link-mode', verifyToken, toggleLinkMode);
 router.get('/url/:urlId/active-link', getActiveSurveyLink);
 

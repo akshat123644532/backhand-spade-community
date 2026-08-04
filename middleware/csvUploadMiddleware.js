@@ -17,11 +17,17 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
-        cb(null, true);
-    } else {
-        cb(new Error('Only CSV files are allowed!'), false);
-    }
+    const name = (file.originalname || '').toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    const ok =
+        name.endsWith('.csv') ||
+        mime.includes('csv') ||
+        mime === 'application/vnd.ms-excel' ||
+        mime === 'application/octet-stream' ||
+        mime === 'text/plain';
+
+    if (ok) cb(null, true);
+    else cb(new Error('Only CSV files are allowed!'), false);
 };
 
 const csvUploadMiddleware = multer({ storage, fileFilter });
