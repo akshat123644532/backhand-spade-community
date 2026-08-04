@@ -7,7 +7,7 @@ import transporter from '../config/mailer.js';
 
 export const getFilterQuestions = async (req, res) => {
     try {
-        const questions = await FindUser.getFilterQuestions(); // no groupId needed
+        const questions = await FindUser.getFilterQuestions();
         return res.status(200).json({ success: true, data: questions });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -28,7 +28,7 @@ export const getAnswerOptions = async (req, res) => {
 export const searchUsers = async (req, res) => {
     try {
         const { id } = req.params; // project_id
-        const { filters, page, limit } = req.body; // filters = [{ question_id, answer }, ...]
+        const { filters, page, limit } = req.body; // filters = [{ question_id, answers: [...] }, ...]
 
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
@@ -39,15 +39,29 @@ export const searchUsers = async (req, res) => {
 
         const result = await FindUser.search(filters, { page, limit });
 
+        const questionTitles = await FindUser.getQuestionTitles(filters.map(f => f.question_id));
+
         const panelistIds = result.data.map(r => r.id);
         const inviteMap = await ProjectInvitedUser.getMapByProject(id, panelistIds);
 
-        result.data = result.data.map(row => ({
-            ...row,
-            invite_status: inviteMap[row.id]?.invite_status || 'not_invited',
-            message: inviteMap[row.id]?.message || null,
-            earned_points: row.balance_point
-        }));
+        result.data = result.data.map(row => {
+            const matched_answers = filters.map((f, idx) => ({
+                question_id: f.question_id,
+                question_title: questionTitles[f.question_id] || null,
+                answer: row[`answer_${idx}`]
+            }));
+
+            const cleanRow = { ...row };
+            filters.forEach((f, idx) => { delete cleanRow[`answer_${idx}`]; });
+
+            return {
+                ...cleanRow,
+                matched_answers,
+                invite_status: inviteMap[row.id]?.invite_status || 'not_invited',
+                message: inviteMap[row.id]?.message || null,
+                earned_points: row.balance_point
+            };
+        });
 
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
@@ -84,12 +98,11 @@ export const inviteUsers = async (req, res) => {
                 survey_link: `https://spade-community-client-ui.vercel.app/survey/${id}`
             });
 
-        
-        transporter.sendMail({
-    to: panelist.email,
-    subject: rendered.subject,
-    html: rendered.body
-}).catch(err => console.error('Invite email failed:', err.message));
+            transporter.sendMail({
+                to: panelist.email,
+                subject: rendered.subject,
+                html: rendered.body
+            }).catch(err => console.error('Invite email failed:', err.message));
 
             await ProjectInvitedUser.create({
                 project_id: id,
