@@ -30,6 +30,12 @@ export const addPartner = async (req, res) => {
             status, api_base_url, api_body, api_secret_key
         } = req.body;
         if (!name || !email) return res.status(400).json({ success: false, message: "Name and email are required!" });
+        if (panel_size === undefined || panel_size === null || panel_size === '') {
+            return res.status(400).json({ success: false, message: "Panel size is required!" });
+        }
+        if (isNaN(Number(panel_size)) || Number(panel_size) < 0) {
+            return res.status(400).json({ success: false, message: "Panel size must be a valid number!" });
+        }
 
         const emailExists = await Partner.findByEmail(email);
         if (emailExists) return res.status(400).json({ success: false, message: "Partner with this email already exists!" });
@@ -65,6 +71,23 @@ export const getAllPartners = async (req, res) => {
         const country = req.query.country || '';
         const result = await Partner.getAll({ page, limit, search, status, country });
         return res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const getPartnerPanelSizes = async (req, res) => {
+    try {
+        const partners = await Partner.getAllPanelSizes();
+        return res.status(200).json({
+            success: true,
+            data: partners.map((p) => ({
+                id: p.id,
+                code: p.code,
+                name: p.name,
+                panel_size: Number(p.panel_size) || 0
+            }))
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
