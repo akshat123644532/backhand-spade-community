@@ -17,6 +17,7 @@ const SupplierMapping = {
             CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             status, IsTest, action_by, isMultiLink
         } = data;
+        // Note: incoming VenderURL (if any) is ignored — it's auto-generated below
 
         const assignCount = parseInt(quota, 10) || 0;
         const connection = await db.getConnection();
