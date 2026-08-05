@@ -488,6 +488,14 @@ export const getMultiLinkStats = async (req, res) => {
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
+        // Single link: only allow partner add flag
+        if (!isMultiLink(project.Project_Link_Type)) {
+            return res.status(200).json({
+                success: true,
+                data: { addPartner: true }
+            });
+        }
+
         const { totalMultiLinkCount, remainingMultiLinkCount, completedSurveyCount } = await ProjectMultipleUrl.getStatsByProjectId(id);
         const addPartner = remainingMultiLinkCount > 0;
 
