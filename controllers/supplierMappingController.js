@@ -10,6 +10,7 @@ export const addSupplierMapping = async (req, res) => {
             CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             status, IsTest
         } = req.body;
+        // Note: VenderURL is not accepted from client anymore — it's auto-generated
 
         if (!partnerid || !projectid || !projectUrlId) {
             return res.status(400).json({ success: false, message: "partnerid, projectid and projectUrlId are required!" });
