@@ -5,7 +5,7 @@ import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import Partner from '../models/partnerModel.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
 
@@ -563,3 +563,27 @@ export const downloadCsvTemplate = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+export const exportProjectsCsv = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const result = await Project.getAll({ page: 1, limit: 1000000, search, status });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Project Code', key: 'Project_code' },
+            { label: 'Project Name', key: 'Project_Name' },
+            { label: 'Clients', key: 'Clients' },
+            { label: 'Project Manager', key: 'Project_Manager' },
+            { label: 'Sales Manager', key: 'Sales_Manager' },
+            { label: 'Status', key: 'Status' },
+            { label: 'Start Date', key: 'startDate' },
+            { label: 'End Date', key: 'endDate' }
+        ]);
+
+        return sendCsv(res, 'projects.csv', csv);
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+

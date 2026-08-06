@@ -7,7 +7,7 @@ dotenv.config();
 
 import adminRoutes from './routes/adminRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
-import partnerRoutes from './routes/partnerRoutes.js';
+import partnerRoutes from './routes/partnerRoutes.js'; 
 import projectManagerRoutes from './routes/projectManagerRoutes.js';
 import countryRoutes from './routes/countryRoutes.js';
 import salesProjectRoutes from './routes/salesProjectRoutes.js';

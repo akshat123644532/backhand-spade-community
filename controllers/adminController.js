@@ -5,7 +5,7 @@ import { db } from '../config/db.js';
 import OTP from '../models/otpModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const toImageBuffer = (value) => {
     if (!value) return null;
     if (Buffer.isBuffer(value)) return value;
@@ -377,6 +377,26 @@ export const changePassword = async (req, res) => {
 
     } catch (error) {
         console.error("CHANGE PASSWORD ERROR:", error);
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+export const exportAdminsCsv = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const result = await Admin.getAll({ page: 1, limit: 1000000, search, status });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Name', key: 'name' },
+            { label: 'Email', key: 'email' },
+            { label: 'Contact No', key: 'contact_no' },
+            { label: 'Permission Type', key: 'permission_type' },
+            { label: 'Status', key: 'status' }
+        ]);
+
+        return sendCsv(res, 'admins.csv', csv);
+    } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };

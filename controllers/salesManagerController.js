@@ -4,7 +4,7 @@ import EmailTemplate from '../models/Emailtemplatemodel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { sendEmail } from '../config/mailer.js';
 import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
@@ -225,6 +225,24 @@ export const deleteSalesManager = async (req, res) => {
         await logActivity({ admin_id: req.user?.id, action: 'DELETE', module: 'SalesManager', description: `Sales Manager ID ${req.params.id} deleted`, ip_address: req.ip });
 
         return res.status(200).json({ success: true, message: "Sales Manager deleted successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+export const exportSalesManagersCsv = async (req, res) => {
+    try {
+        const { search, status } = req.query;
+        const result = await SalesManager.getAll({ page: 1, limit: 1000000, search: search || '', status: status || '' });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Code', key: 'code' },
+            { label: 'Name', key: 'name' },
+            { label: 'Email', key: 'email' },
+            { label: 'Status', key: 'status' }
+        ]);
+
+        return sendCsv(res, 'sales_managers.csv', csv);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
