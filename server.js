@@ -37,6 +37,9 @@ import supplierMappingRoutes from './routes/supplierMappingRoutes.js';
 import supplierRedirectRoutes from './routes/supplierRedirectRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 
+import dashboardRoutes from './routes/dashboardRoutes.js';
+
+
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -93,6 +96,7 @@ app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/supplier-mapping', supplierMappingRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
