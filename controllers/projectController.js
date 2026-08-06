@@ -341,8 +341,27 @@ export const updateProjectUrl = async (req, res) => {
         const { urlId } = req.params;
         const urlInfo = await ProjectUrl.getById(urlId);
         if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });
-        await ProjectUrl.update(urlId, { ...req.body, updated_by: req.user?.id || null });
-        return res.status(200).json({ success: true, message: "Project URL updated successfully!" });
+
+        const metadata = parseMaybeJson(req.body?.metadata);
+        const payload = {
+            ...(typeof metadata === 'object' && metadata ? metadata : {}),
+            ...(req.body || {}),
+            updated_by: req.user?.id || null
+        };
+        if (typeof metadata === 'object' && metadata) {
+            Object.assign(payload, metadata);
+        }
+        delete payload.metadata;
+        delete payload.file;
+
+        await ProjectUrl.update(urlId, payload);
+        const updated = await ProjectUrl.getById(urlId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Project URL updated successfully!",
+            data: updated
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

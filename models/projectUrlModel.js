@@ -1,6 +1,60 @@
 import { db } from '../config/db.js';
 import crypto from 'crypto';
 
+const ALLOWED_UPDATE_FIELDS = new Set([
+    'description', 'LOI', 'IR', 'country', 'CPI', 'SampleSize',
+    'Start_Date', 'End_Date', 'Status', 'Live_Link', 'Test_Link',
+    'GeoLocation', 'UrlProtection', 'UniqueIP', 'PreScreen', 'FraudDetection',
+    'Language', 'PreScreenid', 'PreScreenName',
+    'TerminationPoint', 'CompletionPoint', 'ValidatePoint',
+    'CompleteURL', 'TerminateURL', 'OverQuotaURL', 'QualityTermURL', 'SurveyCloseURL',
+    'link_mode', 'updated_by'
+]);
+
+const toIntFlag = (val, fallback = 0) => {
+    if (val === undefined || val === null || val === '') return fallback;
+    const n = Number(val);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+const toNullable = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    return val;
+};
+
+/** Accept common frontend aliases for PreScreen fields */
+const normalizeUrlPayload = (data = {}) => {
+    const payload = { ...data };
+
+    const preScreen =
+        payload.PreScreen ?? payload.prescreen ?? payload.pre_screen ?? payload.Pre_Screen;
+    const preScreenId =
+        payload.PreScreenid ?? payload.PreScreenId ?? payload.prescreenid ??
+        payload.prescreen_id ?? payload.pre_screen_id ?? payload.PreScreenID;
+    const preScreenName =
+        payload.PreScreenName ?? payload.prescreenName ?? payload.prescreen_name ??
+        payload.Pre_Screen_Name;
+
+    if (preScreen !== undefined) payload.PreScreen = preScreen;
+    if (preScreenId !== undefined) payload.PreScreenid = preScreenId;
+    if (preScreenName !== undefined) payload.PreScreenName = preScreenName;
+
+    // Drop alias keys so update whitelist / SQL don't see unknown columns
+    delete payload.prescreen;
+    delete payload.pre_screen;
+    delete payload.Pre_Screen;
+    delete payload.PreScreenId;
+    delete payload.prescreenid;
+    delete payload.prescreen_id;
+    delete payload.pre_screen_id;
+    delete payload.PreScreenID;
+    delete payload.prescreenName;
+    delete payload.prescreen_name;
+    delete payload.Pre_Screen_Name;
+
+    return payload;
+};
+
 const ProjectUrl = {
 
     generateUrlCode: async (conn = db) => {
@@ -23,6 +77,7 @@ const ProjectUrl = {
     },
 
     create: async (data, conn = db) => {
+        const normalized = normalizeUrlPayload(data);
         const {
             project_id, description, LOI, IR, country, CPI, SampleSize,
             Start_Date, End_Date, Status, Live_Link, Test_Link,
@@ -31,7 +86,7 @@ const ProjectUrl = {
             TerminationPoint, CompletionPoint, ValidatePoint,
             CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             action_by
-        } = data;
+        } = normalized;
 
         const project_url_code = await ProjectUrl.generateUrlCode(conn);
 
@@ -46,14 +101,37 @@ const ProjectUrl = {
               action_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                project_id, project_url_code, description || null, LOI || null, IR || null,
-                country || null, CPI || null, SampleSize || null,
-                Start_Date || null, End_Date || null, Status || 'active',
-                Live_Link || null, Test_Link || null,
-                GeoLocation || 0, UrlProtection || 0, UniqueIP || 0, PreScreen || 0, FraudDetection || 0,
-                Language || null, PreScreenid || null, PreScreenName || null,
-                TerminationPoint || null, CompletionPoint || null, ValidatePoint || null,
-                CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null, SurveyCloseURL || null,
+                project_id,
+                project_url_code,
+                toNullable(description),
+                toNullable(LOI),
+                toNullable(IR),
+                toNullable(country),
+                toNullable(CPI),
+                toNullable(SampleSize),
+                toNullable(Start_Date),
+                toNullable(End_Date),
+                Status || 'active',
+                toNullable(Live_Link),
+                toNullable(Test_Link),
+                toIntFlag(GeoLocation, 0),
+                toIntFlag(UrlProtection, 0),
+                toIntFlag(UniqueIP, 0),
+                toIntFlag(PreScreen, 0),
+                toIntFlag(FraudDetection, 0),
+                toNullable(Language),
+                PreScreenid != null && String(PreScreenid).trim() !== ''
+                    ? String(PreScreenid).trim()
+                    : null,
+                toNullable(PreScreenName),
+                toNullable(TerminationPoint),
+                toNullable(CompletionPoint),
+                toNullable(ValidatePoint),
+                toNullable(CompleteURL),
+                toNullable(TerminateURL),
+                toNullable(OverQuotaURL),
+                toNullable(QualityTermURL),
+                toNullable(SurveyCloseURL),
                 action_by || null
             ]
         );
@@ -85,19 +163,39 @@ const ProjectUrl = {
     },
 
     update: async (id, data) => {
-        // map friendly keys to actual DB column names (LOI -> `LOI(Minute)`, IR -> `IR(%)`)
         const columnMap = {
             LOI: '`LOI(Minute)`',
             IR: '`IR(%)`'
         };
 
-        // project_url_code kabhi update nahi hona chahiye — chahe request me aaye bhi to ignore karo
-        const safeData = { ...data };
+        const safeData = normalizeUrlPayload(data);
         delete safeData.project_url_code;
+        delete safeData.id;
+        delete safeData.project_id;
+        delete safeData.created_at;
+        delete safeData.deleted_at;
+        delete safeData.deleted_by;
+        delete safeData.action_by;
+        delete safeData.partner_id;
+        delete safeData.metadata;
+        delete safeData.file;
+
+        // Normalize flag/id types the same way as create
+        if ('PreScreen' in safeData) safeData.PreScreen = toIntFlag(safeData.PreScreen, 0);
+        if ('PreScreenid' in safeData) {
+            safeData.PreScreenid =
+                safeData.PreScreenid != null && String(safeData.PreScreenid).trim() !== ''
+                    ? String(safeData.PreScreenid).trim()
+                    : null;
+        }
+        for (const flag of ['GeoLocation', 'UrlProtection', 'UniqueIP', 'FraudDetection']) {
+            if (flag in safeData) safeData[flag] = toIntFlag(safeData[flag], 0);
+        }
 
         const setClauses = [];
         const values = [];
         for (const key of Object.keys(safeData)) {
+            if (!ALLOWED_UPDATE_FIELDS.has(key)) continue;
             const column = columnMap[key] || `\`${key}\``;
             setClauses.push(`${column} = ?`);
             values.push(safeData[key]);

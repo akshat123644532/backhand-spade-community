@@ -11,12 +11,6 @@ const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 const generateOtp = () => String(crypto.randomInt(100000, 1000000));
 
-const isEmailEligible = async (email) => {
-    const panelist = await Panelist.findByEmailInsensitive(email);
-    if (panelist) return true;
-    return ProjectMultipleUrl.existsByVenderUserName(email);
-};
-
 /** POST /api/survey-access/send-otp  { email } */
 export const sendSurveyAccessOtp = async (req, res) => {
     try {
@@ -25,11 +19,21 @@ export const sendSurveyAccessOtp = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email is required!' });
         }
 
-        const eligible = await isEmailEligible(email);
-        if (!eligible) {
+        const inMultiLink = await ProjectMultipleUrl.existsByVenderUserName(email);
+
+        // Panelist exists but not assigned to any multi-link survey → soft stop (no OTP)
+        if (!inMultiLink) {
+            const panelist = await Panelist.findByEmailInsensitive(email);
+            if (panelist) {
+                return res.status(200).json({
+                    success: false,
+                    message: 'You do not have access for the survey'
+                });
+            }
+
             return res.status(404).json({
                 success: false,
-                message: 'Email not found in panelists or multi-link records!'
+                message: 'Email not found!'
             });
         }
 
