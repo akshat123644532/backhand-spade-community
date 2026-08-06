@@ -169,6 +169,30 @@ const ProjectMultipleUrl = {
         return rows[0] || null;
     },
 
+    existsByVenderUserName: async (email) => {
+        const [rows] = await db.execute(
+            `SELECT id FROM project_mutiple_Url
+             WHERE LOWER(Vender_UserName) = LOWER(?)
+             LIMIT 1`,
+            [String(email || '').trim()]
+        );
+        return Boolean(rows[0]);
+    },
+
+    getByVenderUserName: async (email) => {
+        const [rows] = await db.execute(
+            `SELECT id, partner_id, project_id, project_url_id, Live_Link, VenderURL,
+                    Vender_UserName, UserType, Status
+             FROM project_mutiple_Url
+             WHERE LOWER(Vender_UserName) = LOWER(?)
+               AND VenderURL IS NOT NULL
+               AND VenderURL != ''
+             ORDER BY id DESC`,
+            [String(email || '').trim()]
+        );
+        return rows;
+    },
+
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(

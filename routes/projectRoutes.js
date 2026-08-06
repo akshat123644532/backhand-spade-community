@@ -9,7 +9,8 @@ import {
     updateProject, deleteProject, toggleProjectStatus,
     addProjectUrl, updateProjectUrl, deleteProjectUrl, getProjectUrlList,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
-    uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate
+    uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate,
+    getMultiLinkCsvImportStatus
 } from '../controllers/projectController.js';
 
 const router = express.Router();
@@ -57,9 +58,10 @@ router.post('/:id/multiple-url',    verifyToken, addMultipleUrl);
 router.put('/multiple-url/:urlId',  verifyToken, updateMultipleUrl);
 router.delete('/multiple-url/:urlId', verifyToken, deleteMultipleUrl);
 
-// Multiple URLs — CSV bulk upload + template download
+// Multiple URLs — CSV bulk upload + template download + import status
 router.get('/multiple-url/csv-template', verifyToken, downloadCsvTemplate);
 router.post('/:id/multiple-url/csv-upload', verifyToken, csvUploadFlexible, uploadMultipleUrlCsv);
+router.get('/:id/multiple-url/csv-import-status', verifyToken, getMultiLinkCsvImportStatus);
 router.patch('/url/:urlId/link-mode', verifyToken, toggleLinkMode);
 router.get('/url/:urlId/active-link', getActiveSurveyLink);
 

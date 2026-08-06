@@ -57,7 +57,6 @@ const SupplierMapping = {
 
             const tokenPayload = {
                 partnerid,
-                partner_code,
                 projectUrlId,
                 projectid,
                 startDate,

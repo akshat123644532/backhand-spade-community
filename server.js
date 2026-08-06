@@ -35,6 +35,8 @@ import findUserRoutes from './routes/findUserRoutes.js';
 import systemSettingRoutes from './routes/systemSettingRoutes.js';
 import supplierMappingRoutes from './routes/supplierMappingRoutes.js';
 import supplierRedirectRoutes from './routes/supplierRedirectRoutes.js';
+import surveyAccessRoutes from './routes/surveyAccessRoutes.js';
+import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 
 
 if (!fs.existsSync('uploads')) {
@@ -90,9 +92,11 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/find-user', findUserRoutes);
 app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/supplier-mapping', supplierMappingRoutes);
+app.use('/api/survey-access', surveyAccessRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    resumePendingMultiLinkCsvJobs();
 });
