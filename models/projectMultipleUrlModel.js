@@ -193,6 +193,22 @@ const ProjectMultipleUrl = {
         return rows;
     },
 
+    /** Resolve multi-link survey row by project + url + vendor email (uid) */
+    getSurveyByAccess: async ({ project_id, project_url_id, Vender_UserName }) => {
+        const [rows] = await db.execute(
+            `SELECT id, partner_id, project_id, project_url_id, Live_Link, VenderURL,
+                    Vender_UserName, UserType, Status
+             FROM project_mutiple_Url
+             WHERE project_id = ?
+               AND project_url_id = ?
+               AND LOWER(Vender_UserName) = LOWER(?)
+             ORDER BY id DESC
+             LIMIT 1`,
+            [project_id, project_url_id, String(Vender_UserName || '').trim()]
+        );
+        return rows[0] || null;
+    },
+
     update: async (id, data) => {
         const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
         const [result] = await db.execute(

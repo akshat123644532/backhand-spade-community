@@ -1,0 +1,341 @@
+import { decryptSurveyToken } from '../utils/Encryptionhelper.js';
+import SurveyData from '../models/surveyDataModel.js';
+import ProjectUrl from '../models/projectUrlModel.js';
+import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
+import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
+
+const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined']);
+
+const decodeToken = (rawToken) => {
+    if (!rawToken || typeof rawToken !== 'string') {
+        const err = new Error('token is required!');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    try {
+        const tokenData = decryptSurveyToken(rawToken.trim());
+        // partnerid can be null (e.g. multi-link / vendor flows)
+        if (tokenData?.projectid == null || tokenData?.projectUrlId == null) {
+            const err = new Error('Invalid token payload!');
+            err.statusCode = 400;
+            throw err;
+        }
+        return tokenData;
+    } catch (e) {
+        if (e.statusCode) throw e;
+        const err = new Error('Invalid or corrupted token!');
+        err.statusCode = 400;
+        throw err;
+    }
+};
+
+const normalizeUid = (uid) => {
+    if (uid == null) return '';
+    let value = String(uid).trim();
+    try {
+        value = decodeURIComponent(value);
+    } catch {
+        // keep raw
+    }
+    return value.trim();
+};
+
+const getClientIp = (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    let ip = '';
+    if (typeof forwarded === 'string' && forwarded.trim()) {
+        ip = forwarded.split(',')[0].trim();
+    } else {
+        ip = req.ip || req.socket?.remoteAddress || '';
+    }
+    if (ip.startsWith('::ffff:')) ip = ip.slice(7);
+    // Column InitalIP is varchar(20)
+    return String(ip).slice(0, 20);
+};
+
+/**
+ * POST /api/survey/activity
+ * Body/query: { token, uid }
+ * Creates survey activity with Status = Initiated and InitalIP = client IP.
+ * Blocks if same partnerid + projectid + project_url_id + UserId + InitalIP
+ * already exists with Status other than Initiated.
+ */
+export const addSurveyActivity = async (req, res) => {
+    try {
+        const token = req.body?.token || req.query?.token;
+        const uidRaw = req.body?.uid ?? req.query?.uid;
+        const tokenData = decodeToken(token);
+
+        const UserId = normalizeUid(uidRaw);
+        if (!UserId || PLACEHOLDER_UIDS.has(UserId.toLowerCase()) || PLACEHOLDER_UIDS.has(UserId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'uid is required! Replace [identifier] with the respondent id.'
+            });
+        }
+
+        const partnerid =
+            tokenData.partnerid == null || tokenData.partnerid === ''
+                ? null
+                : Number(tokenData.partnerid);
+        const projectid = Number(tokenData.projectid);
+        const project_url_id = Number(tokenData.projectUrlId);
+        const InitalIP = getClientIp(req);
+
+        if (
+            (partnerid != null && !Number.isFinite(partnerid)) ||
+            !Number.isFinite(projectid) ||
+            !Number.isFinite(project_url_id)
+        ) {
+            return res.status(400).json({ success: false, message: 'Invalid token ids!' });
+        }
+
+        // Optional window check from token dates
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (tokenData.startDate && new Date(tokenData.startDate) > today) {
+            return res.status(403).json({ success: false, message: 'Survey has not started yet!' });
+        }
+        if (tokenData.endDate && new Date(tokenData.endDate) < today) {
+            return res.status(403).json({ success: false, message: 'Survey is closed!' });
+        }
+
+        const blocked = await SurveyData.findBlockedAccess({
+            partnerid, projectid, project_url_id, UserId, InitalIP
+        });
+        if (blocked) {
+            return res.status(403).json({
+                success: false,
+                message: 'No access — survey already filled or in progress for this user.',
+                code: 'ALREADY_FILLED',
+                data: { id: blocked.id, Status: blocked.Status }
+            });
+        }
+
+        const existing = await SurveyData.findInitiated({
+            partnerid, projectid, project_url_id, UserId, InitalIP
+        });
+        if (existing) {
+            return res.status(200).json({
+                success: true,
+                message: 'Survey activity already initiated!',
+                data: existing
+            });
+        }
+
+        const id = await SurveyData.createInitiated({
+            partnerid, projectid, project_url_id, UserId, InitalIP
+        });
+        const row = await SurveyData.getById(id);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Survey activity initiated successfully!',
+            data: row
+        });
+    } catch (error) {
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
+            success: false,
+            message: statusCode === 500 ? 'Server error!' : error.message,
+            error: error.message
+        });
+    }
+};
+
+/**
+ * POST|GET /api/survey/prescreen
+ * Body/query: { token }
+ * If project_url_Info.PreScreen = 1, return questions for PreScreenid group.
+ */
+export const getSurveyPreScreen = async (req, res) => {
+    try {
+        const token = req.body?.token || req.query?.token;
+        const tokenData = decodeToken(token);
+
+        const projectid = Number(tokenData.projectid);
+        const project_url_id = Number(tokenData.projectUrlId);
+
+        const urlInfo = await ProjectUrl.getById(project_url_id);
+        if (!urlInfo) {
+            return res.status(404).json({ success: false, message: 'Project URL not found!' });
+        }
+
+        if (Number(urlInfo.project_id) !== projectid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Token projectid does not match project_url_id!'
+            });
+        }
+
+        const preScreenFlag = Number(urlInfo.PreScreen) === 1;
+        if (!preScreenFlag) {
+            return res.status(200).json({
+                success: true,
+                required: false,
+                message: 'No PreScreen required'
+            });
+        }
+
+        const preScreenId = urlInfo.PreScreenid;
+        if (preScreenId == null || String(preScreenId).trim() === '') {
+            return res.status(400).json({
+                success: false,
+                required: true,
+                message: 'PreScreen is enabled but PreScreenid is missing!'
+            });
+        }
+
+        const group = await QuestionnaireGroup.getById(preScreenId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                required: true,
+                message: 'PreScreen questionnaire group not found!'
+            });
+        }
+        if (group.status === 'inactive') {
+            return res.status(403).json({
+                success: false,
+                required: true,
+                message: 'PreScreen questionnaire is not active!'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            required: true,
+            message: 'PreScreen required',
+            data: {
+                PreScreen: 1,
+                PreScreenid: group.id,
+                PreScreenName: urlInfo.PreScreenName || group.surveyTitle,
+                surveyTitle: group.surveyTitle,
+                language: group.language,
+                questions: group.questions || []
+            }
+        });
+    } catch (error) {
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
+            success: false,
+            message: statusCode === 500 ? 'Server error!' : error.message,
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/survey/link?token=...&uid=...
+ * token → projectid + projectUrlId
+ * uid → Vender_UserName
+ * Returns the multi-link Live_Link for that respondent.
+ */
+export const getSurveyLink = async (req, res) => {
+    try {
+        const token = req.query?.token || req.body?.token;
+        const uidRaw = req.query?.uid ?? req.body?.uid;
+        const tokenData = decodeToken(token);
+
+        const UserId = normalizeUid(uidRaw);
+        if (!UserId || PLACEHOLDER_UIDS.has(UserId.toLowerCase()) || PLACEHOLDER_UIDS.has(UserId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'uid is required! Use the respondent email / Vender_UserName.'
+            });
+        }
+
+        const projectid = Number(tokenData.projectid);
+        const project_url_id = Number(tokenData.projectUrlId);
+
+        if (!Number.isFinite(projectid) || !Number.isFinite(project_url_id)) {
+            return res.status(400).json({ success: false, message: 'Invalid token ids!' });
+        }
+
+        // Optional window check from token dates
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (tokenData.startDate && new Date(tokenData.startDate) > today) {
+            return res.status(403).json({ success: false, message: 'Survey has not started yet!' });
+        }
+        if (tokenData.endDate && new Date(tokenData.endDate) < today) {
+            return res.status(403).json({ success: false, message: 'Survey is closed!' });
+        }
+
+        const multiRow = await ProjectMultipleUrl.getSurveyByAccess({
+            project_id: projectid,
+            project_url_id,
+            Vender_UserName: UserId
+        });
+
+        if (multiRow) {
+            if (String(multiRow.Status || '').toLowerCase() === 'inactive') {
+                return res.status(403).json({ success: false, message: 'Survey link is inactive!' });
+            }
+            if (!multiRow.Live_Link) {
+                return res.status(404).json({ success: false, message: 'Live_Link not configured for this user!' });
+            }
+
+            const liveLink = String(multiRow.Live_Link);
+            const surveyUrl = liveLink.includes('?')
+                ? `${liveLink}&respondent_id=${encodeURIComponent(UserId)}`
+                : `${liveLink}?respondent_id=${encodeURIComponent(UserId)}`;
+
+            return res.status(200).json({
+                success: true,
+                message: 'Survey link fetched successfully!',
+                data: {
+                    project_id: multiRow.project_id,
+                    project_url_id: multiRow.project_url_id,
+                    Vender_UserName: multiRow.Vender_UserName,
+                    Live_Link: multiRow.Live_Link,
+                    survey_url: surveyUrl,
+                    Status: multiRow.Status
+                }
+            });
+        }
+
+        // Fallback: single-link project_url_Info
+        const urlInfo = await ProjectUrl.getById(project_url_id);
+        if (!urlInfo || Number(urlInfo.project_id) !== projectid) {
+            return res.status(404).json({
+                success: false,
+                message: 'No survey found for this token and uid!'
+            });
+        }
+
+        const liveLink =
+            urlInfo.link_mode === 'live'
+                ? urlInfo.Live_Link
+                : (urlInfo.Test_Link || urlInfo.Live_Link);
+
+        if (!liveLink) {
+            return res.status(404).json({ success: false, message: 'Live_Link not configured!' });
+        }
+
+        const surveyUrl = String(liveLink).includes('?')
+            ? `${liveLink}&respondent_id=${encodeURIComponent(UserId)}`
+            : `${liveLink}?respondent_id=${encodeURIComponent(UserId)}`;
+
+        return res.status(200).json({
+            success: true,
+            message: 'Survey link fetched successfully!',
+            data: {
+                project_id: projectid,
+                project_url_id,
+                Vender_UserName: UserId,
+                Live_Link: liveLink,
+                survey_url: surveyUrl,
+                Status: urlInfo.Status
+            }
+        });
+    } catch (error) {
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
+            success: false,
+            message: statusCode === 500 ? 'Server error!' : error.message,
+            error: error.message
+        });
+    }
+};

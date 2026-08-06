@@ -36,6 +36,7 @@ import systemSettingRoutes from './routes/systemSettingRoutes.js';
 import supplierMappingRoutes from './routes/supplierMappingRoutes.js';
 import supplierRedirectRoutes from './routes/supplierRedirectRoutes.js';
 import surveyAccessRoutes from './routes/surveyAccessRoutes.js';
+import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 
 
@@ -93,6 +94,7 @@ app.use('/api/find-user', findUserRoutes);
 app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/supplier-mapping', supplierMappingRoutes);
 app.use('/api/survey-access', surveyAccessRoutes);
+app.use('/api/survey', surveyDataRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);
 
 const PORT = process.env.PORT || 5050;

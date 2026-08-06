@@ -11,10 +11,24 @@ const ALLOWED_UPDATE_FIELDS = new Set([
     'link_mode', 'updated_by'
 ]);
 
+const FLAG_FIELDS = ['GeoLocation', 'UrlProtection', 'UniqueIP', 'FraudDetection', 'PreScreen'];
+
+/** Coerce checkbox / flag values; explicit 0 / false / "0" stay 0 */
 const toIntFlag = (val, fallback = 0) => {
     if (val === undefined || val === null || val === '') return fallback;
-    const n = Number(val);
-    return Number.isFinite(n) ? n : fallback;
+    if (typeof val === 'boolean') return val ? 1 : 0;
+    if (typeof val === 'number') {
+        if (!Number.isFinite(val)) return fallback;
+        return val === 0 ? 0 : 1;
+    }
+
+    const raw = String(val).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(raw)) return 1;
+    if (['0', 'false', 'no', 'off'].includes(raw)) return 0;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return fallback;
+    return n === 0 ? 0 : 1;
 };
 
 const toNullable = (val) => {
@@ -22,35 +36,49 @@ const toNullable = (val) => {
     return val;
 };
 
-/** Accept common frontend aliases for PreScreen fields */
+const pickFirstDefined = (obj, keys) => {
+    for (const key of keys) {
+        if (obj[key] !== undefined) return obj[key];
+    }
+    return undefined;
+};
+
+/** Normalize frontend aliases → DB column names */
 const normalizeUrlPayload = (data = {}) => {
     const payload = { ...data };
 
-    const preScreen =
-        payload.PreScreen ?? payload.prescreen ?? payload.pre_screen ?? payload.Pre_Screen;
-    const preScreenId =
-        payload.PreScreenid ?? payload.PreScreenId ?? payload.prescreenid ??
-        payload.prescreen_id ?? payload.pre_screen_id ?? payload.PreScreenID;
-    const preScreenName =
-        payload.PreScreenName ?? payload.prescreenName ?? payload.prescreen_name ??
-        payload.Pre_Screen_Name;
+    const flagAliasMap = {
+        GeoLocation: ['GeoLocation', 'geoLocation', 'geo_location', 'Geolocation'],
+        UrlProtection: ['UrlProtection', 'urlProtection', 'url_protection', 'URLProtection'],
+        UniqueIP: ['UniqueIP', 'uniqueIP', 'unique_ip', 'UniqueIp'],
+        FraudDetection: ['FraudDetection', 'fraudDetection', 'fraud_detection'],
+        PreScreen: ['PreScreen', 'prescreen', 'pre_screen', 'Pre_Screen']
+    };
 
-    if (preScreen !== undefined) payload.PreScreen = preScreen;
+    for (const [canonical, aliases] of Object.entries(flagAliasMap)) {
+        const value = pickFirstDefined(payload, aliases);
+        if (value !== undefined) payload[canonical] = value;
+        for (const alias of aliases) {
+            if (alias !== canonical) delete payload[alias];
+        }
+    }
+
+    const preScreenId = pickFirstDefined(payload, [
+        'PreScreenid', 'PreScreenId', 'prescreenid', 'prescreen_id',
+        'pre_screen_id', 'PreScreenID'
+    ]);
     if (preScreenId !== undefined) payload.PreScreenid = preScreenId;
-    if (preScreenName !== undefined) payload.PreScreenName = preScreenName;
+    for (const alias of ['PreScreenId', 'prescreenid', 'prescreen_id', 'pre_screen_id', 'PreScreenID']) {
+        delete payload[alias];
+    }
 
-    // Drop alias keys so update whitelist / SQL don't see unknown columns
-    delete payload.prescreen;
-    delete payload.pre_screen;
-    delete payload.Pre_Screen;
-    delete payload.PreScreenId;
-    delete payload.prescreenid;
-    delete payload.prescreen_id;
-    delete payload.pre_screen_id;
-    delete payload.PreScreenID;
-    delete payload.prescreenName;
-    delete payload.prescreen_name;
-    delete payload.Pre_Screen_Name;
+    const preScreenName = pickFirstDefined(payload, [
+        'PreScreenName', 'prescreenName', 'prescreen_name', 'Pre_Screen_Name'
+    ]);
+    if (preScreenName !== undefined) payload.PreScreenName = preScreenName;
+    for (const alias of ['prescreenName', 'prescreen_name', 'Pre_Screen_Name']) {
+        delete payload[alias];
+    }
 
     return payload;
 };
@@ -180,16 +208,17 @@ const ProjectUrl = {
         delete safeData.metadata;
         delete safeData.file;
 
-        // Normalize flag/id types the same way as create
-        if ('PreScreen' in safeData) safeData.PreScreen = toIntFlag(safeData.PreScreen, 0);
-        if ('PreScreenid' in safeData) {
+        // Normalize flag/id types — hasOwn so explicit 0 is kept
+        for (const flag of FLAG_FIELDS) {
+            if (Object.prototype.hasOwnProperty.call(safeData, flag)) {
+                safeData[flag] = toIntFlag(safeData[flag], 0);
+            }
+        }
+        if (Object.prototype.hasOwnProperty.call(safeData, 'PreScreenid')) {
             safeData.PreScreenid =
                 safeData.PreScreenid != null && String(safeData.PreScreenid).trim() !== ''
                     ? String(safeData.PreScreenid).trim()
                     : null;
-        }
-        for (const flag of ['GeoLocation', 'UrlProtection', 'UniqueIP', 'FraudDetection']) {
-            if (flag in safeData) safeData[flag] = toIntFlag(safeData[flag], 0);
         }
 
         const setClauses = [];
@@ -198,7 +227,7 @@ const ProjectUrl = {
             if (!ALLOWED_UPDATE_FIELDS.has(key)) continue;
             const column = columnMap[key] || `\`${key}\``;
             setClauses.push(`${column} = ?`);
-            values.push(safeData[key]);
+            values.push(FLAG_FIELDS.includes(key) ? Number(safeData[key]) : safeData[key]);
         }
         if (!setClauses.length) return null;
 

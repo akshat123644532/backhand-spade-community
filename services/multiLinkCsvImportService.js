@@ -2,7 +2,7 @@ import Project from '../models/projectModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import Panelist from '../models/Panelistmodel.js';
 import MultiLinkCsvJob from '../models/multiLinkCsvJobModel.js';
-import { encryptId } from '../utils/Encryptionhelper.js';
+import { encryptSurveyToken } from '../utils/Encryptionhelper.js';
 
 const BATCH_SIZE = 200;
 const runningJobs = new Set();
@@ -151,10 +151,8 @@ export const processMultiLinkCsvJob = async (jobId) => {
             partnerid: job.partner_id || null,
             projectUrlId: job.project_url_id,
             projectid: job.project_id,
-            startDate: project.startDate || null,
-            endDate: project.endDate || null
         };
-        const token = encryptId(JSON.stringify(tokenPayload));
+        const token = encryptSurveyToken(tokenPayload);
 
         const processed = await insertInBatches({
             jobId,

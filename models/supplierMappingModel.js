@@ -1,5 +1,5 @@
 import { db } from '../config/db.js';
-import { encryptId, decryptId } from '../utils/Encryptionhelper.js';
+import { encryptSurveyToken, decryptSurveyToken } from '../utils/Encryptionhelper.js';
 import ProjectMultipleUrl from './projectMultipleUrlModel.js';
 
 const SupplierMapping = {
@@ -62,7 +62,7 @@ const SupplierMapping = {
                 startDate,
                 endDate
             };
-            const token = encryptId(JSON.stringify(tokenPayload));
+            const token = encryptSurveyToken(tokenPayload);
             const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
             const dynamic_url = `${baseUrl}/dosurvey/${token}?uid=[identifier]`;
 
@@ -187,7 +187,7 @@ const SupplierMapping = {
     getByDynamicHash: async (token) => {
         let tokenData;
         try {
-            tokenData = JSON.parse(decryptId(token));
+            tokenData = decryptSurveyToken(token);
         } catch {
             const [rows] = await db.execute(
                 `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
@@ -203,7 +203,7 @@ const SupplierMapping = {
             `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
              FROM supplier_mapping sm
              LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
-             WHERE sm.partnerid = ? AND sm.projectid = ? AND sm.projectUrlId = ?
+             WHERE sm.partnerid <=> ? AND sm.projectid = ? AND sm.projectUrlId = ?
                AND sm.deleted_at IS NULL
              ORDER BY sm.id DESC LIMIT 1`,
             [tokenData.partnerid, tokenData.projectid, tokenData.projectUrlId]

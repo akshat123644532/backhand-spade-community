@@ -222,14 +222,13 @@ export const addProjectUrl = async (req, res) => {
 
         // Frontend sends fields under `metadata` JSON string (+ optional flat fields)
         const metadata = parseMaybeJson(req.body?.metadata);
+        const metaObj = (metadata && typeof metadata === 'object' && !Array.isArray(metadata))
+            ? metadata
+            : {};
         const urlPayload = {
-            ...(typeof metadata === 'object' && metadata ? metadata : {}),
             ...(req.body || {}),
+            ...metaObj,
         };
-        // Prefer parsed metadata values over the raw JSON string field
-        if (typeof metadata === 'object' && metadata) {
-            Object.assign(urlPayload, metadata);
-        }
         delete urlPayload.metadata;
         delete urlPayload.file;
 
@@ -342,15 +341,18 @@ export const updateProjectUrl = async (req, res) => {
         const urlInfo = await ProjectUrl.getById(urlId);
         if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });
 
-        const metadata = parseMaybeJson(req.body?.metadata);
+        const body = req.body || {};
+        const metadata = parseMaybeJson(body.metadata);
+        const metaObj = (metadata && typeof metadata === 'object' && !Array.isArray(metadata))
+            ? metadata
+            : {};
+
+        // Frontend sends URL fields under `metadata` — metadata wins over flat body
         const payload = {
-            ...(typeof metadata === 'object' && metadata ? metadata : {}),
-            ...(req.body || {}),
+            ...body,
+            ...metaObj,
             updated_by: req.user?.id || null
         };
-        if (typeof metadata === 'object' && metadata) {
-            Object.assign(payload, metadata);
-        }
         delete payload.metadata;
         delete payload.file;
 
