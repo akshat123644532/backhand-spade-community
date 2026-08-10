@@ -3,15 +3,18 @@ import crypto from 'crypto';
 
 const ProjectUrl = {
 
-    generateUrlCode: async (conn = db) => {
+    // Alphanumeric code, project_id ke saath prefix — jaise PID20A7X9K2Z1
+    generateUrlCode: async (project_id, conn = db) => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let code;
         let exists = true;
 
         while (exists) {
-            const length = Math.floor(Math.random() * 5) + 6; // 6,7,8,9,10
-            const min = Math.pow(10, length - 1);
-            const max = Math.pow(10, length) - 1;
-            code = String(crypto.randomInt(min, max));
+            let randomPart = '';
+            for (let i = 0; i < 8; i++) {
+                randomPart += chars[crypto.randomInt(0, chars.length)];
+            }
+            code = `PID${project_id}${randomPart}`;
 
             const [rows] = await conn.execute(
                 `SELECT id FROM project_url_Info WHERE project_url_code = ?`, [code]
@@ -33,7 +36,13 @@ const ProjectUrl = {
             action_by
         } = data;
 
-        const project_url_code = await ProjectUrl.generateUrlCode(conn);
+        if (!project_id) {
+            const err = new Error('project_id is required to generate project_url_code!');
+            err.statusCode = 400;
+            throw err;
+        }
+
+        const project_url_code = await ProjectUrl.generateUrlCode(project_id, conn);
 
         const [result] = await conn.execute(
             `INSERT INTO project_url_Info
@@ -57,7 +66,7 @@ const ProjectUrl = {
                 action_by || null
             ]
         );
-        return result.insertId;
+        return { id: result.insertId, project_url_code };
     },
 
     getByProjectId: async (project_id) => {
@@ -85,13 +94,11 @@ const ProjectUrl = {
     },
 
     update: async (id, data) => {
-        // map friendly keys to actual DB column names (LOI -> `LOI(Minute)`, IR -> `IR(%)`)
         const columnMap = {
             LOI: '`LOI(Minute)`',
             IR: '`IR(%)`'
         };
 
-        // project_url_code kabhi update nahi hona chahiye — chahe request me aaye bhi to ignore karo
         const safeData = { ...data };
         delete safeData.project_url_code;
 
@@ -119,7 +126,6 @@ const ProjectUrl = {
         return result;
     },
 
-    // ── Test / Live link mode ──────────────────────────────
     toggleLinkMode: async (id, link_mode) => {
         const [result] = await db.execute(
             `UPDATE project_url_Info SET link_mode = ?, updated_at = NOW() WHERE id = ?`,
