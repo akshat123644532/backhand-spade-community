@@ -249,7 +249,7 @@ export const addProjectUrl = async (req, res) => {
         await connection.beginTransaction();
         started = true;
 
-        const urlId = await ProjectUrl.create(
+        const { id: urlId, project_url_code } = await ProjectUrl.create(
             { ...urlPayload, project_id: id, action_by: req.user?.id || null },
             connection
         );
@@ -273,6 +273,7 @@ export const addProjectUrl = async (req, res) => {
                 : "Project URL added successfully!",
             data: {
                 id: urlId,
+                project_url_code,
                 sampleSize: multiLink ? sampleSize : (urlPayload.SampleSize ?? null),
                 linksCount: csvInserted,
                 partner_id: partnerMeta.partner_id,

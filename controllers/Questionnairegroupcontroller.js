@@ -1,11 +1,18 @@
 import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+
 export const addQuestionnaireGroup = async (req, res) => {
     try {
         const { surveyTitle, language, status, questionIds } = req.body;
 
         if (!surveyTitle || !language) {
             return res.status(400).json({ success: false, message: "Survey title and language are required!" });
+        }
+
+        // Duplicate title check — same title + same language ka koi active group already exist na kare
+        const existing = await QuestionnaireGroup.findByTitle(surveyTitle, language);
+        if (existing) {
+            return res.status(400).json({ success: false, message: "A questionnaire group with this title already exists for this language!" });
         }
 
         const questionnaire_group_id = await QuestionnaireGroup.create({ surveyTitle, language, status, questionIds });
@@ -84,6 +91,16 @@ export const updateQuestionnaireGroup = async (req, res) => {
         const group = await QuestionnaireGroup.getById(id);
         if (!group) return res.status(404).json({ success: false, message: "Questionnaire group not found!" });
 
+        // Duplicate title check — title/language change ho rahi hai to khud ko exclude karke check karo
+        if (surveyTitle || language) {
+            const checkTitle = surveyTitle || group.surveyTitle;
+            const checkLanguage = language || group.language;
+            const existing = await QuestionnaireGroup.findByTitleExcludingId(checkTitle, checkLanguage, id);
+            if (existing) {
+                return res.status(400).json({ success: false, message: "A questionnaire group with this title already exists for this language!" });
+            }
+        }
+
         const updateData = {};
         if (surveyTitle) updateData.surveyTitle = surveyTitle;
         if (language) updateData.language = language;
@@ -113,6 +130,7 @@ export const toggleStatus = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
 export const submitGroupAnswers = async (req, res) => {
     try {
         const { id } = req.params;
@@ -154,6 +172,7 @@ export const deleteQuestionnaireGroup = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
 export const exportQuestionnaireGroupsCsv = async (req, res) => {
     try {
         const search = req.query.search || '';
