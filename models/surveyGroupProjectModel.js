@@ -11,6 +11,7 @@ const SurveyGroupProject = {
         return result.insertId;
     },
 
+    
     addClients: async (survey_group_project_id, client_ids) => {
         for (const client_id of client_ids) {
             await db.execute(
