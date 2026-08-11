@@ -28,6 +28,7 @@ generateUrlCode: async (project_id, conn = db) => {
     }
 
     return code;
+    
 },
 
     create: async (data, conn = db) => {
