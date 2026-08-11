@@ -201,6 +201,20 @@ const SupplierMapping = {
         return rows[0] || null;
     },
 
+    getByPartnerProjectUrl: async (partnerid, projectid, projectUrlId) => {
+        const [rows] = await db.execute(
+            `SELECT * FROM supplier_mapping
+             WHERE partnerid = ?
+               AND projectid = ?
+               AND projectUrlId = ?
+               AND deleted_at IS NULL
+             ORDER BY id DESC
+             LIMIT 1`,
+            [partnerid, projectid, projectUrlId]
+        );
+        return rows[0] || null;
+    },
+
     getQuotaSumByProjectId: async (projectid) => {
         const [rows] = await db.execute(
             `SELECT COALESCE(SUM(quota), 0) AS samplesAdded
