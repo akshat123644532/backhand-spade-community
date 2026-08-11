@@ -2,7 +2,7 @@ import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import MultiLinkCsvJob from '../models/multiLinkCsvJobModel.js';
-import { encryptSurveyToken } from '../utils/Encryptionhelper.js';
+import { encodeSurveyToken } from '../utils/Encryptionhelper.js';
 
 const BATCH_SIZE = 200;
 const runningJobs = new Set();
@@ -135,7 +135,7 @@ export const processMultiLinkCsvJob = async (jobId) => {
 
         const rows = normalizeImportRows(rawRows);
 
-        const token = encryptSurveyToken({
+        const token = encodeSurveyToken({
             partnerid: job.partner_id || null,
             projectUrlId: job.project_url_id,
             projectid: job.project_id,

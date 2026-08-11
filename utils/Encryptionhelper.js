@@ -1,14 +1,22 @@
 import crypto from 'crypto';
 
-const SALT = process.env.URL_ENCRYPT_SALT;
-
-if (!SALT) {
-    throw new Error('URL_ENCRYPT_SALT is not set in .env file! Application cannot start without it.');
-}
-
 const ALGORITHM = 'aes-256-cbc';
-const KEY = crypto.createHash('sha256').update(SALT).digest(); // 32 bytes for aes-256
 const IV_LENGTH = 16;
+
+const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const SURVEY_ID_BASE = 1_000_000n;
+const SURVEY_ID_MAX = 999_999;
+
+let cachedKey = null;
+const getAesKey = () => {
+    if (cachedKey) return cachedKey;
+    const SALT = process.env.URL_ENCRYPT_SALT;
+    if (!SALT) {
+        throw new Error('URL_ENCRYPT_SALT is not set in .env file! Application cannot start without it.');
+    }
+    cachedKey = crypto.createHash('sha256').update(SALT).digest();
+    return cachedKey;
+};
 
 const toBase64Url = (buf) =>
     Buffer.from(buf)
@@ -24,10 +32,10 @@ const fromBase64Url = (str) => {
     return Buffer.from(s, 'base64');
 };
 
-/** New shorter format: base64url(iv).base64url(ciphertext) */
+/** AES encryption — still used for panelist IDs and legacy survey tokens */
 export const encryptId = (id) => {
     const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+    const cipher = crypto.createCipheriv(ALGORITHM, getAesKey(), iv);
     const encrypted = Buffer.concat([
         cipher.update(Buffer.from(id.toString(), 'utf8')),
         cipher.final()
@@ -43,7 +51,7 @@ const decryptHexLegacy = (combined) => {
         throw new Error('Invalid encrypted ID format');
     }
     const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, getAesKey(), iv);
     let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
@@ -56,7 +64,7 @@ const decryptBase64Url = (combined) => {
     }
     const iv = fromBase64Url(ivPart);
     const encrypted = fromBase64Url(dataPart);
-    const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, getAesKey(), iv);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 };
 
@@ -80,9 +88,8 @@ export const decryptId = (encoded) => {
 };
 
 /**
- * Compact survey token payload keys (shorter ciphertext):
+ * Compact survey token payload keys (legacy AES JSON):
  *   p = partnerid, u = projectUrlId, j = projectid, s = startDate, e = endDate
- * Consumers always receive the expanded field names.
  */
 export const packSurveyPayload = (data = {}) => {
     const packed = {
@@ -98,7 +105,6 @@ export const packSurveyPayload = (data = {}) => {
 };
 
 export const unpackSurveyPayload = (parsed = {}) => {
-    // Compact keys present
     if (
         Object.prototype.hasOwnProperty.call(parsed, 'u') ||
         Object.prototype.hasOwnProperty.call(parsed, 'j') ||
@@ -112,7 +118,6 @@ export const unpackSurveyPayload = (parsed = {}) => {
             endDate: parsed.e ?? null
         };
     }
-    // Legacy full-key JSON
     return {
         partnerid: parsed.partnerid ?? null,
         projectUrlId: parsed.projectUrlId,
@@ -122,9 +127,151 @@ export const unpackSurveyPayload = (parsed = {}) => {
     };
 };
 
-export const encryptSurveyToken = (payload) => encryptId(packSurveyPayload(payload));
+/** Encode a non-negative BigInt / integer as Base62 */
+export const encodeBase62 = (value) => {
+    let n = typeof value === 'bigint' ? value : BigInt(value);
+    if (n < 0n) {
+        throw new Error('Cannot encode a negative value as Base62');
+    }
+    if (n === 0n) return '0';
 
-export const decryptSurveyToken = (token) => {
-    const parsed = JSON.parse(decryptId(token));
+    let out = '';
+    while (n > 0n) {
+        out = BASE62_ALPHABET[Number(n % 62n)] + out;
+        n /= 62n;
+    }
+    return out;
+};
+
+/** Decode a Base62 string to BigInt */
+export const decodeBase62 = (token) => {
+    if (token == null || String(token).trim() === '') {
+        throw new Error('Token is empty');
+    }
+
+    const s = String(token).trim();
+    let result = 0n;
+    for (const ch of s) {
+        const idx = BASE62_ALPHABET.indexOf(ch);
+        if (idx < 0) {
+            throw new Error(`Invalid Base62 character: '${ch}'`);
+        }
+        result = result * 62n + BigInt(idx);
+    }
+    return result;
+};
+
+const assertSurveyId = (value, fieldName, { allowNull = false } = {}) => {
+    if (value === null || value === undefined || value === '') {
+        if (allowNull) return 0;
+        throw new Error(`${fieldName} is required and must be an integer`);
+    }
+
+    if (typeof value === 'boolean') {
+        throw new Error(`${fieldName} must be an integer`);
+    }
+
+    if (typeof value === 'bigint') {
+        if (value < 0n || value > BigInt(SURVEY_ID_MAX)) {
+            throw new Error(`${fieldName} must be an integer between 0 and ${SURVEY_ID_MAX}`);
+        }
+        return Number(value);
+    }
+
+    if (typeof value === 'number') {
+        if (!Number.isInteger(value)) {
+            throw new Error(`${fieldName} must be an integer (decimals are not allowed)`);
+        }
+        if (value < 0 || value > SURVEY_ID_MAX) {
+            throw new Error(`${fieldName} must be an integer between 0 and ${SURVEY_ID_MAX}`);
+        }
+        return value;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!/^\d+$/.test(trimmed)) {
+            throw new Error(`${fieldName} must be an integer (decimals are not allowed)`);
+        }
+        const n = Number(trimmed);
+        if (!Number.isInteger(n) || n < 0 || n > SURVEY_ID_MAX) {
+            throw new Error(`${fieldName} must be an integer between 0 and ${SURVEY_ID_MAX}`);
+        }
+        return n;
+    }
+
+    throw new Error(`${fieldName} must be an integer`);
+};
+
+/**
+ * Compact reversible survey token (Base62, ~11 chars max).
+ * packed = partnerId * BASE^2 + projectUrlId * BASE + projectId
+ * partnerid null/undefined → 0
+ */
+export const encodeSurveyToken = ({ partnerid, projectUrlId, projectid } = {}) => {
+    const p = assertSurveyId(partnerid, 'partnerid', { allowNull: true });
+    const u = assertSurveyId(projectUrlId, 'projectUrlId');
+    const j = assertSurveyId(projectid, 'projectid');
+
+    const packed =
+        BigInt(p) * SURVEY_ID_BASE * SURVEY_ID_BASE +
+        BigInt(u) * SURVEY_ID_BASE +
+        BigInt(j);
+
+    return encodeBase62(packed);
+};
+
+const decodeCompactSurveyToken = (token) => {
+    const packed = decodeBase62(token);
+    const partnerid = Number(packed / (SURVEY_ID_BASE * SURVEY_ID_BASE));
+    const rem = packed % (SURVEY_ID_BASE * SURVEY_ID_BASE);
+    const projectUrlId = Number(rem / SURVEY_ID_BASE);
+    const projectid = Number(rem % SURVEY_ID_BASE);
+
+    for (const [name, id] of [
+        ['partnerid', partnerid],
+        ['projectUrlId', projectUrlId],
+        ['projectid', projectid]
+    ]) {
+        if (!Number.isInteger(id) || id < 0 || id > SURVEY_ID_MAX) {
+            throw new Error(`Decoded ${name} is out of range`);
+        }
+    }
+
+    return {
+        partnerid,
+        projectUrlId,
+        projectid,
+        // Compact tokens do not carry dates; keep keys for callers
+        startDate: null,
+        endDate: null
+    };
+};
+
+const looksLikeCompactSurveyToken = (token) => /^[0-9A-Za-z]+$/.test(token);
+
+/**
+ * Decode survey token.
+ * Prefer compact Base62; fall back to legacy AES JSON so existing links keep working.
+ */
+export const decodeSurveyToken = (token) => {
+    if (token == null || String(token).trim() === '') {
+        throw new Error('Token is empty');
+    }
+
+    const raw = String(token).trim();
+
+    if (looksLikeCompactSurveyToken(raw)) {
+        return decodeCompactSurveyToken(raw);
+    }
+
+    // Legacy AES-encrypted JSON survey token
+    const parsed = JSON.parse(decryptId(raw));
     return unpackSurveyPayload(parsed);
 };
+
+/** @deprecated Prefer encodeSurveyToken — kept as alias for older call sites */
+export const encryptSurveyToken = (payload) => encodeSurveyToken(payload);
+
+/** @deprecated Prefer decodeSurveyToken — kept as alias (includes legacy fallback) */
+export const decryptSurveyToken = (token) => decodeSurveyToken(token);
