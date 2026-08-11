@@ -8,7 +8,8 @@ import {
     updateLibraryQuestion,
     updateLibraryQuestionSortOrder,
     toggleLibraryQuestionStatus,
-    deleteLibraryQuestion
+    deleteLibraryQuestion,
+    exportLibraryQuestionsCsv
 } from '../controllers/Questionlibrarycontroller.js';
 import {
     validateAddLibraryQuestion,
@@ -23,12 +24,11 @@ const router = express.Router();
 
 router.post('/add',                 verifyToken, validateAddLibraryQuestion,     addLibraryQuestion);
 router.get('/list',                 verifyToken, validateGetAllLibraryQuestions, getAllLibraryQuestions);
+router.get('/export/csv',           verifyToken, exportLibraryQuestionsCsv);
 router.get('/language/:language',   verifyToken, validateGetByLanguage,          getLibraryQuestionsByLanguage);
 router.put('/sort-order',           verifyToken,                                 updateLibraryQuestionSortOrder);
 router.get('/:id',                  verifyToken, validateLibraryQuestionId,      getLibraryQuestionById);
 router.put('/:id',                  verifyToken, validateUpdateLibraryQuestion,  updateLibraryQuestion);
 router.patch('/:id/status',         verifyToken, validateToggleStatus,           toggleLibraryQuestionStatus);
 router.delete('/:id',               verifyToken, validateLibraryQuestionId,      deleteLibraryQuestion);
-
 export default router;
-

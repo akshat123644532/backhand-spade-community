@@ -7,7 +7,7 @@ dotenv.config();
 
 import adminRoutes from './routes/adminRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
-import partnerRoutes from './routes/partnerRoutes.js';
+import partnerRoutes from './routes/partnerRoutes.js'; 
 import projectManagerRoutes from './routes/projectManagerRoutes.js';
 import countryRoutes from './routes/countryRoutes.js';
 import salesProjectRoutes from './routes/salesProjectRoutes.js';
@@ -35,6 +35,10 @@ import findUserRoutes from './routes/findUserRoutes.js';
 import systemSettingRoutes from './routes/systemSettingRoutes.js';
 import supplierMappingRoutes from './routes/supplierMappingRoutes.js';
 import supplierRedirectRoutes from './routes/supplierRedirectRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
+
+import dashboardRoutes from './routes/dashboardRoutes.js';
+
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 
@@ -94,7 +98,8 @@ app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/supplier-mapping', supplierMappingRoutes);
 app.use('/api/survey', surveyDataRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);
-
+app.use('/api/messages', messageRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

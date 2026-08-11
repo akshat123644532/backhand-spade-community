@@ -8,7 +8,8 @@ import {
     submitGroupAnswers,
     updateQuestionnaireGroup,
     toggleStatus,
-    deleteQuestionnaireGroup
+    deleteQuestionnaireGroup,
+    exportQuestionnaireGroupsCsv
 } from '../controllers/Questionnairegroupcontroller.js';
 import {
     validateAddQuestionnaireGroup,
@@ -22,12 +23,11 @@ const router = express.Router();
 
 router.post('/add',                     verifyToken, validateAddQuestionnaireGroup,     addQuestionnaireGroup);
 router.get('/list',                     verifyToken, validateGetAllQuestionnaireGroups, getAllQuestionnaireGroups);
+router.get('/export/csv',               verifyToken, exportQuestionnaireGroupsCsv);
 router.get('/public/:id/questions',     getGroupQuestions);
 router.post('/public/:id/submit',       submitGroupAnswers);
 router.get('/:id',                      verifyToken, validateQuestionnaireGroupId,      getQuestionnaireGroupById);
 router.put('/:id',                      verifyToken, validateUpdateQuestionnaireGroup,  updateQuestionnaireGroup);
 router.patch('/:id/status',             verifyToken, validateToggleStatus,              toggleStatus);
 router.delete('/:id',                   verifyToken, validateQuestionnaireGroupId,      deleteQuestionnaireGroup);
-
 export default router;
-

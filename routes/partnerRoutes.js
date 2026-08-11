@@ -1,17 +1,22 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
-import { addPartner, getAllPartners, getPartnerPanelSizes, getPartnerById, updatePartner, deletePartner } from '../controllers/partnerController.js';
-
+import {
+    addPartner,
+    getAllPartners,
+    getPartnerPanelSizes,
+    getPartnerById,
+    updatePartner,
+    deletePartner,
+    exportPartnersCsv
+} from '../controllers/partnerController.js';
 const router = express.Router();
 
-router.post('/add', verifyToken, addPartner);           
+router.post('/add', verifyToken, addPartner);
 router.get('/list', verifyToken, getAllPartners);
 router.get('/panel-sizes', verifyToken, getPartnerPanelSizes);
-router.get('/:id', verifyToken, getPartnerById);      
-router.put('/:id', verifyToken, updatePartner); 
-
-
-router.delete('/:id', verifyToken, deletePartner);      
-
+router.get('/export/csv', verifyToken, exportPartnersCsv);
+router.get('/:id', verifyToken, getPartnerById);
+router.put('/:id', verifyToken, updatePartner);
+router.delete('/:id', verifyToken, deletePartner);
 export default router;
 

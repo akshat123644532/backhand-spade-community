@@ -1,6 +1,6 @@
 import SurveyGroupProject from '../models/surveyGroupProjectModel.js';
 import { logActivity } from '../utils/activityLogger.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 export const addSurveyGroupProject = async (req, res) => {
     try {
         const { project_name, description, notes, status, client_ids, survey_ids } = req.body;
@@ -131,6 +131,24 @@ export const removeSurveyFromGroup = async (req, res) => {
         await logActivity({ admin_id: req.user?.id, action: 'REMOVE_SURVEY', module: 'GroupSurvey', description: `Survey ${surveyId} removed from group ID ${id}`, ip_address: req.ip });
 
         return res.status(200).json({ success: true, message: "Survey removed from group!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+export const exportSurveyGroupProjectsCsv = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const result = await SurveyGroupProject.getAll({ page: 1, limit: 1000000, search, status });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Project Name', key: 'project_name' },
+            { label: 'Description', key: 'description' },
+            { label: 'Status', key: 'status' }
+        ]);
+
+        return sendCsv(res, 'group_surveys.csv', csv);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

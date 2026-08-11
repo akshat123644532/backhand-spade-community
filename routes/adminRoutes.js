@@ -1,4 +1,5 @@
 import express from 'express';
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import {
     loginAdmin,
     signupAdmin,
@@ -11,7 +12,8 @@ import {
     getAllAdmins,
     getAdminById,
     getSelf,
-    changePassword
+    changePassword,
+    exportAdminsCsv
 } from '../controllers/adminController.js';
 import verifyToken from '../middleware/authMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js';
@@ -45,10 +47,14 @@ router.post('/verify-otp', validateVerifyOTP, verifyOTP);
 router.post('/reset-password', validateResetPassword, resetPassword);
 
 router.get('/all', verifyToken, validateGetAllAdmins, getAllAdmins);
+
+// '/:id' se upar rakha hai, warna 'export' ko id samajh lega
+router.get('/export/csv', verifyToken, exportAdminsCsv);
+
 router.get('/:id', verifyToken, validateAdminId, getAdminById);
 
 router.put('/change-password', verifyToken, validateChangePassword, changePassword);
 
 router.post('/logout', verifyToken, logout);
-export default router;
 
+export default router;

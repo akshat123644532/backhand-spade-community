@@ -1,7 +1,7 @@
 import Partner from '../models/partnerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { decrypt, encrypt } from '../utils/cryptoHelper.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const prepareApiSecretKeyForStorage = (apiSecretKey) => {
     if (apiSecretKey === undefined || apiSecretKey === null || apiSecretKey === '') {
         return apiSecretKey;
@@ -153,6 +153,29 @@ export const deletePartner = async (req, res) => {
         await logActivity({ admin_id: req.user?.id, action: 'DELETE', module: 'Partner', description: `Partner ID ${id} deleted`, ip_address: req.ip });
 
         return res.status(200).json({ success: true, message: "Partner deleted successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+export const exportPartnersCsv = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const country = req.query.country || '';
+        const result = await Partner.getAll({ page: 1, limit: 1000000, search, status, country });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Code', key: 'code' },
+            { label: 'Name', key: 'name' },
+            { label: 'Email', key: 'email' },
+            { label: 'Contact Person', key: 'contact_person' },
+            { label: 'Country', key: 'country' },
+            { label: 'Panel Size', key: 'panel_size' },
+            { label: 'Status', key: 'status' }
+        ]);
+
+        return sendCsv(res, 'partners.csv', csv);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

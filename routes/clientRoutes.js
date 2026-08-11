@@ -5,7 +5,8 @@ import {
     getAllClients,
     getClientById,
     updateClient,
-    deleteClient
+    deleteClient,
+    exportClientsCsv
 } from '../controllers/clientController.js';
 import verifyToken from '../middleware/authMiddleware.js';
 import {
@@ -17,9 +18,9 @@ import {
 
 router.post('/add', verifyToken, validateAddClient, addClient);
 router.get('/all', verifyToken, validateGetAllClients, getAllClients);
+router.get('/export/csv', verifyToken, exportClientsCsv);
 router.get('/:id', verifyToken, validateClientId, getClientById);
 router.put('/update/:id', verifyToken, validateUpdateClient, updateClient);
 router.delete('/delete/:id', verifyToken, validateClientId, deleteClient);
-
 export default router;
 

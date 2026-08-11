@@ -229,6 +229,20 @@ export const toggleProjectStatus = async (req, res) => {
     }
 };
 
+// 👇 NAYA: Add tab pe click hote hi preview code generate karne ke liye (kuch save nahi hota, sirf preview)
+export const generateProjectUrlCode = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const project_url_code = await ProjectUrl.generateUrlCode(id);
+        return res.status(200).json({ success: true, data: { project_url_code } });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 // Project URL Info APIs — Multi Link: URL + CSV in one transaction
 // Frontend sends: multipart with `metadata` (JSON string) + `file` (CSV)
 export const addProjectUrl = async (req, res) => {
@@ -306,7 +320,7 @@ export const addProjectUrl = async (req, res) => {
         await connection.beginTransaction();
         started = true;
 
-        const urlId = await ProjectUrl.create(
+        const { id: urlId, project_url_code } = await ProjectUrl.create(
             { ...urlPayload, project_id: id, action_by: req.user?.id || null },
             connection
         );
@@ -724,6 +738,29 @@ export const downloadCsvTemplate = async (req, res) => {
         res.setHeader('X-Template-Note', note);
         res.setHeader('Access-Control-Expose-Headers', 'X-Template-Note');
         return res.status(200).send(headers + sampleRow + noteRow);
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+export const exportProjectsCsv = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const result = await Project.getAll({ page: 1, limit: 1000000, search, status });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Project Code', key: 'Project_code' },
+            { label: 'Project Name', key: 'Project_Name' },
+            { label: 'Clients', key: 'Clients' },
+            { label: 'Project Manager', key: 'Project_Manager' },
+            { label: 'Sales Manager', key: 'Sales_Manager' },
+            { label: 'Status', key: 'Status' },
+            { label: 'Start Date', key: 'startDate' },
+            { label: 'End Date', key: 'endDate' }
+        ]);
+
+        return sendCsv(res, 'projects.csv', csv);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

@@ -2,6 +2,22 @@ import { db } from '../config/db.js';
 
 const QuestionnaireGroup = {
 
+    findByTitle: async (surveyTitle, language) => {
+        const [rows] = await db.execute(
+            `SELECT id FROM questionnaire_groups WHERE group_title = ? AND language = ? AND deleted_at IS NULL`,
+            [surveyTitle, language]
+        );
+        return rows[0] || null;
+    },
+
+    findByTitleExcludingId: async (surveyTitle, language, excludeId) => {
+        const [rows] = await db.execute(
+            `SELECT id FROM questionnaire_groups WHERE group_title = ? AND language = ? AND id != ? AND deleted_at IS NULL`,
+            [surveyTitle, language, excludeId]
+        );
+        return rows[0] || null;
+    },
+
     create: async (data) => {
         const { surveyTitle, language, status, questionIds } = data;
 
@@ -131,15 +147,16 @@ const QuestionnaireGroup = {
         );
         return result;
     },
+
     submitAnswers: async (data) => {
-    const { questionnaire_group_id, panelist_id, answers } = data;
-    const [result] = await db.execute(
-        `INSERT INTO questionnaire_submissions (questionnaire_group_id, panelist_id, answers)
-         VALUES (?, ?, ?)`,
-        [questionnaire_group_id, panelist_id || null, JSON.stringify(answers)]
-    );
-    return result.insertId;
-},
+        const { questionnaire_group_id, panelist_id, answers } = data;
+        const [result] = await db.execute(
+            `INSERT INTO questionnaire_submissions (questionnaire_group_id, panelist_id, answers)
+             VALUES (?, ?, ?)`,
+            [questionnaire_group_id, panelist_id || null, JSON.stringify(answers)]
+        );
+        return result.insertId;
+    },
 
     delete: async (id) => {
         const [result] = await db.execute(
@@ -149,6 +166,5 @@ const QuestionnaireGroup = {
         return result;
     }
 };
-
 
 export default QuestionnaireGroup;

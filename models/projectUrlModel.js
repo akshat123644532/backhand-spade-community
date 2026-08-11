@@ -103,25 +103,34 @@ const normalizeUrlPayload = (data = {}) => {
 };
 
 const ProjectUrl = {
+generateUrlCode: async (project_id, conn = db) => {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const digits = '0123456789';
+    let code;
+    let exists = true;
 
-    generateUrlCode: async (conn = db) => {
-        let code;
-        let exists = true;
-
-        while (exists) {
-            const length = Math.floor(Math.random() * 5) + 6; // 6,7,8,9,10
-            const min = Math.pow(10, length - 1);
-            const max = Math.pow(10, length) - 1;
-            code = String(crypto.randomInt(min, max));
-
-            const [rows] = await conn.execute(
-                `SELECT id FROM project_url_Info WHERE project_url_code = ?`, [code]
-            );
-            exists = rows.length > 0;
+    while (exists) {
+        let letterPart = '';
+        for (let i = 0; i < 3; i++) {
+            letterPart += letters[crypto.randomInt(0, letters.length)];
         }
 
-        return code;
-    },
+        let digitPart = '';
+        for (let i = 0; i < 3; i++) {
+            digitPart += digits[crypto.randomInt(0, digits.length)];
+        }
+
+        code = letterPart + digitPart;
+
+        const [rows] = await conn.execute(
+            `SELECT id FROM project_url_Info WHERE project_url_code = ?`, [code]
+        );
+        exists = rows.length > 0;
+    }
+
+    return code;
+
+},
 
     create: async (data, conn = db) => {
         const normalized = normalizeUrlPayload(data);
@@ -280,7 +289,6 @@ const ProjectUrl = {
         return result;
     },
 
-    // ── Test / Live link mode ──────────────────────────────
     toggleLinkMode: async (id, link_mode) => {
         const [result] = await db.execute(
             `UPDATE project_url_Info SET link_mode = ?, updated_at = NOW() WHERE id = ?`,
