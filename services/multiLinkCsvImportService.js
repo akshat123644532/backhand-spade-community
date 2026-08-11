@@ -1,15 +1,22 @@
 import Project from '../models/projectModel.js';
+import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
-import Panelist from '../models/Panelistmodel.js';
 import MultiLinkCsvJob from '../models/multiLinkCsvJobModel.js';
 import { encryptSurveyToken } from '../utils/Encryptionhelper.js';
 
 const BATCH_SIZE = 200;
 const runningJobs = new Set();
 
-const buildVenderUrl = ({ token, email }) => {
+/** Static uid placeholder — replaced with real respondent uid later */
+const UID_PLACEHOLDER = 'XXXXXX';
+
+/** VenderURL = CLIENT_BASE_URL/dosurvey/{token}?pid={project_url_code}&uid=XXXXXX */
+const buildVenderUrl = ({ token, project_url_code }) => {
     const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
-    return `${baseUrl}/dosurvey/${token}?uid=${encodeURIComponent(email)}`;
+    const params = new URLSearchParams();
+    params.set('pid', String(project_url_code));
+    params.set('uid', UID_PLACEHOLDER);
+    return `${baseUrl}/dosurvey/${token}?${params.toString()}`;
 };
 
 const parsePayloadRows = (payload) => {
@@ -23,38 +30,10 @@ const parsePayloadRows = (payload) => {
     }
 };
 
-const assignEmails = async (rows) => {
-    const used = new Set();
-    const missingIndexes = [];
-
-    const normalized = rows.map((row, index) => {
-        const liveLink = String(row.Live_Link || '').trim();
-        const email = String(row.email || '').trim();
-        if (email) {
-            used.add(email.toLowerCase());
-            return { Live_Link: liveLink, email };
-        }
-        missingIndexes.push(index);
-        return { Live_Link: liveLink, email: null };
-    });
-
-    if (!missingIndexes.length) return normalized;
-
-    const panelistEmails = await Panelist.getActiveEmails(missingIndexes.length, [...used]);
-    if (panelistEmails.length < missingIndexes.length) {
-        const err = new Error(
-            `Not enough active panelists for rows without email. Needed ${missingIndexes.length}, available ${panelistEmails.length}.`
-        );
-        err.statusCode = 400;
-        throw err;
-    }
-
-    missingIndexes.forEach((rowIndex, i) => {
-        normalized[rowIndex].email = panelistEmails[i];
-    });
-
-    return normalized;
-};
+const normalizeImportRows = (rows) =>
+    rows.map((row) => ({
+        Live_Link: String(row.Live_Link || '').trim() || null
+    }));
 
 const insertInBatches = async ({
     jobId,
@@ -63,6 +42,7 @@ const insertInBatches = async ({
     project_url_id,
     partner_id,
     UserType,
+    project_url_code,
     token
 }) => {
     let processed = 0;
@@ -73,8 +53,8 @@ const insertInBatches = async ({
             project_url_id,
             partner_id: partner_id || null,
             Live_Link: row.Live_Link || null,
-            VenderURL: buildVenderUrl({ token, email: row.email }),
-            Vender_UserName: row.email,
+            VenderURL: buildVenderUrl({ token, project_url_code }),
+            Vender_UserName: null,
             UserType: UserType || (partner_id ? 'PARTNER' : 'VENDOR'),
             Status: 'active'
         }));
@@ -140,27 +120,35 @@ export const processMultiLinkCsvJob = async (jobId) => {
             throw new Error(`Project not found for job ${jobId}`);
         }
 
+        const urlInfo = await ProjectUrl.getById(job.project_url_id);
+        if (!urlInfo || Number(urlInfo.project_id) !== Number(job.project_id)) {
+            throw new Error(`Project URL not found for job ${jobId}`);
+        }
+        if (!urlInfo.project_url_code) {
+            throw new Error(`project_url_code missing for project_url_id ${job.project_url_id}`);
+        }
+
         const rawRows = parsePayloadRows(job.payload);
         if (!rawRows.length) {
             throw new Error('Job payload is empty');
         }
 
-        const rowsWithEmail = await assignEmails(rawRows);
+        const rows = normalizeImportRows(rawRows);
 
-        const tokenPayload = {
+        const token = encryptSurveyToken({
             partnerid: job.partner_id || null,
             projectUrlId: job.project_url_id,
             projectid: job.project_id,
-        };
-        const token = encryptSurveyToken(tokenPayload);
+        });
 
         const processed = await insertInBatches({
             jobId,
-            rows: rowsWithEmail,
+            rows,
             project_id: job.project_id,
             project_url_id: job.project_url_id,
             partner_id: job.partner_id,
             UserType: job.user_type,
+            project_url_code: urlInfo.project_url_code,
             token
         });
 

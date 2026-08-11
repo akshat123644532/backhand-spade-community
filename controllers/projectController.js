@@ -5,7 +5,6 @@ import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import Partner from '../models/partnerModel.js';
-import Panelist from '../models/Panelistmodel.js';
 import {
     enqueueMultiLinkCsvImport,
     getImportJobStatus,
@@ -13,7 +12,15 @@ import {
 } from '../services/multiLinkCsvImportService.js';
 
 const isMultiLink = (type) =>
-    String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
+    String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
+
+const resolveProjectLinkType = (raw) => {
+    if (raw === undefined || raw === null || raw === '') return null;
+    const n = String(raw).trim().toLowerCase().replace(/[\s_-]+/g, '');
+    if (n === 'multilink') return 'MultiLink';
+    if (n === 'singlelink') return 'SingleLink';
+    return undefined; // invalid
+};
 
 const parseMaybeJson = (val) => {
     if (typeof val !== 'string') return val;
@@ -32,28 +39,39 @@ const parseCsvFile = (filePath) => {
     return rows;
 };
 
-/** CSV columns: Link_Live / Live_Link + email → Live_Link + email */
+/** Extract pid/uid from survey start links. Base URL can be anything. */
+const extractLinkParams = (liveLink) => {
+    try {
+        const url = new URL(String(liveLink || '').trim());
+        const pidRaw = url.searchParams.get('pid');
+        const uidRaw = url.searchParams.get('uid');
+        const pid = pidRaw != null && String(pidRaw).trim() !== '' ? String(pidRaw).trim() : null;
+        const uid = uidRaw != null && String(uidRaw).trim() !== '' ? String(uidRaw).trim() : null;
+        return { pid, uid, validUrl: true };
+    } catch {
+        return { pid: null, uid: null, validUrl: false };
+    }
+};
+
+/** CSV columns: Link_Live / Live_Link → Live_Link (+ uid from query if present) */
 const pickCsvLinkFields = (row) => {
     const live =
         row.Link_Live || row.link_live || row.Live_Link || row.live_link ||
         row['Live Link'] || row['live link'] || row.Test_Link || row.test_link || null;
-    const email =
-        row.email || row.Email || row.EMAIL || null;
 
-    if (live || email) {
-        return {
-            Live_Link: live ? String(live).trim() : null,
-            email: email ? String(email).trim() : null
-        };
+    if (live) {
+        const link = String(live).trim();
+        const { uid } = extractLinkParams(link);
+        return { Live_Link: link, uid };
     }
 
     const values = Object.values(row).filter(
         (v) => v != null && String(v).trim() !== '' && !String(v).trim().startsWith('#')
     );
-    return {
-        Live_Link: values[0] ? String(values[0]).trim() : null,
-        email: values[1] ? String(values[1]).trim() : null
-    };
+    if (!values[0]) return { Live_Link: null, uid: null };
+    const link = String(values[0]).trim();
+    const { uid } = extractLinkParams(link);
+    return { Live_Link: link, uid };
 };
 
 const normalizeCsvRows = (csvRows) =>
@@ -61,22 +79,23 @@ const normalizeCsvRows = (csvRows) =>
         .map(pickCsvLinkFields)
         .filter((row) => row.Live_Link);
 
-const validatePanelistAvailability = async (rows) => {
-    const usedEmails = rows
-        .map((r) => r.email)
-        .filter(Boolean)
-        .map((e) => e.toLowerCase());
-    const missingCount = rows.filter((r) => !r.email).length;
-    if (!missingCount) return;
+/** Each link must be a valid URL with at least pid or uid (or both). */
+const validateMultiLinkCsvRows = (rows) => {
+    const invalidRows = [];
+    rows.forEach((row, index) => {
+        const { pid, uid, validUrl } = extractLinkParams(row.Live_Link);
+        if (!validUrl || (!pid && !uid)) {
+            invalidRows.push({ row: index + 1, Live_Link: row.Live_Link });
+        }
+    });
+    if (!invalidRows.length) return;
 
-    const available = await Panelist.countActive(usedEmails);
-    if (available < missingCount) {
-        const err = new Error(
-            `Not enough active panelists for rows without email. Needed ${missingCount}, available ${available}.`
-        );
-        err.statusCode = 400;
-        throw err;
-    }
+    const err = new Error(
+        'Each CSV link must include at least pid or uid as a query param (e.g. ?pid=XXX, ?uid=XXX, or both).'
+    );
+    err.statusCode = 400;
+    err.invalidRows = invalidRows;
+    throw err;
 };
 
 const resolvePartnerMeta = async (partner_id) => {
@@ -232,7 +251,22 @@ export const addProjectUrl = async (req, res) => {
         delete urlPayload.metadata;
         delete urlPayload.file;
 
-        const multiLink = isMultiLink(project.Project_Link_Type);
+        const rawLinkType = urlPayload.Project_Link_Type
+            ?? urlPayload.project_link_type
+            ?? urlPayload.projectLinkType
+            ?? urlPayload.linkType;
+        const projectLinkType = resolveProjectLinkType(rawLinkType);
+        if (rawLinkType !== undefined && rawLinkType !== null && rawLinkType !== '' && projectLinkType === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: "Project_Link_Type must be 'MultiLink' or 'SingleLink'!"
+            });
+        }
+        if (projectLinkType) {
+            urlPayload.Project_Link_Type = projectLinkType;
+        }
+
+        const multiLink = isMultiLink(urlPayload.Project_Link_Type);
         const sampleSize = Number(urlPayload.SampleSize);
 
         let normalizedRows = null;
@@ -264,7 +298,7 @@ export const addProjectUrl = async (req, res) => {
                 });
             }
 
-            await validatePanelistAvailability(normalizedRows);
+            validateMultiLinkCsvRows(normalizedRows);
         }
 
         const partnerMeta = await resolvePartnerMeta(urlPayload.partner_id || req.body.partner_id || null);
@@ -298,6 +332,7 @@ export const addProjectUrl = async (req, res) => {
                 : "Project URL added successfully!",
             data: {
                 id: urlId,
+                Project_Link_Type: urlPayload.Project_Link_Type || null,
                 sampleSize: multiLink ? sampleSize : (urlPayload.SampleSize ?? null),
                 linksCount: normalizedRows?.length || 0,
                 partner_id: partnerMeta.partner_id,
@@ -312,7 +347,8 @@ export const addProjectUrl = async (req, res) => {
         return res.status(status).json({
             success: false,
             message: status === 500 ? "Server error!" : error.message,
-            error: error.message
+            error: error.message,
+            ...(error.invalidRows ? { invalidRows: error.invalidRows } : {})
         });
     } finally {
         connection.release();
@@ -355,6 +391,21 @@ export const updateProjectUrl = async (req, res) => {
         };
         delete payload.metadata;
         delete payload.file;
+
+        const rawLinkType = payload.Project_Link_Type
+            ?? payload.project_link_type
+            ?? payload.projectLinkType
+            ?? payload.linkType;
+        if (rawLinkType !== undefined && rawLinkType !== null && rawLinkType !== '') {
+            const projectLinkType = resolveProjectLinkType(rawLinkType);
+            if (projectLinkType === undefined) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Project_Link_Type must be 'MultiLink' or 'SingleLink'!"
+                });
+            }
+            payload.Project_Link_Type = projectLinkType;
+        }
 
         await ProjectUrl.update(urlId, payload);
         const updated = await ProjectUrl.getById(urlId);
@@ -422,7 +473,7 @@ export const deleteMultipleUrl = async (req, res) => {
     }
 };
 
-// CSV upload — Live_Link + email → background import (Multi Link only)
+// CSV upload — Live_Link (?pid / ?uid) → background import (Multi Link only)
 // Prefer POST /:id/url with CSV for new URL+CSV atomic create.
 // This endpoint is for uploading CSV against an existing project_url_id.
 export const uploadMultipleUrlCsv = async (req, res) => {
@@ -435,13 +486,6 @@ export const uploadMultipleUrlCsv = async (req, res) => {
 
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
-
-        if (!isMultiLink(project.Project_Link_Type)) {
-            return res.status(400).json({
-                success: false,
-                message: "CSV upload is only allowed for Multi Link projects!"
-            });
-        }
 
         let project_url_id = req.body.project_url_id || null;
         let urlInfo = null;
@@ -462,6 +506,13 @@ export const uploadMultipleUrlCsv = async (req, res) => {
             project_url_id = urlInfo.id;
         }
 
+        if (!isMultiLink(urlInfo.Project_Link_Type)) {
+            return res.status(400).json({
+                success: false,
+                message: "CSV upload is only allowed for Multi Link project URLs!"
+            });
+        }
+
         const csvRows = parseCsvFile(req.file.path);
         const normalizedRows = normalizeCsvRows(csvRows);
         if (!normalizedRows.length) {
@@ -478,7 +529,7 @@ export const uploadMultipleUrlCsv = async (req, res) => {
             });
         }
 
-        await validatePanelistAvailability(normalizedRows);
+        validateMultiLinkCsvRows(normalizedRows);
 
         const partnerMeta = await resolvePartnerMeta(req.body.partner_id || null);
         const jobId = await enqueueMultiLinkCsvImport({
@@ -507,7 +558,8 @@ export const uploadMultipleUrlCsv = async (req, res) => {
         return res.status(status).json({
             success: false,
             message: status === 500 ? "Server error!" : error.message,
-            error: error.message
+            error: error.message,
+            ...(error.invalidRows ? { invalidRows: error.invalidRows } : {})
         });
     } finally {
         if (req.file?.path && fs.existsSync(req.file.path)) {
@@ -564,28 +616,45 @@ export const getMultipleUrlList = async (req, res) => {
     }
 };
 
-// Multi-link + sample allocation summary for a project
+// Multi-link + sample allocation summary for a project URL
 export const getMultiLinkStats = async (req, res) => {
     try {
         const { id } = req.params;
+        const project_url_id = req.query.project_url_id || req.query.projectUrlId || null;
+
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        // Single link: only allow partner add flag
-        if (!isMultiLink(project.Project_Link_Type)) {
-            return res.status(200).json({
-                success: true,
-                data: { addPartner: true }
+        if (!project_url_id) {
+            return res.status(400).json({
+                success: false,
+                message: "project_url_id is required!"
             });
         }
 
-        const { totalMultiLinkCount, remainingMultiLinkCount, completedSurveyCount } = await ProjectMultipleUrl.getStatsByProjectId(id);
+        const urlInfo = await ProjectUrl.getById(project_url_id);
+        if (!urlInfo || Number(urlInfo.project_id) !== Number(id)) {
+            return res.status(404).json({ success: false, message: "Project URL not found!" });
+        }
+
+        // Single link: only allow partner add flag
+        if (!isMultiLink(urlInfo.Project_Link_Type)) {
+            return res.status(200).json({
+                success: true,
+                data: { addPartner: true, Project_Link_Type: urlInfo.Project_Link_Type || 'SingleLink' }
+            });
+        }
+
+        const { totalMultiLinkCount, remainingMultiLinkCount, completedSurveyCount } =
+            await ProjectMultipleUrl.getStatsByProjectId(id, project_url_id);
         const addPartner = remainingMultiLinkCount > 0;
 
         return res.status(200).json({
             success: true,
             data: {
                 project_id: Number(id),
+                project_url_id: Number(project_url_id),
+                Project_Link_Type: urlInfo.Project_Link_Type || 'MultiLink',
                 totalMultiLinkCount,
                 remainingMultiLinkCount,
                 completedSurveyCount,
@@ -644,18 +713,16 @@ export const getActiveSurveyLink = async (req, res) => {
 // Multiple URLs — download a blank CSV template for the "Download CSV Template" button
 export const downloadCsvTemplate = async (req, res) => {
     try {
-        const availablePanelists = await Panelist.getAllPanelistsCount();
-        const note = `We have ${availablePanelists} available panelists. Add a minimum of half or more than half of Live Link users with their unique email.`;
+        const note = `Please add the Live Link for the survey in the same format as the sample row. Each link must include at least pid or uid (or both).`;
 
-        const headers = 'Link_Live,Email\n';
-        const sampleRow = 'https://startSurveyLink?uid=[unique_user_id],user@example.com\n';
+        const headers = 'Link_Live\n';
+        const sampleRow = 'https://startSurveyLink?pid=XXXXXX&uid=XXXXXX\n';
         const noteRow = `# ${note}\n`;
 
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename="multi_url_template.csv"');
         res.setHeader('X-Template-Note', note);
-        res.setHeader('X-Available-Panelists', String(availablePanelists));
-        res.setHeader('Access-Control-Expose-Headers', 'X-Template-Note, X-Available-Panelists');
+        res.setHeader('Access-Control-Expose-Headers', 'X-Template-Note');
         return res.status(200).send(headers + sampleRow + noteRow);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });

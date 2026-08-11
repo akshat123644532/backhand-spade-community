@@ -8,8 +8,17 @@ const ALLOWED_UPDATE_FIELDS = new Set([
     'Language', 'PreScreenid', 'PreScreenName',
     'TerminationPoint', 'CompletionPoint', 'ValidatePoint',
     'CompleteURL', 'TerminateURL', 'OverQuotaURL', 'QualityTermURL', 'SurveyCloseURL',
-    'link_mode', 'updated_by'
+    'link_mode', 'Project_Link_Type', 'updated_by'
 ]);
+
+/** Canonical values: MultiLink | SingleLink */
+const normalizeProjectLinkType = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    const n = String(val).trim().toLowerCase().replace(/[\s_-]+/g, '');
+    if (n === 'multilink') return 'MultiLink';
+    if (n === 'singlelink') return 'SingleLink';
+    return null;
+};
 
 const FLAG_FIELDS = ['GeoLocation', 'UrlProtection', 'UniqueIP', 'FraudDetection', 'PreScreen'];
 
@@ -80,6 +89,16 @@ const normalizeUrlPayload = (data = {}) => {
         delete payload[alias];
     }
 
+    const linkType = pickFirstDefined(payload, [
+        'Project_Link_Type', 'project_link_type', 'projectLinkType', 'linkType', 'LinkType'
+    ]);
+    if (linkType !== undefined) {
+        payload.Project_Link_Type = normalizeProjectLinkType(linkType);
+    }
+    for (const alias of ['project_link_type', 'projectLinkType', 'linkType', 'LinkType']) {
+        delete payload[alias];
+    }
+
     return payload;
 };
 
@@ -113,7 +132,7 @@ const ProjectUrl = {
             Language, PreScreenid, PreScreenName,
             TerminationPoint, CompletionPoint, ValidatePoint,
             CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
-            action_by
+            Project_Link_Type, action_by
         } = normalized;
 
         const project_url_code = await ProjectUrl.generateUrlCode(conn);
@@ -126,8 +145,8 @@ const ProjectUrl = {
               Language, PreScreenid, PreScreenName,
               TerminationPoint, CompletionPoint, ValidatePoint,
               CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
-              action_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              Project_Link_Type, action_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 project_id,
                 project_url_code,
@@ -160,6 +179,7 @@ const ProjectUrl = {
                 toNullable(OverQuotaURL),
                 toNullable(QualityTermURL),
                 toNullable(SurveyCloseURL),
+                toNullable(Project_Link_Type),
                 action_by || null
             ]
         );
@@ -186,6 +206,16 @@ const ProjectUrl = {
     getById: async (id) => {
         const [rows] = await db.execute(
             `SELECT * FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`, [id]
+        );
+        return rows[0] || null;
+    },
+
+    getByCode: async (project_url_code) => {
+        const [rows] = await db.execute(
+            `SELECT * FROM project_url_Info
+             WHERE project_url_code = ? AND deleted_at IS NULL
+             LIMIT 1`,
+            [String(project_url_code || '').trim()]
         );
         return rows[0] || null;
     },
@@ -219,6 +249,10 @@ const ProjectUrl = {
                 safeData.PreScreenid != null && String(safeData.PreScreenid).trim() !== ''
                     ? String(safeData.PreScreenid).trim()
                     : null;
+        }
+        if (Object.prototype.hasOwnProperty.call(safeData, 'Project_Link_Type')) {
+            // Already normalized in normalizeUrlPayload; keep null if invalid/empty
+            safeData.Project_Link_Type = safeData.Project_Link_Type || null;
         }
 
         const setClauses = [];

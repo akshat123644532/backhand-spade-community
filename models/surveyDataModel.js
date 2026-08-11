@@ -64,6 +64,38 @@ const SurveyData = {
         return rows[0] || null;
     },
 
+    /** Any row for this partner/project/url + UserId (any IP). */
+    findByUserId: async ({ partnerid, projectid, project_url_id, UserId }) => {
+        const [rows] = await db.execute(
+            `SELECT *
+             FROM \`${TABLE}\`
+             WHERE partnerid <=> ?
+               AND projectid = ?
+               AND project_url_id = ?
+               AND LOWER(UserId) = LOWER(?)
+             ORDER BY id DESC
+             LIMIT 1`,
+            [partnerid, projectid, project_url_id, UserId]
+        );
+        return rows[0] || null;
+    },
+
+    /** Any row for this partner/project/url + InitalIP (any UserId). */
+    findByInitialIp: async ({ partnerid, projectid, project_url_id, InitalIP }) => {
+        const [rows] = await db.execute(
+            `SELECT *
+             FROM \`${TABLE}\`
+             WHERE partnerid <=> ?
+               AND projectid = ?
+               AND project_url_id = ?
+               AND InitalIP = ?
+             ORDER BY id DESC
+             LIMIT 1`,
+            [partnerid, projectid, project_url_id, InitalIP]
+        );
+        return rows[0] || null;
+    },
+
     createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
         await SurveyData.ensureIndex();
 
@@ -74,6 +106,35 @@ const SurveyData = {
             [partnerid, projectid, project_url_id, UserId, InitalIP, STATUS_INITIATED]
         );
         return result.insertId;
+    },
+
+    /**
+     * Finalize survey activity: set Status, FinalIP, EndDate.
+     * Matches partner + project + url + UserId (latest row).
+     */
+    finalizeStatus: async ({ partnerid, projectid, project_url_id, UserId, Status, FinalIP }) => {
+        const [existing] = await db.execute(
+            `SELECT id, Status
+             FROM \`${TABLE}\`
+             WHERE partnerid <=> ?
+               AND projectid = ?
+               AND project_url_id = ?
+               AND LOWER(UserId) = LOWER(?)
+             ORDER BY id DESC
+             LIMIT 1`,
+            [partnerid, projectid, project_url_id, UserId]
+        );
+
+        if (!existing[0]) return null;
+
+        await db.execute(
+            `UPDATE \`${TABLE}\`
+             SET Status = ?, FinalIP = ?, EndDate = NOW()
+             WHERE id = ?`,
+            [Status, FinalIP, existing[0].id]
+        );
+
+        return SurveyData.getById(existing[0].id);
     },
 
     getById: async (id) => {

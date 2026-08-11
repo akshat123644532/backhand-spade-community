@@ -2,9 +2,35 @@ import { decryptSurveyToken } from '../utils/Encryptionhelper.js';
 import SurveyData from '../models/surveyDataModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
+import Project from '../models/projectModel.js';
+import SupplierMapping from '../models/supplierMappingModel.js';
 import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
 
-const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined']);
+const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined', 'xxxxxx']);
+
+const SURVEY_STATUS_ALIASES = {
+    completed: 'completed',
+    complete: 'completed',
+    terminate: 'terminate',
+    terminated: 'terminate',
+    'quota full': 'Quota full',
+    quotafull: 'Quota full',
+    overquota: 'Quota full',
+    'over quota': 'Quota full',
+    qualityterm: 'qualityTerm',
+    'quality term': 'qualityTerm',
+    surveyclosed: 'surveyClosed',
+    'survey closed': 'surveyClosed',
+    surveyclose: 'surveyClosed'
+};
+
+const normalizeSurveyStatus = (raw) => {
+    const key = String(raw || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+    return SURVEY_STATUS_ALIASES[key] || null;
+};
+
+const isMultiLinkProject = (type) =>
+    String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
 const decodeToken = (rawToken) => {
     if (!rawToken || typeof rawToken !== 'string') {
@@ -60,6 +86,7 @@ const getClientIp = (req) => {
  * Creates survey activity with Status = Initiated and InitalIP = client IP.
  * Blocks if same partnerid + projectid + project_url_id + UserId + InitalIP
  * already exists with Status other than Initiated.
+ * Also binds uid → Vender_UserName on project_mutiple_Url for project + url + partner.
  */
 export const addSurveyActivity = async (req, res) => {
     try {
@@ -75,7 +102,7 @@ export const addSurveyActivity = async (req, res) => {
             });
         }
 
-        const partnerid =
+        let partnerid =
             tokenData.partnerid == null || tokenData.partnerid === ''
                 ? null
                 : Number(tokenData.partnerid);
@@ -91,6 +118,17 @@ export const addSurveyActivity = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid token ids!' });
         }
 
+        // Resolve partner from multi-link mapping when token has none
+        if (partnerid == null || !Number.isFinite(partnerid)) {
+            partnerid = await ProjectMultipleUrl.getMappedPartnerId(projectid, project_url_id);
+            if (partnerid == null || !Number.isFinite(partnerid)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Partner to the link not mapped.'
+                });
+            }
+        }
+
         // Optional window check from token dates
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -99,6 +137,29 @@ export const addSurveyActivity = async (req, res) => {
         }
         if (tokenData.endDate && new Date(tokenData.endDate) < today) {
             return res.status(403).json({ success: false, message: 'Survey is closed!' });
+        }
+
+        // Exact combo: partner + project + url + UserId + IP
+        const initiatedExact = await SurveyData.findInitiated({
+            partnerid, projectid, project_url_id, UserId, InitalIP
+        });
+        if (initiatedExact) {
+            // Same combination + Initiated → do nothing
+            const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
+                project_id: projectid,
+                project_url_id,
+                partner_id: partnerid,
+                uid: UserId
+            });
+            return res.status(200).json({
+                success: true,
+                message: 'Survey activity already initiated!',
+                data: {
+                    ...initiatedExact,
+                    multi_link_id: multiLinkRow?.id || null,
+                    Vender_UserName: multiLinkRow?.Vender_UserName || UserId
+                }
+            });
         }
 
         const blocked = await SurveyData.findBlockedAccess({
@@ -113,16 +174,36 @@ export const addSurveyActivity = async (req, res) => {
             });
         }
 
-        const existing = await SurveyData.findInitiated({
-            partnerid, projectid, project_url_id, UserId, InitalIP
+        // UserId + InitalIP must be unique within partnerid + projectid + project_url_id
+        const existingByUser = await SurveyData.findByUserId({
+            partnerid, projectid, project_url_id, UserId
         });
-        if (existing) {
-            return res.status(200).json({
-                success: true,
-                message: 'Survey activity already initiated!',
-                data: existing
+        if (existingByUser && String(existingByUser.InitalIP || '') !== String(InitalIP || '')) {
+            return res.status(403).json({
+                success: false,
+                message: 'User not allowed from the current ip.',
+                code: 'IP_NOT_ALLOWED'
             });
         }
+
+        const existingByIp = await SurveyData.findByInitialIp({
+            partnerid, projectid, project_url_id, InitalIP
+        });
+        if (existingByIp && String(existingByIp.UserId || '').toLowerCase() !== String(UserId).toLowerCase()) {
+            return res.status(403).json({
+                success: false,
+                message: 'The uid is not correct.',
+                code: 'UID_NOT_CORRECT'
+            });
+        }
+
+        // Bind uid → Vender_UserName on multi-link row (project + url + partner)
+        const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
+            project_id: projectid,
+            project_url_id,
+            partner_id: partnerid,
+            uid: UserId
+        });
 
         const id = await SurveyData.createInitiated({
             partnerid, projectid, project_url_id, UserId, InitalIP
@@ -132,7 +213,11 @@ export const addSurveyActivity = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: 'Survey activity initiated successfully!',
-            data: row
+            data: {
+                ...row,
+                multi_link_id: multiLinkRow?.id || null,
+                Vender_UserName: multiLinkRow?.Vender_UserName || UserId
+            }
         });
     } catch (error) {
         const statusCode = error.statusCode || 500;
@@ -328,6 +413,131 @@ export const getSurveyLink = async (req, res) => {
                 Live_Link: liveLink,
                 survey_url: surveyUrl,
                 Status: urlInfo.Status
+            }
+        });
+    } catch (error) {
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
+            success: false,
+            message: statusCode === 500 ? 'Server error!' : error.message,
+            error: error.message
+        });
+    }
+};
+
+/**
+ * POST|GET /api/survey/status
+ * Params: surveyStatus, pid (project_url_code), uid
+ * Allowed status: completed | terminate | Quota full | qualityTerm | surveyClosed
+ * Multi-link: update project_mutiple_Url.Status + survery_data
+ * Single-link: update survery_data only
+ */
+export const updateSurveyStatus = async (req, res) => {
+    try {
+        const surveyStatusRaw = req.body?.surveyStatus ?? req.query?.surveyStatus ?? req.body?.status ?? req.query?.status;
+        const pid = req.body?.pid ?? req.query?.pid;
+        const uidRaw = req.body?.uid ?? req.query?.uid;
+
+        const Status = normalizeSurveyStatus(surveyStatusRaw);
+        if (!Status) {
+            return res.status(400).json({
+                success: false,
+                message: 'surveyStatus is required! Allowed: completed, terminate, Quota full, qualityTerm, surveyClosed'
+            });
+        }
+
+        if (!pid || String(pid).trim() === '') {
+            return res.status(400).json({ success: false, message: 'pid is required!' });
+        }
+
+        const UserId = normalizeUid(uidRaw);
+        if (!UserId || PLACEHOLDER_UIDS.has(UserId.toLowerCase())) {
+            return res.status(400).json({ success: false, message: 'uid is required!' });
+        }
+
+        const urlInfo = await ProjectUrl.getByCode(pid);
+        if (!urlInfo) {
+            return res.status(404).json({ success: false, message: 'Project URL not found for given pid!' });
+        }
+
+        const project_url_id = Number(urlInfo.id);
+        const projectid = Number(urlInfo.project_id);
+        const project = await Project.getById(projectid);
+        if (!project) {
+            return res.status(404).json({ success: false, message: 'Project not found!' });
+        }
+
+        const mapping = await SupplierMapping.getByProjectAndUrl(projectid, project_url_id);
+        const partnerid = mapping?.partnerid != null ? Number(mapping.partnerid) : null;
+        if (partnerid == null || !Number.isFinite(partnerid)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Partner to the link not mapped.'
+            });
+        }
+
+        const FinalIP = getClientIp(req);
+        let multiLinkRow = null;
+        let multiLinkUpdated = 0;
+        const multiLink = isMultiLinkProject(urlInfo.Project_Link_Type);
+
+        if (multiLink) {
+            multiLinkRow = await ProjectMultipleUrl.getSurveyByAccess({
+                project_id: projectid,
+                project_url_id,
+                Vender_UserName: UserId,
+                partner_id: partnerid
+            });
+
+            if (!multiLinkRow) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Multi-link row not found for this pid, uid and partner!'
+                });
+            }
+        }
+
+        const surveyRow = await SurveyData.finalizeStatus({
+            partnerid,
+            projectid,
+            project_url_id,
+            UserId,
+            Status,
+            FinalIP
+        });
+
+        if (!surveyRow) {
+            return res.status(404).json({
+                success: false,
+                message: 'Survey activity not found for this partner, project, url and uid!'
+            });
+        }
+
+        if (multiLink && multiLinkRow) {
+            multiLinkUpdated = await ProjectMultipleUrl.updateStatusByAccess({
+                project_id: projectid,
+                project_url_id,
+                partner_id: partnerid,
+                Vender_UserName: UserId,
+                Status
+            });
+            multiLinkRow = { ...multiLinkRow, Status };
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Survey status updated to ${Status}!`,
+            data: {
+                surveyStatus: Status,
+                pid: String(pid).trim(),
+                uid: UserId,
+                project_id: projectid,
+                project_url_id,
+                partnerid,
+                isMultiLink: multiLink,
+                multi_link_updated: multiLinkUpdated,
+                multi_link: multiLinkRow,
+                survey: surveyRow
             }
         });
     } catch (error) {
