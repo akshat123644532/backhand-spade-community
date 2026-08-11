@@ -8,6 +8,7 @@ import {
     addProject, getAllProjects, getProjectById,
     updateProject, deleteProject, toggleProjectStatus,
     addProjectUrl, updateProjectUrl, deleteProjectUrl, getProjectUrlList,
+    generateProjectUrlCode,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
     uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate,
     getMultiLinkCsvImportStatus

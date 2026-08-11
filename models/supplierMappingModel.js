@@ -106,19 +106,20 @@ const SupplierMapping = {
             const mapping_code = await SupplierMapping.generateMappingCode(connection);
 
             const [result] = await connection.execute(
-                `INSERT INTO supplier_mapping
-                 (mapping_code, partnerid, partner_code, projectid, projectUrlId, quota, CPI,
-                  CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
-                  status, IsTest, action_by, dynamic_url)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    mapping_code, partnerid || null, partner_code || null, projectid || null, projectUrlId || null,
-                    quota || null, CPI || null,
-                    CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null,
-                    SurveyCloseURL || null, VenderURL,
-                    status || 'active', IsTest || 0, action_by || null, dynamic_url
-                ]
-            );
+    `INSERT INTO supplier_mapping
+     (mapping_code, partnerid, partner_code, projectid, projectUrlId, quota, CPI,
+      CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
+      status, IsTest, action_by, dynamic_url, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+    [
+        mapping_code, partnerid || null, partner_code || null, projectid || null, projectUrlId || null,
+        quota || null, CPI || null,
+        CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null,
+        SurveyCloseURL || null, VenderURL,
+        status || 'active', IsTest || 0, action_by || null, dynamic_url
+    ]
+);
+
 
             const mappingId = result.insertId;
 

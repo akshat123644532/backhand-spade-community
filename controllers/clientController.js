@@ -1,7 +1,7 @@
 import Client from '../models/clientModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { decrypt, encrypt } from '../utils/cryptoHelper.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const prepareApiSecretKeyForStorage = (apiSecretKey) => {
     if (apiSecretKey === undefined || apiSecretKey === null || apiSecretKey === '') {
         return apiSecretKey;
@@ -126,5 +126,26 @@ export const deleteClient = async (req, res) => {
         res.status(200).json({ success: true, message: "Client deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+};
+export const exportClientsCsv = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const country = req.query.country || '';
+        const result = await Client.getAll({ page: 1, limit: 1000000, search, country });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Name', key: 'name' },
+            { label: 'Email', key: 'email' },
+            { label: 'Country', key: 'country' },
+            { label: 'Contact No', key: 'contact_no' },
+            { label: 'Website', key: 'website_url' },
+            { label: 'Status', key: 'status' }
+        ]);
+
+        return sendCsv(res, 'clients.csv', csv);
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
     }
 };

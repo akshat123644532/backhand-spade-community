@@ -1,5 +1,5 @@
 import QuestionLibrary from '../models/Questionlibrarymodel.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 export const addLibraryQuestion = async (req, res) => {
     try {
         const { language, question_title, question_type, options, right_answer, status, sort_order } = req.body;
@@ -122,6 +122,27 @@ export const deleteLibraryQuestion = async (req, res) => {
         if (!question) return res.status(404).json({ success: false, message: "Question not found in library!" });
         await QuestionLibrary.delete(id);
         return res.status(200).json({ success: true, message: "Question deleted from library successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+export const exportLibraryQuestionsCsv = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+        const language = req.query.language || '';
+        const question_type = req.query.question_type || '';
+        const result = await QuestionLibrary.getAll({ page: 1, limit: 1000000, search, status, language, question_type });
+
+        const csv = buildCsv(result.data, [
+            { label: 'ID', key: 'id' },
+            { label: 'Language', key: 'language' },
+            { label: 'Question Title', key: 'question_title' },
+            { label: 'Question Type', key: 'question_type' },
+            { label: 'Status', key: 'status' }
+        ]);
+
+        return sendCsv(res, 'question_library.csv', csv);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
