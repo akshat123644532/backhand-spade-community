@@ -50,6 +50,7 @@ router.patch('/:id/status',         verifyToken, toggleProjectStatus);
 // Project URL Info (+ CSV for Multi Link in same request)
 router.get('/:id/url/list',         verifyToken, getProjectUrlList);
 router.post('/:id/url',             verifyToken, csvUploadFlexible, addProjectUrl);
+router.get('/:id/url/generate-code', verifyToken, generateProjectUrlCode);
 // csvUploadFlexible also parses multipart fields (metadata) — required because
 // server.js skips express.json for multipart/form-data
 router.put('/url/:urlId',           verifyToken, csvUploadFlexible, updateProjectUrl);

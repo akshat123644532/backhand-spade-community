@@ -31,8 +31,14 @@ const SupplierMapping = {
             let dynamic_url = null;
             let VenderURL = null;
 
-            // Multi Link: assign partner_id to `quota` unassigned rows for this project_url_id
-            if (isMultiLink && assignCount > 0) {
+            if (isMultiLink) {
+                // Multi Link: assign partner_id to `quota` unassigned rows for this project_url_id
+                if (assignCount < 1) {
+                    const err = new Error('quota is required and must be a positive number for Multi Link projects!');
+                    err.statusCode = 400;
+                    throw err;
+                }
+
                 const stats = await ProjectMultipleUrl.getStatsByProjectId(projectid, projectUrlId, connection);
                 if (assignCount > stats.remainingMultiLinkCount) {
                     const err = new Error(
@@ -63,7 +69,7 @@ const SupplierMapping = {
                 dynamic_url = firstRow?.VenderURL || null;
                 VenderURL = dynamic_url;
             } else {
-                // Single-link (and multi-link with no assign): keep encrypted token URL
+                // SingleLink: one dosurvey URL (?pid=&uid=XXXXXX) → VenderURL + dynamic_url
                 const [projectRows] = await connection.execute(
                     `SELECT startDate, endDate FROM project_Info WHERE id = ?`,
                     [projectid]
@@ -72,12 +78,15 @@ const SupplierMapping = {
                 const endDate = projectRows[0]?.endDate || null;
 
                 const [urlRows] = await connection.execute(
-                    `SELECT Test_Link, project_url_code FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
+                    `SELECT project_url_code FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
                     [projectUrlId]
                 );
-                const testLink = (urlRows[0]?.Test_Link || '').replace(/\/$/, '');
-                VenderURL = testLink || null;
                 const project_url_code = urlRows[0]?.project_url_code || null;
+                if (!project_url_code) {
+                    const err = new Error('project_url_code missing for this Project URL!');
+                    err.statusCode = 400;
+                    throw err;
+                }
 
                 const token = encryptSurveyToken({
                     partnerid,
@@ -87,8 +96,11 @@ const SupplierMapping = {
                     endDate
                 });
                 const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
-                const pidQuery = project_url_code ? `pid=${encodeURIComponent(project_url_code)}&` : '';
-                dynamic_url = `${baseUrl}/dosurvey/${token}?${pidQuery}uid=[identifier]`;
+                const params = new URLSearchParams();
+                params.set('pid', String(project_url_code));
+                params.set('uid', 'XXXXXX');
+                VenderURL = `${baseUrl}/dosurvey/${token}?${params.toString()}`;
+                dynamic_url = VenderURL;
             }
 
             const mapping_code = await SupplierMapping.generateMappingCode(connection);
