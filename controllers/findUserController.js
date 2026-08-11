@@ -24,6 +24,20 @@ export const getAnswerOptions = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+import ProjectUrl from '../models/projectUrlModel.js';
+
+export const getEligibleProjectUrls = async (req, res) => {
+    try {
+        const { id } = req.params; // project_id
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const urls = await ProjectUrl.getEligibleByProjectId(id);
+        return res.status(200).json({ success: true, data: urls });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
 
 export const searchUsers = async (req, res) => {
     try {
