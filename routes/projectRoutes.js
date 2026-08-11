@@ -8,6 +8,7 @@ import {
     addProject, getAllProjects, getProjectById,
     updateProject, deleteProject, toggleProjectStatus,
     addProjectUrl, updateProjectUrl, deleteProjectUrl, getProjectUrlList,
+    generateProjectUrlCode,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
     uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate
 } from '../controllers/projectController.js';
@@ -46,10 +47,11 @@ router.delete('/:id',               verifyToken, deleteProject);
 router.patch('/:id/status',         verifyToken, toggleProjectStatus);
 
 // Project URL Info (+ CSV for Multi Link in same request)
-router.get('/:id/url/list',         verifyToken, getProjectUrlList);
-router.post('/:id/url',             verifyToken, csvUploadFlexible, addProjectUrl);
-router.put('/url/:urlId',           verifyToken, updateProjectUrl);
-router.delete('/url/:urlId',        verifyToken, deleteProjectUrl);
+router.get('/:id/url/list',          verifyToken, getProjectUrlList);
+router.get('/:id/url/generate-code', verifyToken, generateProjectUrlCode);
+router.post('/:id/url',              verifyToken, csvUploadFlexible, addProjectUrl);
+router.put('/url/:urlId',            verifyToken, updateProjectUrl);
+router.delete('/url/:urlId',         verifyToken, deleteProjectUrl);
 
 // Multiple URLs
 router.get('/:id/multiple-url/list', verifyToken, getMultipleUrlList);

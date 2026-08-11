@@ -2,28 +2,34 @@ import { db } from '../config/db.js';
 import crypto from 'crypto';
 
 const ProjectUrl = {
+generateUrlCode: async (project_id, conn = db) => {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const digits = '0123456789';
+    let code;
+    let exists = true;
 
-    // Alphanumeric code, project_id ke saath prefix — jaise PID20A7X9K2Z1
-    generateUrlCode: async (project_id, conn = db) => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let code;
-        let exists = true;
-
-        while (exists) {
-            let randomPart = '';
-            for (let i = 0; i < 8; i++) {
-                randomPart += chars[crypto.randomInt(0, chars.length)];
-            }
-            code = `PID${project_id}${randomPart}`;
-
-            const [rows] = await conn.execute(
-                `SELECT id FROM project_url_Info WHERE project_url_code = ?`, [code]
-            );
-            exists = rows.length > 0;
+    while (exists) {
+        let letterPart = '';
+        for (let i = 0; i < 3; i++) {
+            letterPart += letters[crypto.randomInt(0, letters.length)];
         }
 
-        return code;
-    },
+        let digitPart = '';
+        for (let i = 0; i < 3; i++) {
+            digitPart += digits[crypto.randomInt(0, digits.length)];
+        }
+
+        code = letterPart + digitPart;
+
+        const [rows] = await conn.execute(
+            `SELECT id FROM project_url_Info WHERE project_url_code = ?`, [code]
+        );
+        exists = rows.length > 0;
+    }
+
+    return code;
+    
+},
 
     create: async (data, conn = db) => {
         const {
@@ -33,7 +39,8 @@ const ProjectUrl = {
             Language, PreScreenid, PreScreenName,
             TerminationPoint, CompletionPoint, ValidatePoint,
             CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
-            action_by
+            action_by,
+            project_url_code: preGeneratedCode   // 👈 NAYA: frontend se preview wala code (agar bheja ho)
         } = data;
 
         if (!project_id) {
@@ -42,7 +49,8 @@ const ProjectUrl = {
             throw err;
         }
 
-        const project_url_code = await ProjectUrl.generateUrlCode(project_id, conn);
+        // 👇 NAYA: agar preview code diya hai to wahi use karo, warna naya generate karo
+        const project_url_code = preGeneratedCode || await ProjectUrl.generateUrlCode(project_id, conn);
 
         const [result] = await conn.execute(
             `INSERT INTO project_url_Info
