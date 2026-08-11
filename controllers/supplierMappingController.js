@@ -65,6 +65,28 @@ export const addSupplierMapping = async (req, res) => {
         });
     }
 };
+export const toggleSupplierIsTest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { IsTest } = req.body; // expects 1 (Test) or 0 (Live)
+
+        if (![0, 1].includes(Number(IsTest))) {
+            return res.status(400).json({ success: false, message: "IsTest must be 0 (Live) or 1 (Test)!" });
+        }
+
+        const mapping = await SupplierMapping.getById(id);
+        if (!mapping) return res.status(404).json({ success: false, message: "Supplier mapping not found!" });
+
+        await SupplierMapping.toggleIsTest(id, Number(IsTest));
+
+        return res.status(200).json({
+            success: true,
+            message: `Mode switched to ${Number(IsTest) === 1 ? 'Test' : 'Live'}!`
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
 
 export const getAllSupplierMappings = async (req, res) => {
     try {

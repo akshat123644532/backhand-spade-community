@@ -6,6 +6,7 @@ import {
     getSupplierMappingById,
     updateSupplierMapping,
     toggleSupplierMappingStatus,
+    toggleSupplierIsTest,
     deleteSupplierMapping
 } from '../controllers/supplierMappingController.js';
 
@@ -16,6 +17,7 @@ router.get('/list',         verifyToken, getAllSupplierMappings);
 router.get('/:id',          verifyToken, getSupplierMappingById);
 router.put('/:id',          verifyToken, updateSupplierMapping);
 router.patch('/status/:id', verifyToken, toggleSupplierMappingStatus);
+router.patch('/istest/:id', verifyToken, toggleSupplierIsTest);
 router.delete('/:id',       verifyToken, deleteSupplierMapping);
 
 export default router;

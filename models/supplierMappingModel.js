@@ -82,7 +82,6 @@ const SupplierMapping = {
     ]
 );
 
-
             const mappingId = result.insertId;
             let assignedMultiUrlIds = [];
 
@@ -324,6 +323,13 @@ const SupplierMapping = {
         );
         return result;
     },
+    toggleIsTest: async (id, IsTest) => {
+    const [result] = await db.execute(
+        `UPDATE supplier_mapping SET IsTest = ?, updated_at = NOW() WHERE id = ?`,
+        [IsTest, id]
+    );
+    return result;
+},
 
     delete: async (id) => {
         const [result] = await db.execute(
@@ -332,5 +338,6 @@ const SupplierMapping = {
         return result;
     }
 };
+
 
 export default SupplierMapping;
