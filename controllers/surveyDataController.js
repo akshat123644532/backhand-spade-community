@@ -1,4 +1,4 @@
-import { decryptSurveyToken } from '../utils/Encryptionhelper.js';
+import { decodeSurveyToken } from '../utils/Encryptionhelper.js';
 import SurveyData from '../models/surveyDataModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
@@ -40,7 +40,7 @@ const decodeToken = (rawToken) => {
     }
 
     try {
-        const tokenData = decryptSurveyToken(rawToken.trim());
+        const tokenData = decodeSurveyToken(rawToken.trim());
         // partnerid can be null (e.g. multi-link / vendor flows)
         if (tokenData?.projectid == null || tokenData?.projectUrlId == null) {
             const err = new Error('Invalid token payload!');

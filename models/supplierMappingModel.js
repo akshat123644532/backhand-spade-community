@@ -1,5 +1,5 @@
 import { db } from '../config/db.js';
-import { encryptSurveyToken, decryptSurveyToken } from '../utils/Encryptionhelper.js';
+import { encodeSurveyToken, decodeSurveyToken } from '../utils/Encryptionhelper.js';
 import ProjectMultipleUrl from './projectMultipleUrlModel.js';
 
 const SupplierMapping = {
@@ -70,13 +70,6 @@ const SupplierMapping = {
                 VenderURL = dynamic_url;
             } else {
                 // SingleLink: one dosurvey URL (?pid=&uid=XXXXXX) → VenderURL + dynamic_url
-                const [projectRows] = await connection.execute(
-                    `SELECT startDate, endDate FROM project_Info WHERE id = ?`,
-                    [projectid]
-                );
-                const startDate = projectRows[0]?.startDate || null;
-                const endDate = projectRows[0]?.endDate || null;
-
                 const [urlRows] = await connection.execute(
                     `SELECT project_url_code FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
                     [projectUrlId]
@@ -88,12 +81,10 @@ const SupplierMapping = {
                     throw err;
                 }
 
-                const token = encryptSurveyToken({
+                const token = encodeSurveyToken({
                     partnerid,
                     projectUrlId,
-                    projectid,
-                    startDate,
-                    endDate
+                    projectid
                 });
                 const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
                 const params = new URLSearchParams();
@@ -235,7 +226,7 @@ const SupplierMapping = {
     getByDynamicHash: async (token) => {
         let tokenData;
         try {
-            tokenData = decryptSurveyToken(token);
+            tokenData = decodeSurveyToken(token);
         } catch {
             const [rows] = await db.execute(
                 `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
