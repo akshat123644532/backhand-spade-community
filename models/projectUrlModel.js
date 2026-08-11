@@ -28,7 +28,7 @@ generateUrlCode: async (project_id, conn = db) => {
     }
 
     return code;
-    
+
 },
 
     create: async (data, conn = db) => {
@@ -52,28 +52,28 @@ generateUrlCode: async (project_id, conn = db) => {
         // 👇 NAYA: agar preview code diya hai to wahi use karo, warna naya generate karo
         const project_url_code = preGeneratedCode || await ProjectUrl.generateUrlCode(project_id, conn);
 
-        const [result] = await conn.execute(
-            `INSERT INTO project_url_Info
-             (project_id, project_url_code, description, \`LOI(Minute)\`, \`IR(%)\`, country, CPI, SampleSize,
-              Start_Date, End_Date, Status, Live_Link, Test_Link,
-              GeoLocation, UrlProtection, UniqueIP, PreScreen, FraudDetection,
-              Language, PreScreenid, PreScreenName,
-              TerminationPoint, CompletionPoint, ValidatePoint,
-              CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
-              action_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                project_id, project_url_code, description || null, LOI || null, IR || null,
-                country || null, CPI || null, SampleSize || null,
-                Start_Date || null, End_Date || null, Status || 'active',
-                Live_Link || null, Test_Link || null,
-                GeoLocation || 0, UrlProtection || 0, UniqueIP || 0, PreScreen || 0, FraudDetection || 0,
-                Language || null, PreScreenid || null, PreScreenName || null,
-                TerminationPoint || null, CompletionPoint || null, ValidatePoint || null,
-                CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null, SurveyCloseURL || null,
-                action_by || null
-            ]
-        );
+      const [result] = await conn.execute(
+    `INSERT INTO project_url_Info
+     (project_id, project_url_code, description, \`LOI(Minute)\`, \`IR(%)\`, country, CPI, SampleSize,
+      Start_Date, End_Date, Status, Live_Link, Test_Link,
+      GeoLocation, UrlProtection, UniqueIP, PreScreen, FraudDetection,
+      Language, PreScreenid, PreScreenName,
+      TerminationPoint, CompletionPoint, ValidatePoint,
+      CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
+      action_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+    [
+        project_id, project_url_code, description || null, LOI || null, IR || null,
+        country || null, CPI || null, SampleSize || null,
+        Start_Date || null, End_Date || null, Status || 'active',
+        Live_Link || null, Test_Link || null,
+        GeoLocation || 0, UrlProtection || 0, UniqueIP || 0, PreScreen || 0, FraudDetection || 0,
+        Language || null, PreScreenid || null, PreScreenName || null,
+        TerminationPoint || null, CompletionPoint || null, ValidatePoint || null,
+        CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null, SurveyCloseURL || null,
+        action_by || null
+    ]
+);
         return { id: result.insertId, project_url_code };
     },
 
