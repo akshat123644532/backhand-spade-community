@@ -82,6 +82,7 @@ const SupplierMapping = {
     ]
 );
 
+
             const mappingId = result.insertId;
             let assignedMultiUrlIds = [];
 
