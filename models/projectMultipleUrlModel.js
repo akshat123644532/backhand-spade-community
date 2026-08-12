@@ -96,6 +96,17 @@ const ProjectMultipleUrl = {
         return rows;
     },
 
+    // 👇 NAYA: Multi Link projects ke liye — is project ke saare ACTIVE status wale VenderURLs nikalo
+    getActiveVenderUrlsByProjectId: async (project_id, conn = db) => {
+        const [rows] = await conn.execute(
+            `SELECT id, VenderURL FROM project_mutiple_Url 
+             WHERE project_id = ? AND Status = 'active' AND VenderURL IS NOT NULL AND VenderURL != ''
+             ORDER BY id ASC`,
+            [project_id]
+        );
+        return rows;
+    },
+
     getStatsByProjectId: async (project_id, conn = db) => {
         const [rows] = await conn.execute(
             `SELECT

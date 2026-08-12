@@ -4,6 +4,12 @@ import ProjectInvitedUser from '../models/ProjectInvitedUserModel.js';
 import EmailTemplate from '../models/Emailtemplatemodel.js';
 import Panelist from '../models/Panelistmodel.js';
 import transporter from '../config/mailer.js';
+import ProjectUrl from '../models/projectUrlModel.js';
+import SupplierMapping from '../models/supplierMappingModel.js';
+import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
+
+const isMultiLink = (type) =>
+    String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
 
 export const getFilterQuestions = async (req, res) => {
     try {
@@ -24,7 +30,6 @@ export const getAnswerOptions = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
-import ProjectUrl from '../models/projectUrlModel.js';
 
 export const getEligibleProjectUrls = async (req, res) => {
     try {
@@ -83,6 +88,8 @@ export const searchUsers = async (req, res) => {
     }
 };
 
+// 👇 UPDATED: ab survey_link hardcoded nahi hai — Single/Multi Link ke hisab se
+// supplier_mapping ya project_mutiple_Url se sahi VenderURL uthaya jayega
 export const inviteUsers = async (req, res) => {
     try {
         const { id } = req.params; // project_id
@@ -101,15 +108,46 @@ export const inviteUsers = async (req, res) => {
         const template = await EmailTemplate.getById(email_template_id);
         if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
 
+        const multiLink = isMultiLink(project.Project_Link_Type);
+
+        // Link type ke hisab se VenderURL(s) nikaalo
+        let singleVenderUrl = null;
+        let multiVenderUrls = [];
+
+        if (multiLink) {
+            const rows = await ProjectMultipleUrl.getActiveVenderUrlsByProjectId(id);
+            multiVenderUrls = rows.map(r => r.VenderURL);
+            if (!multiVenderUrls.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: "No active Vendor URL found in project_mutiple_Url for this project!"
+                });
+            }
+        } else {
+            singleVenderUrl = await SupplierMapping.getVenderUrlByProjectId(id);
+            if (!singleVenderUrl) {
+                return res.status(400).json({
+                    success: false,
+                    message: "No active Vendor URL found in supplier_mapping for this project!"
+                });
+            }
+        }
+
         let invited = 0;
-        for (const panelistId of panelist_ids) {
+        for (let i = 0; i < panelist_ids.length; i++) {
+            const panelistId = panelist_ids[i];
             const panelist = await Panelist.findById(panelistId);
             if (!panelist) continue;
+
+            // Multi link me har panelist ko round-robin se ek VenderURL milega
+            const survey_link = multiLink
+                ? multiVenderUrls[i % multiVenderUrls.length]
+                : singleVenderUrl;
 
             const rendered = EmailTemplate.render(template, {
                 name: panelist.name,
                 project_name: project.Project_Name,
-                survey_link: `https://spade-community-client-ui.vercel.app/survey/${id}`
+                survey_link
             });
 
             transporter.sendMail({

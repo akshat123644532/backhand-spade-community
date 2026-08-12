@@ -68,19 +68,19 @@ const SupplierMapping = {
             const dynamic_url = `${baseUrl}/dosurvey/${token}?uid=[identifier]`;
 
             const [result] = await connection.execute(
-    `INSERT INTO supplier_mapping
-     (mapping_code, partnerid, partner_code, projectid, projectUrlId, quota, CPI,
-      CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
-      status, IsTest, action_by, dynamic_url, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [
-        mapping_code, partnerid || null, partner_code || null, projectid || null, projectUrlId || null,
-        quota || null, CPI || null,
-        CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null,
-        SurveyCloseURL || null, VenderURL,
-        status || 'active', IsTest || 0, action_by || null, dynamic_url
-    ]
-);
+                `INSERT INTO supplier_mapping
+                 (mapping_code, partnerid, partner_code, projectid, projectUrlId, quota, CPI,
+                  CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL, VenderURL,
+                  status, IsTest, action_by, dynamic_url, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                [
+                    mapping_code, partnerid || null, partner_code || null, projectid || null, projectUrlId || null,
+                    quota || null, CPI || null,
+                    CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null,
+                    SurveyCloseURL || null, VenderURL,
+                    status || 'active', IsTest || 0, action_by || null, dynamic_url
+                ]
+            );
 
             const mappingId = result.insertId;
             let assignedMultiUrlIds = [];
@@ -118,6 +118,25 @@ const SupplierMapping = {
         } finally {
             connection.release();
         }
+    },
+
+    // 👇 NAYA: Single Link projects ke liye — is project ka active VenderURL nikalo email bhejne ke liye
+    getVenderUrlByProjectId: async (project_id, conn = db) => {
+        const [rows] = await conn.execute(
+            `SELECT VenderURL FROM supplier_mapping 
+             WHERE projectid = ? AND status = 'active' AND deleted_at IS NULL 
+             ORDER BY id DESC LIMIT 1`,
+            [project_id]
+        );
+        return rows[0]?.VenderURL || null;
+    },
+
+    toggleIsTest: async (id, IsTest) => {
+        const [result] = await db.execute(
+            `UPDATE supplier_mapping SET IsTest = ?, updated_at = NOW() WHERE id = ?`,
+            [IsTest, id]
+        );
+        return result;
     },
 
     getAll: async ({ page = 1, limit = 10, search = '', status = '', projectid = '', partnerid = '' } = {}) => {
@@ -323,13 +342,6 @@ const SupplierMapping = {
         );
         return result;
     },
-    toggleIsTest: async (id, IsTest) => {
-    const [result] = await db.execute(
-        `UPDATE supplier_mapping SET IsTest = ?, updated_at = NOW() WHERE id = ?`,
-        [IsTest, id]
-    );
-    return result;
-},
 
     delete: async (id) => {
         const [result] = await db.execute(
@@ -338,6 +350,5 @@ const SupplierMapping = {
         return result;
     }
 };
-
 
 export default SupplierMapping;
