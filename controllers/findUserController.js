@@ -174,6 +174,7 @@ export const inviteUsers = async (req, res) => {
 export const listInvitedUsers = async (req, res) => {
     try {
         const { id } = req.params;
+        
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
 
