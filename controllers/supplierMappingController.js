@@ -26,7 +26,7 @@ export const addSupplierMapping = async (req, res) => {
         if (!projectUrl) return res.status(404).json({ success: false, message: "Project URL not found!" });
 
         const isMultiLink =
-            String(project.Project_Link_Type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
+            String(projectUrl.Project_Link_Type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
         if (isMultiLink) {
             const quotaNum = parseInt(quota, 10);
@@ -125,17 +125,16 @@ export const updateSupplierMapping = async (req, res) => {
 
         const nextPartnerId = updateData.partnerid !== undefined ? updateData.partnerid : mapping.partnerid;
         const nextProjectId = updateData.projectid !== undefined ? updateData.projectid : mapping.projectid;
+        const nextProjectUrlId = updateData.projectUrlId !== undefined ? updateData.projectUrlId : mapping.projectUrlId;
 
         const project = await Project.getById(nextProjectId);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        if (updateData.projectUrlId !== undefined) {
-            const projectUrl = await ProjectUrl.getById(updateData.projectUrlId);
-            if (!projectUrl) return res.status(404).json({ success: false, message: "Project URL not found!" });
-        }
+        const projectUrl = await ProjectUrl.getById(nextProjectUrlId);
+        if (!projectUrl) return res.status(404).json({ success: false, message: "Project URL not found!" });
 
         const isMultiLink =
-            String(project.Project_Link_Type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
+            String(projectUrl.Project_Link_Type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
         let partner_name = null;
         const partnerOrQuotaChanging =

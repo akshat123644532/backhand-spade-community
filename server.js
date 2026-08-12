@@ -39,6 +39,8 @@ import messageRoutes from './routes/messageRoutes.js';
 
 import dashboardRoutes from './routes/dashboardRoutes.js';
 
+import surveyDataRoutes from './routes/surveyDataRoutes.js';
+import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 
 
 if (!fs.existsSync('uploads')) {
@@ -94,10 +96,12 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/find-user', findUserRoutes);
 app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/supplier-mapping', supplierMappingRoutes);
+app.use('/api/survey', surveyDataRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    resumePendingMultiLinkCsvJobs();
 });

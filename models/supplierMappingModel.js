@@ -1,5 +1,5 @@
 import { db } from '../config/db.js';
-import { encryptId, decryptId } from '../utils/Encryptionhelper.js';
+import { encodeSurveyToken, decodeSurveyToken } from '../utils/Encryptionhelper.js';
 import ProjectMultipleUrl from './projectMultipleUrlModel.js';
 
 const SupplierMapping = {
@@ -27,9 +27,19 @@ const SupplierMapping = {
             await connection.beginTransaction();
             started = true;
 
-            // Multi Link: assign partner_id to `quota` unassigned project_mutiple_Url rows
-            if (isMultiLink && assignCount > 0) {
-                const stats = await ProjectMultipleUrl.getStatsByProjectId(projectid, connection);
+            let assignedMultiUrlIds = [];
+            let dynamic_url = null;
+            let VenderURL = null;
+
+            if (isMultiLink) {
+                // Multi Link: assign partner_id to `quota` unassigned rows for this project_url_id
+                if (assignCount < 1) {
+                    const err = new Error('quota is required and must be a positive number for Multi Link projects!');
+                    err.statusCode = 400;
+                    throw err;
+                }
+
+                const stats = await ProjectMultipleUrl.getStatsByProjectId(projectid, projectUrlId, connection);
                 if (assignCount > stats.remainingMultiLinkCount) {
                     const err = new Error(
                         `quota (${assignCount}) cannot be greater than remaining multi-link count (${stats.remainingMultiLinkCount}). Total multi-links: ${stats.totalMultiLinkCount}.`
@@ -37,35 +47,54 @@ const SupplierMapping = {
                     err.statusCode = 400;
                     throw err;
                 }
+
+                assignedMultiUrlIds = await ProjectMultipleUrl.getUnassignedIds(
+                    projectid, assignCount, connection, projectUrlId
+                );
+                if (assignedMultiUrlIds.length < assignCount) {
+                    const err = new Error(
+                        `Not enough unassigned multi-links. Requested ${assignCount}, available ${assignedMultiUrlIds.length}.`
+                    );
+                    err.statusCode = 400;
+                    throw err;
+                }
+
+                await ProjectMultipleUrl.assignPartnerToRows({
+                    ids: assignedMultiUrlIds,
+                    partner_id: partnerid
+                }, connection);
+
+                // Use first assigned row's VenderURL for both dynamic_url and VenderURL
+                const firstRow = await ProjectMultipleUrl.getById(assignedMultiUrlIds[0], connection);
+                dynamic_url = firstRow?.VenderURL || null;
+                VenderURL = dynamic_url;
+            } else {
+                // SingleLink: one dosurvey URL (?pid=&uid=XXXXXX) → VenderURL + dynamic_url
+                const [urlRows] = await connection.execute(
+                    `SELECT project_url_code FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
+                    [projectUrlId]
+                );
+                const project_url_code = urlRows[0]?.project_url_code || null;
+                if (!project_url_code) {
+                    const err = new Error('project_url_code missing for this Project URL!');
+                    err.statusCode = 400;
+                    throw err;
+                }
+
+                const token = encodeSurveyToken({
+                    partnerid,
+                    projectUrlId,
+                    projectid
+                });
+                const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
+                const params = new URLSearchParams();
+                params.set('pid', String(project_url_code));
+                params.set('uid', 'XXXXXX');
+                VenderURL = `${baseUrl}/dosurvey/${token}?${params.toString()}`;
+                dynamic_url = VenderURL;
             }
 
             const mapping_code = await SupplierMapping.generateMappingCode(connection);
-
-            const [projectRows] = await connection.execute(
-                `SELECT startDate, endDate FROM project_Info WHERE id = ?`,
-                [projectid]
-            );
-            const startDate = projectRows[0]?.startDate || null;
-            const endDate = projectRows[0]?.endDate || null;
-
-            const [urlRows] = await connection.execute(
-                `SELECT Test_Link FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
-                [projectUrlId]
-            );
-            const testLink = (urlRows[0]?.Test_Link || '').replace(/\/$/, '');
-            const VenderURL = testLink || null;
-
-            const tokenPayload = {
-                partnerid,
-                partner_code,
-                projectUrlId,
-                projectid,
-                startDate,
-                endDate
-            };
-            const token = encryptId(JSON.stringify(tokenPayload));
-            const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spade-community.com').replace(/\/$/, '');
-            const dynamic_url = `${baseUrl}/dosurvey/${token}?uid=[identifier]`;
 
             const [result] = await connection.execute(
                 `INSERT INTO supplier_mapping
@@ -83,24 +112,6 @@ const SupplierMapping = {
             );
 
             const mappingId = result.insertId;
-            let assignedMultiUrlIds = [];
-
-            if (isMultiLink && assignCount > 0) {
-                assignedMultiUrlIds = await ProjectMultipleUrl.getUnassignedIds(projectid, assignCount, connection);
-                if (assignedMultiUrlIds.length < assignCount) {
-                    const err = new Error(
-                        `Not enough unassigned multi-links. Requested ${assignCount}, available ${assignedMultiUrlIds.length}.`
-                    );
-                    err.statusCode = 400;
-                    throw err;
-                }
-
-                await ProjectMultipleUrl.assignPartnerToRows({
-                    ids: assignedMultiUrlIds,
-                    partner_id: partnerid,
-                    Vender_UserName: partner_name || partner_code || null
-                }, connection);
-            }
 
             await connection.commit();
 
@@ -187,6 +198,33 @@ const SupplierMapping = {
         return rows;
     },
 
+    getByProjectAndUrl: async (projectid, projectUrlId) => {
+        const [rows] = await db.execute(
+            `SELECT * FROM supplier_mapping
+             WHERE projectid = ?
+               AND projectUrlId = ?
+               AND deleted_at IS NULL
+             ORDER BY id DESC
+             LIMIT 1`,
+            [projectid, projectUrlId]
+        );
+        return rows[0] || null;
+    },
+
+    getByPartnerProjectUrl: async (partnerid, projectid, projectUrlId) => {
+        const [rows] = await db.execute(
+            `SELECT * FROM supplier_mapping
+             WHERE partnerid = ?
+               AND projectid = ?
+               AND projectUrlId = ?
+               AND deleted_at IS NULL
+             ORDER BY id DESC
+             LIMIT 1`,
+            [partnerid, projectid, projectUrlId]
+        );
+        return rows[0] || null;
+    },
+
     getQuotaSumByProjectId: async (projectid) => {
         const [rows] = await db.execute(
             `SELECT COALESCE(SUM(quota), 0) AS samplesAdded
@@ -207,7 +245,7 @@ const SupplierMapping = {
     getByDynamicHash: async (token) => {
         let tokenData;
         try {
-            tokenData = JSON.parse(decryptId(token));
+            tokenData = decodeSurveyToken(token);
         } catch {
             const [rows] = await db.execute(
                 `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
@@ -223,7 +261,7 @@ const SupplierMapping = {
             `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
              FROM supplier_mapping sm
              LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
-             WHERE sm.partnerid = ? AND sm.projectid = ? AND sm.projectUrlId = ?
+             WHERE sm.partnerid <=> ? AND sm.projectid = ? AND sm.projectUrlId = ?
                AND sm.deleted_at IS NULL
              ORDER BY sm.id DESC LIMIT 1`,
             [tokenData.partnerid, tokenData.projectid, tokenData.projectUrlId]
@@ -255,27 +293,32 @@ const SupplierMapping = {
             const safeData = { ...data };
             delete safeData.mapping_code;
             delete safeData.dynamic_url;
+            delete safeData.VenderURL;
             delete safeData.linksToAssign;
             delete safeData.partner_name;
             delete safeData.isMultiLink;
 
             const nextPartnerId = safeData.partnerid !== undefined ? safeData.partnerid : mapping.partnerid;
             const nextProjectId = safeData.projectid !== undefined ? safeData.projectid : mapping.projectid;
+            const nextProjectUrlId = safeData.projectUrlId !== undefined
+                ? safeData.projectUrlId
+                : mapping.projectUrlId;
             const nextQuota = safeData.quota !== undefined
                 ? (parseInt(safeData.quota, 10) || 0)
                 : (parseInt(mapping.quota, 10) || 0);
 
             const partnerChanged = Number(nextPartnerId) !== Number(mapping.partnerid);
             const projectChanged = Number(nextProjectId) !== Number(mapping.projectid);
+            const projectUrlChanged = Number(nextProjectUrlId) !== Number(mapping.projectUrlId);
             const quotaChanged = safeData.quota !== undefined
                 && nextQuota !== (parseInt(mapping.quota, 10) || 0);
 
             let assignedMultiUrlIds = [];
 
-            if (isMultiLink && (partnerChanged || projectChanged || quotaChanged)) {
-                // Free rows currently held by the old partner on the old project
+            if (isMultiLink && (partnerChanged || projectChanged || projectUrlChanged || quotaChanged)) {
+                // Free rows currently held by the old partner on the old project URL
                 const currentlyAssigned = await ProjectMultipleUrl.getAssignedIdsByPartner(
-                    mapping.projectid, mapping.partnerid, connection
+                    mapping.projectid, mapping.partnerid, connection, mapping.projectUrlId
                 );
                 if (currentlyAssigned.length) {
                     await ProjectMultipleUrl.unassignPartnerFromRows(currentlyAssigned, connection);
@@ -287,7 +330,9 @@ const SupplierMapping = {
                     throw err;
                 }
 
-                const stats = await ProjectMultipleUrl.getStatsByProjectId(nextProjectId, connection);
+                const stats = await ProjectMultipleUrl.getStatsByProjectId(
+                    nextProjectId, nextProjectUrlId, connection
+                );
                 if (nextQuota > stats.remainingMultiLinkCount) {
                     const err = new Error(
                         `quota (${nextQuota}) cannot be greater than remaining multi-link count (${stats.remainingMultiLinkCount}). Total multi-links: ${stats.totalMultiLinkCount}.`
@@ -296,7 +341,9 @@ const SupplierMapping = {
                     throw err;
                 }
 
-                assignedMultiUrlIds = await ProjectMultipleUrl.getUnassignedIds(nextProjectId, nextQuota, connection);
+                assignedMultiUrlIds = await ProjectMultipleUrl.getUnassignedIds(
+                    nextProjectId, nextQuota, connection, nextProjectUrlId
+                );
                 if (assignedMultiUrlIds.length < nextQuota) {
                     const err = new Error(
                         `Not enough unassigned multi-links. Requested ${nextQuota}, available ${assignedMultiUrlIds.length}.`
@@ -307,10 +354,13 @@ const SupplierMapping = {
 
                 await ProjectMultipleUrl.assignPartnerToRows({
                     ids: assignedMultiUrlIds,
-                    partner_id: nextPartnerId,
-                    Vender_UserName: partner_name || safeData.partner_code || mapping.partner_code || null
+                    partner_id: nextPartnerId
                 }, connection);
 
+                const firstRow = await ProjectMultipleUrl.getById(assignedMultiUrlIds[0], connection);
+                const sharedUrl = firstRow?.VenderURL || null;
+                safeData.dynamic_url = sharedUrl;
+                safeData.VenderURL = sharedUrl;
                 safeData.quota = nextQuota;
             }
 

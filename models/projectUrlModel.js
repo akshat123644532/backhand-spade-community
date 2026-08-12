@@ -1,6 +1,107 @@
 import { db } from '../config/db.js';
 import crypto from 'crypto';
 
+const ALLOWED_UPDATE_FIELDS = new Set([
+    'description', 'LOI', 'IR', 'country', 'CPI', 'SampleSize',
+    'Start_Date', 'End_Date', 'Status', 'Live_Link', 'Test_Link',
+    'GeoLocation', 'UrlProtection', 'UniqueIP', 'PreScreen', 'FraudDetection',
+    'Language', 'PreScreenid', 'PreScreenName',
+    'TerminationPoint', 'CompletionPoint', 'ValidatePoint',
+    'CompleteURL', 'TerminateURL', 'OverQuotaURL', 'QualityTermURL', 'SurveyCloseURL',
+    'link_mode', 'Project_Link_Type', 'updated_by'
+]);
+
+/** Canonical values: MultiLink | SingleLink */
+const normalizeProjectLinkType = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    const n = String(val).trim().toLowerCase().replace(/[\s_-]+/g, '');
+    if (n === 'multilink') return 'MultiLink';
+    if (n === 'singlelink') return 'SingleLink';
+    return null;
+};
+
+const FLAG_FIELDS = ['GeoLocation', 'UrlProtection', 'UniqueIP', 'FraudDetection', 'PreScreen'];
+
+/** Coerce checkbox / flag values; explicit 0 / false / "0" stay 0 */
+const toIntFlag = (val, fallback = 0) => {
+    if (val === undefined || val === null || val === '') return fallback;
+    if (typeof val === 'boolean') return val ? 1 : 0;
+    if (typeof val === 'number') {
+        if (!Number.isFinite(val)) return fallback;
+        return val === 0 ? 0 : 1;
+    }
+
+    const raw = String(val).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(raw)) return 1;
+    if (['0', 'false', 'no', 'off'].includes(raw)) return 0;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return fallback;
+    return n === 0 ? 0 : 1;
+};
+
+const toNullable = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    return val;
+};
+
+const pickFirstDefined = (obj, keys) => {
+    for (const key of keys) {
+        if (obj[key] !== undefined) return obj[key];
+    }
+    return undefined;
+};
+
+/** Normalize frontend aliases → DB column names */
+const normalizeUrlPayload = (data = {}) => {
+    const payload = { ...data };
+
+    const flagAliasMap = {
+        GeoLocation: ['GeoLocation', 'geoLocation', 'geo_location', 'Geolocation'],
+        UrlProtection: ['UrlProtection', 'urlProtection', 'url_protection', 'URLProtection'],
+        UniqueIP: ['UniqueIP', 'uniqueIP', 'unique_ip', 'UniqueIp'],
+        FraudDetection: ['FraudDetection', 'fraudDetection', 'fraud_detection'],
+        PreScreen: ['PreScreen', 'prescreen', 'pre_screen', 'Pre_Screen']
+    };
+
+    for (const [canonical, aliases] of Object.entries(flagAliasMap)) {
+        const value = pickFirstDefined(payload, aliases);
+        if (value !== undefined) payload[canonical] = value;
+        for (const alias of aliases) {
+            if (alias !== canonical) delete payload[alias];
+        }
+    }
+
+    const preScreenId = pickFirstDefined(payload, [
+        'PreScreenid', 'PreScreenId', 'prescreenid', 'prescreen_id',
+        'pre_screen_id', 'PreScreenID'
+    ]);
+    if (preScreenId !== undefined) payload.PreScreenid = preScreenId;
+    for (const alias of ['PreScreenId', 'prescreenid', 'prescreen_id', 'pre_screen_id', 'PreScreenID']) {
+        delete payload[alias];
+    }
+
+    const preScreenName = pickFirstDefined(payload, [
+        'PreScreenName', 'prescreenName', 'prescreen_name', 'Pre_Screen_Name'
+    ]);
+    if (preScreenName !== undefined) payload.PreScreenName = preScreenName;
+    for (const alias of ['prescreenName', 'prescreen_name', 'Pre_Screen_Name']) {
+        delete payload[alias];
+    }
+
+    const linkType = pickFirstDefined(payload, [
+        'Project_Link_Type', 'project_link_type', 'projectLinkType', 'linkType', 'LinkType'
+    ]);
+    if (linkType !== undefined) {
+        payload.Project_Link_Type = normalizeProjectLinkType(linkType);
+    }
+    for (const alias of ['project_link_type', 'projectLinkType', 'linkType', 'LinkType']) {
+        delete payload[alias];
+    }
+
+    return payload;
+};
+
 const ProjectUrl = {
 generateUrlCode: async (project_id, conn = db) => {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -32,6 +133,7 @@ generateUrlCode: async (project_id, conn = db) => {
 },
 
     create: async (data, conn = db) => {
+        const normalized = normalizeUrlPayload(data);
         const {
             project_id, description, LOI, IR, country, CPI, SampleSize,
             Start_Date, End_Date, Status, Live_Link, Test_Link,
@@ -39,42 +141,58 @@ generateUrlCode: async (project_id, conn = db) => {
             Language, PreScreenid, PreScreenName,
             TerminationPoint, CompletionPoint, ValidatePoint,
             CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
-            action_by,
-            project_url_code: preGeneratedCode   // 👈 NAYA: frontend se preview wala code (agar bheja ho)
-        } = data;
+            Project_Link_Type, action_by
+        } = normalized;
 
-        if (!project_id) {
-            const err = new Error('project_id is required to generate project_url_code!');
-            err.statusCode = 400;
-            throw err;
-        }
+        const project_url_code = await ProjectUrl.generateUrlCode(conn);
 
-        // 👇 NAYA: agar preview code diya hai to wahi use karo, warna naya generate karo
-        const project_url_code = preGeneratedCode || await ProjectUrl.generateUrlCode(project_id, conn);
-
-      const [result] = await conn.execute(
-    `INSERT INTO project_url_Info
-     (project_id, project_url_code, description, \`LOI(Minute)\`, \`IR(%)\`, country, CPI, SampleSize,
-      Start_Date, End_Date, Status, Live_Link, Test_Link,
-      GeoLocation, UrlProtection, UniqueIP, PreScreen, FraudDetection,
-      Language, PreScreenid, PreScreenName,
-      TerminationPoint, CompletionPoint, ValidatePoint,
-      CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
-      action_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [
-        project_id, project_url_code, description || null, LOI || null, IR || null,
-        country || null, CPI || null, SampleSize || null,
-        Start_Date || null, End_Date || null, Status || 'active',
-        Live_Link || null, Test_Link || null,
-        GeoLocation || 0, UrlProtection || 0, UniqueIP || 0, PreScreen || 0, FraudDetection || 0,
-        Language || null, PreScreenid || null, PreScreenName || null,
-        TerminationPoint || null, CompletionPoint || null, ValidatePoint || null,
-        CompleteURL || null, TerminateURL || null, OverQuotaURL || null, QualityTermURL || null, SurveyCloseURL || null,
-        action_by || null
-    ]
-);
-        return { id: result.insertId, project_url_code };
+        const [result] = await conn.execute(
+            `INSERT INTO project_url_Info
+             (project_id, project_url_code, description, \`LOI(Minute)\`, \`IR(%)\`, country, CPI, SampleSize,
+              Start_Date, End_Date, Status, Live_Link, Test_Link,
+              GeoLocation, UrlProtection, UniqueIP, PreScreen, FraudDetection,
+              Language, PreScreenid, PreScreenName,
+              TerminationPoint, CompletionPoint, ValidatePoint,
+              CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
+              Project_Link_Type, action_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                project_id,
+                project_url_code,
+                toNullable(description),
+                toNullable(LOI),
+                toNullable(IR),
+                toNullable(country),
+                toNullable(CPI),
+                toNullable(SampleSize),
+                toNullable(Start_Date),
+                toNullable(End_Date),
+                Status || 'active',
+                toNullable(Live_Link),
+                toNullable(Test_Link),
+                toIntFlag(GeoLocation, 0),
+                toIntFlag(UrlProtection, 0),
+                toIntFlag(UniqueIP, 0),
+                toIntFlag(PreScreen, 0),
+                toIntFlag(FraudDetection, 0),
+                toNullable(Language),
+                PreScreenid != null && String(PreScreenid).trim() !== ''
+                    ? String(PreScreenid).trim()
+                    : null,
+                toNullable(PreScreenName),
+                toNullable(TerminationPoint),
+                toNullable(CompletionPoint),
+                toNullable(ValidatePoint),
+                toNullable(CompleteURL),
+                toNullable(TerminateURL),
+                toNullable(OverQuotaURL),
+                toNullable(QualityTermURL),
+                toNullable(SurveyCloseURL),
+                toNullable(Project_Link_Type),
+                action_by || null
+            ]
+        );
+        return result.insertId;
     },
 
     getByProjectId: async (project_id) => {
@@ -101,21 +219,58 @@ generateUrlCode: async (project_id, conn = db) => {
         return rows[0] || null;
     },
 
+    getByCode: async (project_url_code) => {
+        const [rows] = await db.execute(
+            `SELECT * FROM project_url_Info
+             WHERE project_url_code = ? AND deleted_at IS NULL
+             LIMIT 1`,
+            [String(project_url_code || '').trim()]
+        );
+        return rows[0] || null;
+    },
+
     update: async (id, data) => {
         const columnMap = {
             LOI: '`LOI(Minute)`',
             IR: '`IR(%)`'
         };
 
-        const safeData = { ...data };
+        const safeData = normalizeUrlPayload(data);
         delete safeData.project_url_code;
+        delete safeData.id;
+        delete safeData.project_id;
+        delete safeData.created_at;
+        delete safeData.deleted_at;
+        delete safeData.deleted_by;
+        delete safeData.action_by;
+        delete safeData.partner_id;
+        delete safeData.metadata;
+        delete safeData.file;
+
+        // Normalize flag/id types — hasOwn so explicit 0 is kept
+        for (const flag of FLAG_FIELDS) {
+            if (Object.prototype.hasOwnProperty.call(safeData, flag)) {
+                safeData[flag] = toIntFlag(safeData[flag], 0);
+            }
+        }
+        if (Object.prototype.hasOwnProperty.call(safeData, 'PreScreenid')) {
+            safeData.PreScreenid =
+                safeData.PreScreenid != null && String(safeData.PreScreenid).trim() !== ''
+                    ? String(safeData.PreScreenid).trim()
+                    : null;
+        }
+        if (Object.prototype.hasOwnProperty.call(safeData, 'Project_Link_Type')) {
+            // Already normalized in normalizeUrlPayload; keep null if invalid/empty
+            safeData.Project_Link_Type = safeData.Project_Link_Type || null;
+        }
 
         const setClauses = [];
         const values = [];
         for (const key of Object.keys(safeData)) {
+            if (!ALLOWED_UPDATE_FIELDS.has(key)) continue;
             const column = columnMap[key] || `\`${key}\``;
             setClauses.push(`${column} = ?`);
-            values.push(safeData[key]);
+            values.push(FLAG_FIELDS.includes(key) ? Number(safeData[key]) : safeData[key]);
         }
         if (!setClauses.length) return null;
 

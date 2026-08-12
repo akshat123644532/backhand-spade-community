@@ -10,7 +10,8 @@ import {
     addProjectUrl, updateProjectUrl, deleteProjectUrl, getProjectUrlList,
     generateProjectUrlCode,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
-    uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate
+    uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate,
+    getMultiLinkCsvImportStatus
 } from '../controllers/projectController.js';
 
 const router = express.Router();
@@ -47,11 +48,13 @@ router.delete('/:id',               verifyToken, deleteProject);
 router.patch('/:id/status',         verifyToken, toggleProjectStatus);
 
 // Project URL Info (+ CSV for Multi Link in same request)
-router.get('/:id/url/list',          verifyToken, getProjectUrlList);
+router.get('/:id/url/list',         verifyToken, getProjectUrlList);
+router.post('/:id/url',             verifyToken, csvUploadFlexible, addProjectUrl);
 router.get('/:id/url/generate-code', verifyToken, generateProjectUrlCode);
-router.post('/:id/url',              verifyToken, csvUploadFlexible, addProjectUrl);
-router.put('/url/:urlId',            verifyToken, updateProjectUrl);
-router.delete('/url/:urlId',         verifyToken, deleteProjectUrl);
+// csvUploadFlexible also parses multipart fields (metadata) — required because
+// server.js skips express.json for multipart/form-data
+router.put('/url/:urlId',           verifyToken, csvUploadFlexible, updateProjectUrl);
+router.delete('/url/:urlId',        verifyToken, deleteProjectUrl);
 
 // Multiple URLs
 router.get('/:id/multiple-url/list', verifyToken, getMultipleUrlList);
@@ -59,9 +62,10 @@ router.post('/:id/multiple-url',    verifyToken, addMultipleUrl);
 router.put('/multiple-url/:urlId',  verifyToken, updateMultipleUrl);
 router.delete('/multiple-url/:urlId', verifyToken, deleteMultipleUrl);
 
-// Multiple URLs — CSV bulk upload + template download
+// Multiple URLs — CSV bulk upload + template download + import status
 router.get('/multiple-url/csv-template', verifyToken, downloadCsvTemplate);
 router.post('/:id/multiple-url/csv-upload', verifyToken, csvUploadFlexible, uploadMultipleUrlCsv);
+router.get('/:id/multiple-url/csv-import-status', verifyToken, getMultiLinkCsvImportStatus);
 router.patch('/url/:urlId/link-mode', verifyToken, toggleLinkMode);
 router.get('/url/:urlId/active-link', getActiveSurveyLink);
 

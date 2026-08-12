@@ -7,6 +7,14 @@ const Panelist = {
         return rows[0] || null;
     },
 
+    findByEmailInsensitive: async (email) => {
+        const [rows] = await db.execute(
+            `SELECT * FROM panelists WHERE LOWER(email) = LOWER(?) AND deleted_at IS NULL LIMIT 1`,
+            [String(email || '').trim()]
+        );
+        return rows[0] || null;
+    },
+
     findById: async (id) => {
         const [rows] = await db.execute(`SELECT * FROM panelists WHERE id = ? AND deleted_at IS NULL`, [id]);
         return rows[0] || null;
@@ -155,6 +163,71 @@ const Panelist = {
             [status, id]
         );
         return result;
+    },
+
+    getAllPanelistsCount: async () => {
+        const [result] = await db.query(
+            `SELECT COUNT(*) as total FROM panelists WHERE deleted_at IS NULL`
+        );
+        return result[0].total || 0;
+    },
+
+    // Active, non-deleted panelist emails (optionally exclude already-used emails)
+    getActiveEmails: async (limit, excludeEmails = []) => {
+        if (!limit || limit < 1) return [];
+
+        const excluded = [...new Set(
+            (excludeEmails || [])
+                .map((e) => String(e || '').trim().toLowerCase())
+                .filter(Boolean)
+        )];
+
+        let sql = `
+            SELECT email FROM panelists
+            WHERE deleted_at IS NULL
+              AND status = 'active'
+              AND email IS NOT NULL
+              AND email != ''
+        `;
+        const params = [];
+
+        if (excluded.length) {
+            const placeholders = excluded.map(() => '?').join(', ');
+            sql += ` AND LOWER(email) NOT IN (${placeholders})`;
+            params.push(...excluded);
+        }
+
+        sql += ` ORDER BY id ASC LIMIT ?`;
+        params.push(Number(limit));
+
+        const [rows] = await db.query(sql, params);
+        return rows.map((r) => r.email).filter(Boolean);
+    },
+
+    countActive: async (excludeEmails = []) => {
+        const excluded = [...new Set(
+            (excludeEmails || [])
+                .map((e) => String(e || '').trim().toLowerCase())
+                .filter(Boolean)
+        )];
+
+        let sql = `
+            SELECT COUNT(*) AS total FROM panelists
+            WHERE deleted_at IS NULL
+              AND status = 'active'
+              AND email IS NOT NULL
+              AND email != ''
+        `;
+        const params = [];
+
+        if (excluded.length) {
+            const placeholders = excluded.map(() => '?').join(', ');
+            sql += ` AND LOWER(email) NOT IN (${placeholders})`;
+            params.push(...excluded);
+        }
+
+        const [rows] = await db.query(sql, params);
+        return Number(rows[0]?.total || 0);
     },
 };
 
