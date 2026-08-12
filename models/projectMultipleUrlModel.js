@@ -283,6 +283,23 @@ const ProjectMultipleUrl = {
         return partnerId == null || partnerId === '' ? null : Number(partnerId);
     },
 
+    /** First active multi-link row for partner + project + project_url */
+    getFirstActiveByPartnerProjectUrl: async ({ project_id, project_url_id, partner_id }) => {
+        const [rows] = await db.execute(
+            `SELECT id, partner_id, project_id, project_url_id, Live_Link, VenderURL,
+                    Vender_UserName, UserType, Status
+             FROM project_mutiple_Url
+             WHERE project_id = ?
+               AND project_url_id = ?
+               AND partner_id = ?
+               AND LOWER(Status) = 'active'
+             ORDER BY id ASC
+             LIMIT 1`,
+            [project_id, project_url_id, partner_id]
+        );
+        return rows[0] || null;
+    },
+
     /**
      * On survey start: bind uid → Vender_UserName for the first unbound row
      * (NULL or legacy XXXXXX placeholder) for this project_id + project_url_id

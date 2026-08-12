@@ -32,6 +32,25 @@ const normalizeSurveyStatus = (raw) => {
 const isMultiLinkProject = (type) =>
     String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
+const appendRespondentId = (link, userId) => {
+    const base = String(link);
+    return base.includes('?')
+        ? `${base}&respondent_id=${encodeURIComponent(userId)}`
+        : `${base}?respondent_id=${encodeURIComponent(userId)}`;
+};
+
+/** Prefer token partner when valid (>0); otherwise resolve by project + url. */
+const resolveSupplierMapping = async (partnerid, projectid, project_url_id) => {
+    let mapping = null;
+    if (Number.isFinite(partnerid) && partnerid > 0) {
+        mapping = await SupplierMapping.getByPartnerProjectUrl(partnerid, projectid, project_url_id);
+    }
+    if (!mapping) {
+        mapping = await SupplierMapping.getByProjectAndUrl(projectid, project_url_id);
+    }
+    return mapping;
+};
+
 const decodeToken = (rawToken) => {
     if (!rawToken || typeof rawToken !== 'string') {
         const err = new Error('token is required!');
@@ -313,7 +332,7 @@ export const getSurveyPreScreen = async (req, res) => {
 
 /**
  * GET /api/survey/link?token=...&uid=...
- * MultiLink → project_mutiple_Url Live_Link (by uid / Vender_UserName)
+ * MultiLink → supplier_mapping partner → first active project_mutiple_Url Live_Link
  * SingleLink → supplier_mapping.IsTest: 1 → Test_Link, 0 → Live_Link (from project_url_Info)
  */
 export const getSurveyLink = async (req, res) => {
@@ -321,7 +340,6 @@ export const getSurveyLink = async (req, res) => {
         const token = req.query?.token || req.body?.token;
         const uidRaw = req.query?.uid ?? req.body?.uid;
         const tokenData = decodeToken(token);
-
         const UserId = normalizeUid(uidRaw);
         if (!UserId || PLACEHOLDER_UIDS.has(UserId.toLowerCase()) || PLACEHOLDER_UIDS.has(UserId)) {
             return res.status(400).json({
@@ -360,57 +378,7 @@ export const getSurveyLink = async (req, res) => {
         }
 
         const multiLink = isMultiLinkProject(urlInfo.Project_Link_Type);
-
-        // ── MultiLink: existing flow via project_mutiple_Url ──
-        if (multiLink) {
-            const multiRow = await ProjectMultipleUrl.getSurveyByAccess({
-                project_id: projectid,
-                project_url_id,
-                Vender_UserName: UserId,
-                partner_id: Number.isFinite(partnerid) ? partnerid : null
-            });
-
-            if (!multiRow) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'No survey found for this token and uid!'
-                });
-            }
-            if (String(multiRow.Status || '').toLowerCase() === 'inactive') {
-                return res.status(403).json({ success: false, message: 'Survey link is inactive!' });
-            }
-            if (!multiRow.Live_Link) {
-                return res.status(404).json({ success: false, message: 'Live_Link not configured for this user!' });
-            }
-
-            const liveLink = String(multiRow.Live_Link);
-            const surveyUrl = liveLink.includes('?')
-                ? `${liveLink}&respondent_id=${encodeURIComponent(UserId)}`
-                : `${liveLink}?respondent_id=${encodeURIComponent(UserId)}`;
-
-            return res.status(200).json({
-                success: true,
-                message: 'Survey link fetched successfully!',
-                data: {
-                    project_id: multiRow.project_id,
-                    project_url_id: multiRow.project_url_id,
-                    Vender_UserName: multiRow.Vender_UserName,
-                    Live_Link: multiRow.Live_Link,
-                    survey_url: surveyUrl,
-                    Status: multiRow.Status,
-                    Project_Link_Type: urlInfo.Project_Link_Type || 'MultiLink'
-                }
-            });
-        }
-
-        // ── SingleLink: IsTest on supplier_mapping → Test_Link / Live_Link ──
-        let mapping = null;
-        if (Number.isFinite(partnerid)) {
-            mapping = await SupplierMapping.getByPartnerProjectUrl(partnerid, projectid, project_url_id);
-        }
-        if (!mapping) {
-            mapping = await SupplierMapping.getByProjectAndUrl(projectid, project_url_id);
-        }
+        const mapping = await resolveSupplierMapping(partnerid, projectid, project_url_id);
         if (!mapping) {
             return res.status(400).json({
                 success: false,
@@ -418,6 +386,52 @@ export const getSurveyLink = async (req, res) => {
             });
         }
 
+        // ── MultiLink: partner from mapping → first active multi-url Live_Link ──
+        if (multiLink) {
+            const resolvedPartnerId = Number(mapping.partnerid);
+            if (!Number.isFinite(resolvedPartnerId) || resolvedPartnerId <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Partner to the link not mapped.'
+                });
+            }
+
+            const multiRow = await ProjectMultipleUrl.getFirstActiveByPartnerProjectUrl({
+                project_id: projectid,
+                project_url_id,
+                partner_id: resolvedPartnerId
+            });
+
+            if (!multiRow) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'No active Live_Link found for this partner/project URL!'
+                });
+            }
+            if (!multiRow.Live_Link) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Live_Link not configured for this multi-link row!'
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Survey link fetched successfully!',
+                data: {
+                    project_id: multiRow.project_id,
+                    project_url_id: multiRow.project_url_id,
+                    partner_id: multiRow.partner_id,
+                    Vender_UserName: UserId,
+                    Live_Link: multiRow.Live_Link,
+                    survey_url: appendRespondentId(multiRow.Live_Link, UserId),
+                    Status: multiRow.Status,
+                    Project_Link_Type: urlInfo.Project_Link_Type || 'MultiLink'
+                }
+            });
+        }
+
+        // ── SingleLink: IsTest on supplier_mapping → Test_Link / Live_Link ──
         const isTest = Number(mapping.IsTest) === 1;
         const targetLink = isTest
             ? (urlInfo.Test_Link || null)
@@ -432,10 +446,6 @@ export const getSurveyLink = async (req, res) => {
             });
         }
 
-        const surveyUrl = String(targetLink).includes('?')
-            ? `${targetLink}&respondent_id=${encodeURIComponent(UserId)}`
-            : `${targetLink}?respondent_id=${encodeURIComponent(UserId)}`;
-
         return res.status(200).json({
             success: true,
             message: 'Survey link fetched successfully!',
@@ -446,7 +456,7 @@ export const getSurveyLink = async (req, res) => {
                 IsTest: isTest ? 1 : 0,
                 link_type: isTest ? 'test' : 'live',
                 Live_Link: targetLink,
-                survey_url: surveyUrl,
+                survey_url: appendRespondentId(targetLink, UserId),
                 Status: urlInfo.Status,
                 Project_Link_Type: urlInfo.Project_Link_Type || 'SingleLink'
             }

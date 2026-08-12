@@ -144,7 +144,7 @@ generateUrlCode: async (project_id, conn = db) => {
             Project_Link_Type, action_by
         } = normalized;
 
-        const project_url_code = await ProjectUrl.generateUrlCode(conn);
+        const project_url_code = await ProjectUrl.generateUrlCode(project_id, conn);
 
         const [result] = await conn.execute(
             `INSERT INTO project_url_Info
@@ -192,7 +192,7 @@ generateUrlCode: async (project_id, conn = db) => {
                 action_by || null
             ]
         );
-        return result.insertId;
+        return { id: result.insertId, project_url_code };
     },
 
     getByProjectId: async (project_id) => {

@@ -7,6 +7,7 @@ import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import Partner from '../models/partnerModel.js';
 import {
     enqueueMultiLinkCsvImport,
+    startMultiLinkCsvImport,
     getImportJobStatus,
     getLatestImportJobStatus
 } from '../services/multiLinkCsvImportService.js';
@@ -325,18 +326,26 @@ export const addProjectUrl = async (req, res) => {
             connection
         );
 
-        await connection.commit();
-        started = false;
-
         let jobId = null;
         if (normalizedRows) {
+            // Same transaction as URL insert — if job create fails, URL rolls back too
             jobId = await enqueueMultiLinkCsvImport({
                 project_id: Number(id),
                 project_url_id: urlId,
                 partner_id: partnerMeta.partner_id,
                 user_type: partnerMeta.UserType,
-                rows: normalizedRows
+                rows: normalizedRows,
+                conn: connection,
+                startProcessing: false
             });
+        }
+
+        await connection.commit();
+        started = false;
+
+        // Start background import only after both rows are committed
+        if (jobId) {
+            startMultiLinkCsvImport(jobId);
         }
 
         return res.status(201).json({
