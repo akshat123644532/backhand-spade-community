@@ -144,10 +144,12 @@ export const inviteUsers = async (req, res) => {
                 ? multiVenderUrls[i % multiVenderUrls.length]
                 : singleVenderUrl;
 
+            // ✅ FIX: template placeholders {user_name}, {survey_name}, {survey_url}
+            // ke saath exact key names match honi chahiye, warna render() replace nahi karega
             const rendered = EmailTemplate.render(template, {
-                name: panelist.name,
-                project_name: project.Project_Name,
-                survey_link
+                user_name: panelist.name,
+                survey_name: project.Project_Name,
+                survey_url: survey_link
             });
 
             transporter.sendMail({
