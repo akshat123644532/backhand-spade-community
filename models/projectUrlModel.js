@@ -298,7 +298,7 @@ generateUrlCode: async (project_id, conn = db) => {
     },
   getEligibleByProjectId: async (project_id) => {
         const [rows] = await db.execute(
-            `SELECT id, project_url_code, Status, link_mode, Live_Link, Test_Link
+            `SELECT id, project_url_code, Status, Project_Link_Type, Live_Link, Test_Link
              FROM project_url_Info
              WHERE project_id = ? AND deleted_at IS NULL AND Status = 'Open'
              ORDER BY id DESC`,
