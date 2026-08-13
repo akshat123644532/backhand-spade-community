@@ -18,6 +18,28 @@ const ProjectInvitedUser = {
         return result.insertId || null;
     },
 
+    createMany: async (rows) => {
+        if (!rows?.length) return;
+        const placeholders = rows.map(() => '(?, ?, ?, \'invited\', ?, NOW())').join(', ');
+        const params = rows.flatMap(r => [
+            r.project_id,
+            r.panelist_id,
+            r.email_template_id || null,
+            r.message || null
+        ]);
+        await db.execute(
+            `INSERT INTO project_invited_users (project_id, panelist_id, email_template_id, invite_status, message, invited_at)
+             VALUES ${placeholders}
+             ON DUPLICATE KEY UPDATE
+               email_template_id = VALUES(email_template_id),
+               invite_status = 'invited',
+               message = VALUES(message),
+               invited_at = NOW(),
+               updated_at = NOW()`,
+            params
+        );
+    },
+
     getMapByProject: async (project_id, panelistIds) => {
         if (!panelistIds || !panelistIds.length) return {};
         const placeholders = panelistIds.map(() => '?').join(',');
