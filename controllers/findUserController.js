@@ -88,12 +88,10 @@ export const searchUsers = async (req, res) => {
     }
 };
 
-// 👇 UPDATED: ab survey_link hardcoded nahi hai — Single/Multi Link ke hisab se
-// supplier_mapping ya project_mutiple_Url se sahi VenderURL uthaya jayega
 export const inviteUsers = async (req, res) => {
     try {
         const { id } = req.params; // project_id
-        const { panelist_ids, email_template_id } = req.body;
+        const { panelist_ids, email_template_id, project_url_id: bodyUrlId } = req.body;
 
         if (!panelist_ids || !Array.isArray(panelist_ids) || panelist_ids.length === 0) {
             return res.status(400).json({ success: false, message: "panelist_ids array is required!" });
@@ -110,20 +108,12 @@ export const inviteUsers = async (req, res) => {
 
         const multiLink = isMultiLink(project.Project_Link_Type);
 
-        // Link type ke hisab se VenderURL(s) nikaalo
+        // ── SingleLink: partner already fixed, one link for everyone ──
         let singleVenderUrl = null;
-        let multiVenderUrls = [];
+        // ── MultiLink: need the project_url_id to know which link-group to bind slots in ──
+        let project_url_id = null;
 
-        if (multiLink) {
-            const rows = await ProjectMultipleUrl.getActiveVenderUrlsByProjectId(id);
-            multiVenderUrls = rows.map(r => r.VenderURL);
-            if (!multiVenderUrls.length) {
-                return res.status(400).json({
-                    success: false,
-                    message: "No active Vendor URL found in project_mutiple_Url for this project!"
-                });
-            }
-        } else {
+        if (!multiLink) {
             singleVenderUrl = await SupplierMapping.getVenderUrlByProjectId(id);
             if (!singleVenderUrl) {
                 return res.status(400).json({
@@ -131,21 +121,55 @@ export const inviteUsers = async (req, res) => {
                     message: "No active Vendor URL found in supplier_mapping for this project!"
                 });
             }
+        } else {
+            project_url_id = bodyUrlId || null;
+            if (!project_url_id) {
+                // project_url_id na diya ho to project ka pehla url le lo
+                const urls = await ProjectUrl.getByProjectId(id);
+                if (!urls?.length) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "No project_url_Info found for this project!"
+                    });
+                }
+                project_url_id = urls[0].id;
+            }
         }
 
         let invited = 0;
+        const skipped = [];
+
         for (let i = 0; i < panelist_ids.length; i++) {
             const panelistId = panelist_ids[i];
             const panelist = await Panelist.findById(panelistId);
             if (!panelist) continue;
 
-            // Multi link me har panelist ko round-robin se ek VenderURL milega
-            const survey_link = multiLink
-                ? multiVenderUrls[i % multiVenderUrls.length]
-                : singleVenderUrl;
+            let survey_link;
 
-            // ✅ FIX: template placeholders {user_name}, {survey_name}, {survey_url}
-            // ke saath exact key names match honi chahiye, warna render() replace nahi karega
+            if (multiLink) {
+                // ── Khali slot dhoondo/bind karo panelist ke email se ──
+                const slot = await ProjectMultipleUrl.bindUidOnSurveyStart({
+                    project_id: id,
+                    project_url_id,
+                    partner_id: null, // koi specific partner force nahi kar rahe, jo bhi khali slot mile
+                    uid: panelist.email
+                });
+
+                if (!slot) {
+                    // Koi khali slot nahi bacha — is panelist ko skip karo
+                    skipped.push({ panelist_id: panelistId, reason: 'No available slot (quota full)' });
+                    continue;
+                }
+                survey_link = slot.VenderURL || slot.Live_Link;
+            } else {
+                survey_link = singleVenderUrl;
+            }
+
+            if (!survey_link) {
+                skipped.push({ panelist_id: panelistId, reason: 'No survey link resolved' });
+                continue;
+            }
+
             const rendered = EmailTemplate.render(template, {
                 user_name: panelist.name,
                 survey_name: project.Project_Name,
@@ -167,7 +191,12 @@ export const inviteUsers = async (req, res) => {
             invited++;
         }
 
-        return res.status(200).json({ success: true, message: `${invited} user(s) invited successfully!` });
+        return res.status(200).json({
+            success: true,
+            message: `${invited} user(s) invited successfully!`,
+            skipped_count: skipped.length,
+            skipped
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

@@ -209,11 +209,11 @@ export const addSurveyActivity = async (req, res) => {
             partnerid, projectid, project_url_id, InitalIP
         });
         if (existingByIp && String(existingByIp.UserId || '').toLowerCase() !== String(UserId).toLowerCase()) {
-            return res.status(403).json({
-                success: false,
-                message: 'The uid is not correct.',
-                code: 'UID_NOT_CORRECT'
-            });
+            console.warn(
+                `[SurveyActivity] UID mismatch on same IP — not blocking. ` +
+                `IP=${InitalIP}, incomingUid=${UserId}, existingUid=${existingByIp.UserId}, ` +
+                `partnerid=${partnerid}, projectid=${projectid}, project_url_id=${project_url_id}`
+            );
         }
 
         // Bind uid → Vender_UserName on multi-link row (project + url + partner)
