@@ -108,9 +108,9 @@ export const inviteUsers = async (req, res) => {
 
         const multiLink = isMultiLink(project.Project_Link_Type);
 
-        // ── SingleLink: partner already fixed, one link for everyone ──
+        
         let singleVenderUrl = null;
-        // ── MultiLink: need the project_url_id to know which link-group to bind slots in ──
+        
         let project_url_id = null;
 
         if (!multiLink) {
@@ -124,7 +124,7 @@ export const inviteUsers = async (req, res) => {
         } else {
             project_url_id = bodyUrlId || null;
             if (!project_url_id) {
-                // project_url_id na diya ho to project ka pehla url le lo
+               
                 const urls = await ProjectUrl.getByProjectId(id);
                 if (!urls?.length) {
                     return res.status(400).json({
@@ -147,16 +147,16 @@ export const inviteUsers = async (req, res) => {
             let survey_link;
 
             if (multiLink) {
-                // ── Khali slot dhoondo/bind karo panelist ke email se ──
+                
                 const slot = await ProjectMultipleUrl.bindUidOnSurveyStart({
                     project_id: id,
                     project_url_id,
-                    partner_id: null, // koi specific partner force nahi kar rahe, jo bhi khali slot mile
+                    partner_id: null, 
                     uid: panelist.email
                 });
 
                 if (!slot) {
-                    // Koi khali slot nahi bacha — is panelist ko skip karo
+                   
                     skipped.push({ panelist_id: panelistId, reason: 'No available slot (quota full)' });
                     continue;
                 }
