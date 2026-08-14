@@ -39,7 +39,6 @@ const Project = {
             params.push(status);
         }
 
-        // Min/Max Start Date subquery se laate hain project_url_Info table se, har project ke liye
         const [rows] = await db.query(
             `SELECT p.*,
                     u.min_start_date,
@@ -54,7 +53,7 @@ const Project = {
                  GROUP BY project_id
              ) u ON u.project_id = p.id
              ${where}
-             ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
+             ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
 

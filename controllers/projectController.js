@@ -11,6 +11,10 @@ import {
     getImportJobStatus,
     getLatestImportJobStatus
 } from '../services/multiLinkCsvImportService.js';
+// 👇 NAYA: GeoLocation aur URL Protection ke liye
+import { getCountryFromIp, verifyLinkSignature } from '../utils/linkSecurityHelper.js';
+// 👇 NAYA: Unique IP check ke liye — path apne project ke hisab se confirm/adjust kar lena
+import SurveyData from '../models/surveyDataModel.js';
 
 const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
@@ -115,6 +119,14 @@ const resolvePartnerMeta = async (partner_id) => {
         UserType: 'PARTNER'
     };
 };
+
+// 👇 NAYA: request se respondent ka real IP nikalne ke liye (proxy ke peeche bhi kaam karega)
+const getRequestIp = (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) return String(forwarded).split(',')[0].trim();
+    return req.socket?.remoteAddress || req.ip || null;
+};
+
 export const addProject = async (req, res) => {
     try {
         const {
@@ -712,22 +724,79 @@ export const toggleLinkMode = async (req, res) => {
     }
 };
 
-// Get the currently active link (test or live) — respondent redirect ke liye use hoga
+// 👇 UPDATED: Get the currently active link (test or live) — respondent redirect ke liye use hoga
+// Ab isme GeoLocation + URL Protection + Unique IP teeno checks lagaye gaye hain,
+// jo project_url_Info me jo flags on hain unhi ke hisab se apply honge.
 export const getActiveSurveyLink = async (req, res) => {
     try {
         const { urlId } = req.params;
+        // Signature verify karne ke liye pid/uid/sig query me aane chahiye
+        // (jo email me survey_url ke saath already jode ja chuke honge)
+        const { pid, uid, sig } = req.query;
 
-        const result = await ProjectUrl.getActiveLink(urlId);
-        if (!result) return res.status(404).json({ success: false, message: "URL info not found!" });
+        // Poora urlInfo chahiye (sirf active link nahi) taki flags (GeoLocation/UrlProtection/UniqueIP) mil sakein
+        const urlInfo = await ProjectUrl.getById(urlId);
+        if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });
 
-        if (!result.active_link) {
+        const respondentIp = getRequestIp(req);
+
+        // 1) URL Protection — link tamper/fake na ho
+        if (urlInfo.UrlProtection) {
+            if (!pid || !uid) {
+                return res.status(400).json({
+                    success: false,
+                    message: "pid and uid are required when URL protection is enabled!"
+                });
+            }
+            const valid = verifyLinkSignature(pid, uid, sig);
+            if (!valid) {
+                return res.status(403).json({ success: false, message: "Invalid or tampered survey link!" });
+            }
+        }
+
+        // 2) GeoLocation — sirf allowed country se hi survey khule
+        if (urlInfo.GeoLocation) {
+            const respondentCountry = getCountryFromIp(respondentIp);
+            if (!respondentCountry || respondentCountry !== urlInfo.country) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Survey is not available in your region!"
+                });
+            }
+        }
+
+        // 3) Unique IP — same IP se dobara survey attempt na ho
+        if (urlInfo.UniqueIP) {
+            const existingByIp = await SurveyData.findByInitialIp({
+                projectid: urlInfo.project_id,
+                project_url_id: urlInfo.id,
+                InitalIP: respondentIp
+            });
+            if (existingByIp) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Survey already attempted from this network!"
+                });
+            }
+        }
+
+        const activeLink = urlInfo.link_mode === 'live' ? urlInfo.Live_Link : urlInfo.Test_Link;
+        if (!activeLink) {
             return res.status(400).json({
                 success: false,
-                message: `No ${result.link_mode} link configured for this project URL!`
+                message: `No ${urlInfo.link_mode} link configured for this project URL!`
             });
         }
 
-        return res.status(200).json({ success: true, data: result });
+        return res.status(200).json({
+            success: true,
+            data: {
+                id: urlInfo.id,
+                project_id: urlInfo.project_id,
+                link_mode: urlInfo.link_mode,
+                active_link: activeLink
+            }
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
