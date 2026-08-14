@@ -33,10 +33,16 @@ const isMultiLinkProject = (type) =>
     String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
 const appendRespondentId = (link, userId) => {
-    const base = String(link);
+    const base = String(link || '');
+    const uid = encodeURIComponent(userId);
+
+    if (/[?&]uid=/i.test(base)) {
+        return base.replace(/([?&]uid=)[^&#]*/i, `$1${uid}`);
+    }
+
     return base.includes('?')
-        ? `${base}&respondent_id=${encodeURIComponent(userId)}`
-        : `${base}?respondent_id=${encodeURIComponent(userId)}`;
+        ? `${base}&uid=${uid}`
+        : `${base}?uid=${uid}`;
 };
 
 /** Prefer token partner when valid (>0); otherwise resolve by project + url. */
