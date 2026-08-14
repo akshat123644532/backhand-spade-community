@@ -9,7 +9,7 @@ import SupplierMapping from '../models/supplierMappingModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 
 const isMultiLink = (type) =>
-    String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
+    String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
 export const getFilterQuestions = async (req, res) => {
     try {
@@ -100,46 +100,47 @@ export const inviteUsers = async (req, res) => {
             return res.status(400).json({ success: false, message: "email_template_id is required!" });
         }
 
-        const [project, template] = await Promise.all([
+        const [project, template, urls, panelistRows] = await Promise.all([
             Project.getById(id),
-            EmailTemplate.getById(email_template_id)
+            EmailTemplate.getById(email_template_id),
+            ProjectUrl.getByProjectId(id),
+            Panelist.findByIds(panelist_ids)
         ]);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
         if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
 
-        const multiLink = isMultiLink(project.Project_Link_Type);
+        let project_url_id = bodyUrlId || null;
+        let selectedUrl = null;
 
-        const urlLookup = multiLink
-            ? (bodyUrlId ? Promise.resolve(null) : ProjectUrl.getByProjectId(id))
-            : SupplierMapping.getVenderUrlByProjectId(id);
+        if (project_url_id) {
+            selectedUrl = urls.find(u => Number(u.id) === Number(project_url_id)) || null;
+            if (!selectedUrl) {
+                return res.status(400).json({
+                    success: false,
+                    message: "No project_url_Info found for this project!"
+                });
+            }
+        } else if (urls?.length) {
+            selectedUrl = urls[0];
+            project_url_id = selectedUrl.id;
+        }
 
-        const [urlResult, panelistRows] = await Promise.all([
-            urlLookup,
-            Panelist.findByIds(panelist_ids)
-        ]);
+        const multiLink = isMultiLink(selectedUrl?.Project_Link_Type);
 
         let singleVenderUrl = null;
-        let project_url_id = null;
-
         if (!multiLink) {
-            singleVenderUrl = urlResult;
+            singleVenderUrl = await SupplierMapping.getVenderUrlByProjectId(id);
             if (!singleVenderUrl) {
                 return res.status(400).json({
                     success: false,
                     message: "No active Vendor URL found in supplier_mapping for this project!"
                 });
             }
-        } else {
-            project_url_id = bodyUrlId || null;
-            if (!project_url_id) {
-                if (!urlResult?.length) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "No project_url_Info found for this project!"
-                    });
-                }
-                project_url_id = urlResult[0].id;
-            }
+        } else if (!project_url_id) {
+            return res.status(400).json({
+                success: false,
+                message: "No project_url_Info found for this project!"
+            });
         }
 
         const panelistById = new Map(panelistRows.map(p => [Number(p.id), p]));

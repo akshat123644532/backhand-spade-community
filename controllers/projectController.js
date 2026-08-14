@@ -119,7 +119,7 @@ export const addProject = async (req, res) => {
     try {
         const {
             Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description,
-            Project_Link_Type, Notes, Status, startDate, endDate
+            Notes, Status
         } = req.body;
 
         if (!Project_Name) {
@@ -128,7 +128,7 @@ export const addProject = async (req, res) => {
 
         const { id, Project_code } = await Project.create({
             Project_Name, Clients, Project_Manager, Sales_Manager, RFQ,
-            Project_Description, Project_Link_Type, Notes, Status, startDate, endDate,
+            Project_Description, Notes, Status,
             action_by: req.user?.id || null
         });
 
@@ -176,7 +176,7 @@ export const getProjectById = async (req, res) => {
 export const updateProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, startDate, endDate } = req.body;
+        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Notes, Status } = req.body;
 
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
@@ -188,11 +188,8 @@ export const updateProject = async (req, res) => {
         if (Sales_Manager) updateData.Sales_Manager = Sales_Manager;
         if (RFQ) updateData.RFQ = RFQ;
         if (Project_Description) updateData.Project_Description = Project_Description;
-        if (Project_Link_Type) updateData.Project_Link_Type = Project_Link_Type;
         if (Notes) updateData.Notes = Notes;
         if (Status) updateData.Status = Status;
-        if (startDate !== undefined) updateData.startDate = startDate;
-        if (endDate !== undefined) updateData.endDate = endDate;
 
         if (Object.keys(updateData).length > 0) await Project.update(id, updateData);
 
