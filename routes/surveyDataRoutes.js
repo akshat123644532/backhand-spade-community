@@ -3,7 +3,11 @@ import {
     addSurveyActivity,
     getSurveyPreScreen,
     getSurveyLink,
-    updateSurveyStatus
+    completeSurvey,
+    terminateSurvey,
+    quotaFullSurvey,
+    qualityTermSurvey,
+    surveyClosedSurvey
 } from '../controllers/surveyDataController.js';
 
 const router = express.Router();
@@ -13,7 +17,17 @@ router.post('/activity', addSurveyActivity);
 router.post('/prescreen', getSurveyPreScreen);
 router.get('/prescreen', getSurveyPreScreen);
 router.get('/link', getSurveyLink);
-router.post('/status', updateSurveyStatus);
-router.get('/status', updateSurveyStatus);
+
+router.get('/complete', completeSurvey);
+router.get('/terminate', terminateSurvey);
+router.get('/quota', quotaFullSurvey);
+router.get('/quality', qualityTermSurvey);
+router.get('/closed', surveyClosedSurvey);
+
+router.post('/complete', completeSurvey);
+router.post('/terminate', terminateSurvey);
+router.post('/quota', quotaFullSurvey);
+router.post('/quality', qualityTermSurvey);
+router.post('/closed', surveyClosedSurvey);
 
 export default router;

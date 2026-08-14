@@ -110,7 +110,7 @@ const SurveyData = {
 
     /**
      * Finalize survey activity: set Status, FinalIP, EndDate.
-     * Matches partner + project + url + UserId (latest row).
+     * Only updates when current Status is Initiated or active.
      */
     finalizeStatus: async ({ partnerid, projectid, project_url_id, UserId, Status, FinalIP }) => {
         const [existing] = await db.execute(
@@ -127,14 +127,21 @@ const SurveyData = {
 
         if (!existing[0]) return null;
 
-        await db.execute(
+        const [result] = await db.execute(
             `UPDATE \`${TABLE}\`
              SET Status = ?, FinalIP = ?, EndDate = NOW()
-             WHERE id = ?`,
+             WHERE id = ?
+               AND LOWER(Status) IN ('initiated', 'active')`,
             [Status, FinalIP, existing[0].id]
         );
 
-        return SurveyData.getById(existing[0].id);
+        if (!result.affectedRows) {
+            const current = await SurveyData.getById(existing[0].id);
+            return { alreadyFilled: true, currentStatus: current?.Status || existing[0].Status };
+        }
+
+        const row = await SurveyData.getById(existing[0].id);
+        return { alreadyFilled: false, row };
     },
 
     getById: async (id) => {
