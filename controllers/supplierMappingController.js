@@ -251,8 +251,8 @@ export const handleSupplierRedirect = async (req, res) => {
         }
 
         const finalUrl = targetLink.includes('?')
-            ? `${targetLink}&respondent_id=${uid || ''}`
-            : `${targetLink}?respondent_id=${uid || ''}`;
+            ? `${targetLink}&uid=${encodeURIComponent(uid || '')}`
+            : `${targetLink}?uid=${encodeURIComponent(uid || '')}`;
 
         return res.redirect(finalUrl);
     } catch (error) {
