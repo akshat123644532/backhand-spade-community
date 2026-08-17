@@ -715,23 +715,16 @@ export const toggleLinkMode = async (req, res) => {
     }
 };
 
-// 👇 UPDATED: Get the currently active link (test or live) — respondent redirect ke liye use hoga
-// Ab isme GeoLocation + URL Protection + Unique IP teeno checks lagaye gaye hain,
-// jo project_url_Info me jo flags on hain unhi ke hisab se apply honge.
 export const getActiveSurveyLink = async (req, res) => {
     try {
         const { urlId } = req.params;
-        // Signature verify karne ke liye pid/uid/sig query me aane chahiye
-        // (jo email me survey_url ke saath already jode ja chuke honge)
         const { pid, uid, sig } = req.query;
 
-        // Poora urlInfo chahiye (sirf active link nahi) taki flags (GeoLocation/UrlProtection/UniqueIP) mil sakein
         const urlInfo = await ProjectUrl.getById(urlId);
         if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });
 
         const respondentIp = getRequestIp(req);
 
-        // 1) URL Protection — link tamper/fake na ho
         if (urlInfo.UrlProtection) {
             if (!pid || !uid) {
                 return res.status(400).json({
@@ -745,7 +738,6 @@ export const getActiveSurveyLink = async (req, res) => {
             }
         }
 
-        // 2) GeoLocation — sirf allowed country se hi survey khule
         if (urlInfo.GeoLocation) {
             const respondentCountry = getCountryFromIp(respondentIp);
             if (!respondentCountry || respondentCountry !== urlInfo.country) {
@@ -756,18 +748,34 @@ export const getActiveSurveyLink = async (req, res) => {
             }
         }
 
-        // 3) Unique IP — same IP se dobara survey attempt na ho
         if (urlInfo.UniqueIP) {
+            let resolvedPartnerId = null;
+            if (uid) {
+                const supplierMapping = await SupplierMapping.getByProjectAndUrl(
+                    urlInfo.project_id,
+                    urlInfo.id
+                );
+                resolvedPartnerId = supplierMapping?.partnerid != null
+                    ? Number(supplierMapping.partnerid)
+                    : null;
+            }
+
             const existingByIp = await SurveyData.findByInitialIp({
+                partnerid: resolvedPartnerId,
                 projectid: urlInfo.project_id,
                 project_url_id: urlInfo.id,
                 InitalIP: respondentIp
             });
+
             if (existingByIp) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Survey already attempted from this network!"
-                });
+                const sameUser = uid && String(existingByIp.UserId || '').toLowerCase() === String(uid).toLowerCase();
+                if (!sameUser) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Survey already attempted from this network!",
+                        code: 'UID_NOT_CORRECT'
+                    });
+                }
             }
         }
 
