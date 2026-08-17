@@ -270,6 +270,7 @@ const ProjectMultipleUrl = {
              WHERE project_id = ?
                AND project_url_id = ?
                AND LOWER(Vender_UserName) = LOWER(?)
+               AND LOWER(Status) IN ('initiated', 'active')
                ${partnerSql}`,
             params
         );
