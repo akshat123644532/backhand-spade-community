@@ -31,14 +31,20 @@ const SupplierMapping = {
             let dynamic_url = null;
             let VenderURL = null;
 
+            if (assignCount < 1) {
+                const err = new Error('quota is required and must be a positive number!');
+                err.statusCode = 400;
+                throw err;
+            }
+
+            await SupplierMapping.assertQuotaWithinSampleSize({
+                projectUrlId,
+                quota: assignCount,
+                conn: connection
+            });
+
             if (isMultiLink) {
                 // Multi Link: assign partner_id to `quota` unassigned rows for this project_url_id
-                if (assignCount < 1) {
-                    const err = new Error('quota is required and must be a positive number for Multi Link projects!');
-                    err.statusCode = 400;
-                    throw err;
-                }
-
                 const stats = await ProjectMultipleUrl.getStatsByProjectId(projectid, projectUrlId, connection);
                 if (assignCount > stats.remainingMultiLinkCount) {
                     const err = new Error(
@@ -235,6 +241,53 @@ const SupplierMapping = {
         return Number(rows[0]?.samplesAdded || 0);
     },
 
+    getQuotaSumByProjectUrlId: async (projectUrlId, { excludeId = null, conn = db } = {}) => {
+        let sql = `SELECT COALESCE(SUM(quota), 0) AS quotasAdded
+                   FROM supplier_mapping
+                   WHERE projectUrlId = ? AND deleted_at IS NULL`;
+        const params = [projectUrlId];
+        if (excludeId != null && excludeId !== '') {
+            sql += ` AND id != ?`;
+            params.push(excludeId);
+        }
+        const [rows] = await conn.execute(sql, params);
+        return Number(rows[0]?.quotasAdded || 0);
+    },
+
+    getQuotaStatsByProjectUrlId: async (projectUrlId, { excludeId = null, conn = db } = {}) => {
+        const [urlRows] = await conn.execute(
+            `SELECT SampleSize FROM project_url_Info WHERE id = ? AND deleted_at IS NULL`,
+            [projectUrlId]
+        );
+        const sampleSize = Number(urlRows[0]?.SampleSize || 0);
+        const quotasAdded = await SupplierMapping.getQuotaSumByProjectUrlId(projectUrlId, { excludeId, conn });
+        const remainingQuota = Math.max(sampleSize - quotasAdded, 0);
+        return { sampleSize, quotasAdded, remainingQuota };
+    },
+
+    assertQuotaWithinSampleSize: async ({ projectUrlId, quota, excludeMappingId = null, conn = db }) => {
+        const { sampleSize, quotasAdded, remainingQuota } =
+            await SupplierMapping.getQuotaStatsByProjectUrlId(projectUrlId, {
+                excludeId: excludeMappingId,
+                conn
+            });
+        if (quota > sampleSize) {
+            const err = new Error(
+                `Quota cannot be more than the sample size which is ${sampleSize}.`
+            );
+            err.statusCode = 400;
+            throw err;
+        }
+        if (quota > remainingQuota) {
+            const err = new Error(
+                `Quota cannot be more than the remaining sample size (${remainingQuota}). Sample size is ${sampleSize} and quotas already added are ${quotasAdded}.`
+            );
+            err.statusCode = 400;
+            throw err;
+        }
+        return { sampleSize, quotasAdded, remainingQuota };
+    },
+
     getByPartnerId: async (partnerid) => {
         const [rows] = await db.execute(
             `SELECT * FROM supplier_mapping WHERE partnerid = ? AND deleted_at IS NULL`, [partnerid]
@@ -314,20 +367,32 @@ const SupplierMapping = {
                 && nextQuota !== (parseInt(mapping.quota, 10) || 0);
 
             let assignedMultiUrlIds = [];
+            const quotaInPayload = Object.prototype.hasOwnProperty.call(safeData, 'quota');
+            const quotaRelevant = partnerChanged || projectChanged || projectUrlChanged || quotaChanged || quotaInPayload;
 
-            if (isMultiLink && (partnerChanged || projectChanged || projectUrlChanged || quotaChanged)) {
+            if (quotaInPayload || projectChanged || projectUrlChanged || quotaChanged) {
+                if (nextQuota < 1) {
+                    const err = new Error('quota must be a positive number!');
+                    err.statusCode = 400;
+                    throw err;
+                }
+
+                await SupplierMapping.assertQuotaWithinSampleSize({
+                    projectUrlId: nextProjectUrlId,
+                    quota: nextQuota,
+                    excludeMappingId: id,
+                    conn: connection
+                });
+                safeData.quota = nextQuota;
+            }
+
+            if (isMultiLink && quotaRelevant) {
                 // Free rows currently held by the old partner on the old project URL
                 const currentlyAssigned = await ProjectMultipleUrl.getAssignedIdsByPartner(
                     mapping.projectid, mapping.partnerid, connection, mapping.projectUrlId
                 );
                 if (currentlyAssigned.length) {
                     await ProjectMultipleUrl.unassignPartnerFromRows(currentlyAssigned, connection);
-                }
-
-                if (nextQuota < 1) {
-                    const err = new Error('quota must be a positive number for Multi Link projects!');
-                    err.statusCode = 400;
-                    throw err;
                 }
 
                 const stats = await ProjectMultipleUrl.getStatsByProjectId(

@@ -15,6 +15,7 @@ import {
 import { getCountryFromIp, verifyLinkSignature } from '../utils/linkSecurityHelper.js';
 // 👇 NAYA: Unique IP check ke liye — path apne project ke hisab se confirm/adjust kar lena
 import SurveyData from '../models/surveyDataModel.js';
+import SupplierMapping from '../models/supplierMappingModel.js';
 
 const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
@@ -669,17 +670,26 @@ export const getMultiLinkStats = async (req, res) => {
             return res.status(404).json({ success: false, message: "Project URL not found!" });
         }
 
-        // Single link: only allow partner add flag
+        const { sampleSize, quotasAdded, remainingQuota } =
+            await SupplierMapping.getQuotaStatsByProjectUrlId(project_url_id);
+
         if (!isMultiLink(urlInfo.Project_Link_Type)) {
             return res.status(200).json({
                 success: true,
-                data: { addPartner: true, Project_Link_Type: urlInfo.Project_Link_Type || 'SingleLink' }
+                data: {
+                    project_id: Number(id),
+                    project_url_id: Number(project_url_id),
+                    Project_Link_Type: urlInfo.Project_Link_Type || 'SingleLink',
+                    sampleSize,
+                    quotasAdded,
+                    remainingQuota,
+                    addPartner: remainingQuota > 0
+                }
             });
         }
 
         const { totalMultiLinkCount, remainingMultiLinkCount, completedSurveyCount } =
             await ProjectMultipleUrl.getStatsByProjectId(id, project_url_id);
-        const addPartner = remainingMultiLinkCount > 0;
 
         return res.status(200).json({
             success: true,
@@ -687,10 +697,13 @@ export const getMultiLinkStats = async (req, res) => {
                 project_id: Number(id),
                 project_url_id: Number(project_url_id),
                 Project_Link_Type: urlInfo.Project_Link_Type || 'MultiLink',
+                sampleSize,
+                quotasAdded,
+                remainingQuota,
                 totalMultiLinkCount,
                 remainingMultiLinkCount,
                 completedSurveyCount,
-                addPartner
+                addPartner: remainingQuota > 0 && remainingMultiLinkCount > 0
             }
         });
     } catch (error) {

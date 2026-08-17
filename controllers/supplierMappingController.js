@@ -28,14 +28,20 @@ export const addSupplierMapping = async (req, res) => {
         const isMultiLink =
             String(projectUrl.Project_Link_Type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
-        if (isMultiLink) {
-            const quotaNum = parseInt(quota, 10);
-            if (quota === undefined || quota === null || quota === '' || isNaN(quotaNum) || quotaNum < 1) {
-                return res.status(400).json({
-                    success: false,
-                    message: "quota is required and must be a positive number for Multi Link projects!"
-                });
-            }
+        const quotaNum = parseInt(quota, 10);
+        if (quota === undefined || quota === null || quota === '' || isNaN(quotaNum) || quotaNum < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "quota is required and must be a positive number!"
+            });
+        }
+
+        const sampleSize = Number(projectUrl.SampleSize || 0);
+        if (quotaNum > sampleSize) {
+            return res.status(400).json({
+                success: false,
+                message: `Quota cannot be more than the sample size which is ${sampleSize}.`
+            });
         }
 
         const result = await SupplierMapping.create({
@@ -44,7 +50,7 @@ export const addSupplierMapping = async (req, res) => {
             partner_name: partner.name,
             projectid,
             projectUrlId,
-            quota, CPI,
+            quota: quotaNum, CPI,
             CompleteURL, TerminateURL, OverQuotaURL, QualityTermURL, SurveyCloseURL,
             status, IsTest,
             action_by: req.user?.id || null,
@@ -137,23 +143,47 @@ export const updateSupplierMapping = async (req, res) => {
             String(projectUrl.Project_Link_Type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
         let partner_name = null;
-        const partnerOrQuotaChanging =
-            updateData.partnerid !== undefined ||
-            updateData.quota !== undefined ||
-            updateData.projectid !== undefined;
+        const rawQuota = updateData.quota ?? updateData.Quota;
+        if (Object.prototype.hasOwnProperty.call(updateData, 'Quota')) delete updateData.Quota;
 
-        if (isMultiLink && partnerOrQuotaChanging) {
-            const nextQuota = updateData.quota !== undefined
-                ? parseInt(updateData.quota, 10)
+        const quotaRelevant =
+            rawQuota !== undefined ||
+            updateData.projectid !== undefined ||
+            updateData.projectUrlId !== undefined ||
+            (isMultiLink && updateData.partnerid !== undefined);
+
+        if (quotaRelevant) {
+            const nextQuota = rawQuota !== undefined && rawQuota !== null && rawQuota !== ''
+                ? parseInt(rawQuota, 10)
                 : parseInt(mapping.quota, 10);
             if (isNaN(nextQuota) || nextQuota < 1) {
                 return res.status(400).json({
                     success: false,
-                    message: "quota is required and must be a positive number for Multi Link projects!"
+                    message: "quota is required and must be a positive number!"
                 });
             }
-            updateData.quota = nextQuota;
 
+            const sampleSize = Number(projectUrl.SampleSize || 0);
+            if (nextQuota > sampleSize) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Quota cannot be more than the sample size which is ${sampleSize}.`
+                });
+            }
+
+            const quotasAdded = await SupplierMapping.getQuotaSumByProjectUrlId(nextProjectUrlId, { excludeId: id });
+            const remainingQuota = Math.max(sampleSize - quotasAdded, 0);
+            if (nextQuota > remainingQuota) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Quota cannot be more than the remaining sample size (${remainingQuota}). Sample size is ${sampleSize} and quotas already added are ${quotasAdded}.`
+                });
+            }
+
+            updateData.quota = nextQuota;
+        }
+
+        if (updateData.partnerid !== undefined) {
             const partner = await Partner.getById(nextPartnerId);
             if (!partner) return res.status(404).json({ success: false, message: "Partner not found!" });
             partner_name = partner.name;
