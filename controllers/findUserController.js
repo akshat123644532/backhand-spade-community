@@ -90,8 +90,8 @@ export const searchUsers = async (req, res) => {
 
 export const inviteUsers = async (req, res) => {
     try {
-        const { id } = req.params; // project_id
-        const { panelist_ids, email_template_id, project_url_id: bodyUrlId } = req.body;
+        const { id } = req.params; 
+        const { panelist_ids, email_template_id, project_url_id: bodyUrlId, partner_id } = req.body;
 
         if (!panelist_ids || !Array.isArray(panelist_ids) || panelist_ids.length === 0) {
             return res.status(400).json({ success: false, message: "panelist_ids array is required!" });
@@ -129,6 +129,7 @@ export const inviteUsers = async (req, res) => {
 
         let singleVenderUrl = null;
         if (!multiLink) {
+            // Single link — direct shared vendor URL, no per-user assignment needed
             singleVenderUrl = await SupplierMapping.getVenderUrlByProjectId(id);
             if (!singleVenderUrl) {
                 return res.status(400).json({
@@ -154,19 +155,27 @@ export const inviteUsers = async (req, res) => {
             let survey_link;
 
             if (multiLink) {
-                const slot = await ProjectMultipleUrl.bindUidOnSurveyStart({
-                    project_id: id,
-                    project_url_id,
-                    partner_id: null,
-                    uid: panelist.email
-                });
-
+                // Multi-link: only hand out a link if a free (unassigned) slot exists
+                const slot = await ProjectMultipleUrl.getUnassignedSlot(id, project_url_id);
                 if (!slot) {
-                    skipped.push({ panelist_id: panelistId, reason: 'No available slot (quota full)' });
+                    skipped.push({ panelist_id: panelistId, reason: 'No survey available — all slots are already assigned' });
                     continue;
                 }
+
+                const assigned = await ProjectMultipleUrl.assignSlotToPartner(
+                    slot.id,
+                    partner_id || null,
+                    panelist.email
+                );
+                if (!assigned) {
+                    // Race condition — someone else grabbed this slot first
+                    skipped.push({ panelist_id: panelistId, reason: 'Slot was just taken, please retry' });
+                    continue;
+                }
+
                 survey_link = slot.VenderURL || slot.Live_Link;
             } else {
+                // Single link — direct shared vendor URL
                 survey_link = singleVenderUrl;
             }
 
@@ -207,7 +216,6 @@ export const inviteUsers = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
-
 export const listInvitedUsers = async (req, res) => {
     try {
         const { id } = req.params;
