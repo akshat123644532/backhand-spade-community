@@ -39,6 +39,21 @@ export const appendUidToLink = (link, userId) => {
         : `${base}?uid=${uid}`;
 };
 
+export const appendPidToLink = (link, pid) => {
+    const base = String(link || '');
+    const pidEncoded = encodeURIComponent(pid);
+
+    if (pid == null || pid === '') return base;
+
+    if (/[?&]pid=/i.test(base)) {
+        return base.replace(/([?&]pid=)[^&#]*/i, `$1${pidEncoded}`);
+    }
+
+    return base.includes('?')
+        ? `${base}&pid=${pidEncoded}`
+        : `${base}?pid=${pidEncoded}`;
+};
+
 export const normalizeUid = (uid) => {
     if (uid == null) return '';
     let value = String(uid).trim();

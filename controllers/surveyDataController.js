@@ -8,6 +8,7 @@ import {
     PLACEHOLDER_UIDS,
     isMultiLinkProject,
     appendUidToLink,
+    appendPidToLink,
     decodeToken,
     normalizeUid,
     getClientIp
@@ -302,6 +303,9 @@ export const getSurveyLink = async (req, res) => {
             });
         }
 
+        const pid =
+            urlInfo.project_url_code ?? urlInfo.projectUrlCode ?? urlInfo.pid ?? null;
+
         const multiLink = isMultiLinkProject(urlInfo.Project_Link_Type);
         const mapping = await resolveSupplierMapping(partnerid, projectid, project_url_id);
         if (!mapping) {
@@ -349,7 +353,10 @@ export const getSurveyLink = async (req, res) => {
                     partner_id: multiRow.partner_id,
                     Vender_UserName: UserId,
                     Live_Link: multiRow.Live_Link,
-                    survey_url: appendUidToLink(multiRow.Live_Link, UserId),
+                    survey_url: appendPidToLink(
+                        appendUidToLink(multiRow.Live_Link, UserId),
+                        pid
+                    ),
                     Status: multiRow.Status,
                     Project_Link_Type: urlInfo.Project_Link_Type || 'MultiLink'
                 }
@@ -381,7 +388,10 @@ export const getSurveyLink = async (req, res) => {
                 IsTest: isTest ? 1 : 0,
                 link_type: isTest ? 'test' : 'live',
                 Live_Link: targetLink,
-                survey_url: appendUidToLink(targetLink, UserId),
+                survey_url: appendPidToLink(
+                    appendUidToLink(targetLink, UserId),
+                    pid
+                ),
                 Status: urlInfo.Status,
                 Project_Link_Type: urlInfo.Project_Link_Type || 'SingleLink'
             }
