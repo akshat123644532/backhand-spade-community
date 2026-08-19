@@ -12,6 +12,16 @@ export const getCountryFromIp = (ip) => {
     return countries.getName(geo.country, 'en') || geo.country;
 };
 
+/** Single geoip lookup -> { country, city }. Used by the project report (avoids a second lookup). */
+export const getLocationFromIp = (ip) => {
+    if (!ip) return { country: null, city: null };
+    const geo = geoip.lookup(ip);
+    if (!geo) return { country: null, city: null };
+    const country = geo.country ? (countries.getName(geo.country, 'en') || geo.country) : null;
+    const city = geo.city || null;
+    return { country, city };
+};
+
 const SIGNING_SECRET = process.env.LINK_SIGNING_SECRET || 'change-this-secret-in-env';
 
 export const generateLinkSignature = (pid, uid) => {
@@ -37,6 +47,7 @@ const ENCRYPTION_KEY = crypto
     .update(String(process.env.LINK_ENCRYPTION_KEY || 'change-this-secret-in-env'))
     .digest();
 
+/** Plain uid -> encrypted, URL-safe token. Used when building the survey link for an email. */
 export const encryptUid = (uid) => {
     if (uid === null || uid === undefined || uid === '') return null;
     const iv = crypto.randomBytes(16);
@@ -45,6 +56,7 @@ export const encryptUid = (uid) => {
     return Buffer.concat([iv, encrypted]).toString('base64url');
 };
 
+/** Encrypted token -> plain uid. Used when a respondent opens the survey link. */
 export const decryptUid = (token) => {
     if (!token) return null;
     try {
