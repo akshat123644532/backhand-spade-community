@@ -1,6 +1,12 @@
 import { db } from '../config/db.js';
 import { buildUpdateQuery } from '../utils/sqlHelper.js';
 
+const omitRemovedProjectColumns = (row) => {
+    if (!row) return row;
+    const { Project_Link_Type, startDate, endDate, ...rest } = row;
+    return rest;
+};
+
 const Project = {
 
     generateProjectCode: async (conn = db) => {
@@ -12,13 +18,13 @@ const Project = {
     },
 
     create: async (data, conn = db) => {
-        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, startDate, endDate, action_by } = data;
+        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Notes, Status, action_by } = data;
         const Project_code = await Project.generateProjectCode(conn);
 
         const [result] = await conn.execute(
-            `INSERT INTO project_Info (Project_Name, Project_code, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, startDate, endDate, action_by, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-            [Project_Name, Project_code, Clients || null, Project_Manager || null, Sales_Manager || null, RFQ || null, Project_Description || null, Project_Link_Type || null, Notes || null, Status || 'active', startDate || null, endDate || null, action_by || null]
+            `INSERT INTO project_Info (Project_Name, Project_code, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Notes, Status, action_by, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [Project_Name, Project_code, Clients || null, Project_Manager || null, Sales_Manager || null, RFQ || null, Project_Description || null, Notes || null, Status || 'active', action_by || null]
         );
         return { id: result.insertId, Project_code };
     },
@@ -62,7 +68,7 @@ const Project = {
         );
 
         return {
-            data: rows,
+            data: rows.map(omitRemovedProjectColumns),
             total: countResult[0].total || 0,
             page: p,
             limit: l,
@@ -88,7 +94,7 @@ const Project = {
              WHERE p.id = ? AND (p.isdeleted = 0 OR p.isdeleted IS NULL)`,
             [id]
         );
-        return rows[0] || null;
+        return omitRemovedProjectColumns(rows[0] || null);
     },
     
 

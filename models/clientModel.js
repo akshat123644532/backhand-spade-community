@@ -1,9 +1,7 @@
 import { db } from '../config/db.js';
 
-// DB name .env se aayega, portability ke liye (dev/staging/prod alag ho sakta hai)
 const DB_NAME = process.env.DB_NAME || 'PaperWardb';
 
-// Shared safe-update helper — empty update payload pe invalid SQL banne se rokta hai
 const buildUpdateQuery = (table, updateData, whereClause, whereParams = []) => {
     const fields = [];
     const values = [];
@@ -69,7 +67,7 @@ const Client = {
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.api_base_url, c.api_secret_key, c.api_body, c.status, c.created_at, c.admin_id, a.name AS admin_name
+            `SELECT c.id, c.name, c.email, c.country, c.contact_no, c.website_url, c.api_base_url, c.api_secret_key, c.api_header_key, c.status, c.created_at, c.admin_id, a.name AS admin_name
              FROM ${DB_NAME}.clients c
              LEFT JOIN ${DB_NAME}.admins a ON c.admin_id = a.id
              WHERE c.id = ?`,
@@ -87,11 +85,11 @@ const Client = {
     },
 
     update: async (id, updateData) => {
-        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status } = updateData;
+        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_header_key, status } = updateData;
 
         const { sql, values } = buildUpdateQuery(
             `${DB_NAME}.clients`,
-            { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status },
+            { name, country, contact_no, website_url, api_base_url, api_secret_key, api_header_key, status },
             `id = ?`,
             [id]
         );

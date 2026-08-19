@@ -28,10 +28,10 @@ const ensureTable = async () => {
 };
 
 const MultiLinkCsvJob = {
-    create: async ({ project_id, project_url_id, partner_id, user_type, rows }) => {
+    create: async ({ project_id, project_url_id, partner_id, user_type, rows }, conn = db) => {
         await ensureTable();
         const id = crypto.randomUUID();
-        await db.execute(
+        await conn.execute(
             `INSERT INTO multi_link_csv_jobs
              (id, project_id, project_url_id, partner_id, user_type, status, total_rows, processed_rows, payload)
              VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?)`,
