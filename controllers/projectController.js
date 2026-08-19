@@ -3,6 +3,9 @@ import { parse } from 'csv-parse/sync';
 import { db } from '../config/db.js';
 import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
+
+
+
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import Partner from '../models/partnerModel.js';
 import {
@@ -743,7 +746,8 @@ export const toggleLinkMode = async (req, res) => {
 export const getActiveSurveyLink = async (req, res) => {
     try {
         const { urlId } = req.params;
-        const { pid, uid, sig } = req.query;
+        const { pid, uid: encryptedUid, sig } = req.query;
+        const uid = decryptUid(encryptedUid);
 
         const urlInfo = await ProjectUrl.getById(urlId);
         if (!urlInfo) return res.status(404).json({ success: false, message: "URL info not found!" });

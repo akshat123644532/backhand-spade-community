@@ -3,24 +3,55 @@ import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
-import { finalizeSurveyOutcome } from '../services/surveyStatusService.js';
-import {
-    PLACEHOLDER_UIDS,
-    isMultiLinkProject,
-    appendUidToLink,
-    appendPidToLink,
-    decodeToken,
-    normalizeUid,
-    getClientIp
-} from '../utils/surveyHelper.js';
+import {decryptUid } from '../utils/linkSecurityHelper.js';
+const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined', 'xxxxxx']);
 
-const sendError = (res, error) => {
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-        success: false,
-        message: statusCode === 500 ? 'Server error!' : error.message,
-        error: error.message
-    });
+const SURVEY_STATUS_ALIASES = {
+    completed: 'completed',
+    complete: 'completed',
+    terminate: 'terminate',
+    terminated: 'terminate',
+    'quota full': 'Quota full',
+    quotafull: 'Quota full',
+    overquota: 'Quota full',
+    'over quota': 'Quota full',
+    qualityterm: 'qualityTerm',
+    'quality term': 'qualityTerm',
+    surveyclosed: 'surveyClosed',
+    'survey closed': 'surveyClosed',
+    surveyclose: 'surveyClosed'
+};
+
+const normalizeSurveyStatus = (raw) => {
+    const key = String(raw || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+    return SURVEY_STATUS_ALIASES[key] || null;
+};
+
+const isMultiLinkProject = (type) =>
+    String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
+
+const decodeToken = (rawToken) => {
+    if (!rawToken || typeof rawToken !== 'string') {
+        const err = new Error('token is required!');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    try {
+        const tokenData = decodeSurveyToken(rawToken.trim());
+        // partnerid can be null (e.g. multi-link / vendor flows)
+        if (tokenData?.projectid == null || tokenData?.projectUrlId == null) {
+            const err = new Error('Invalid token payload!');
+            err.statusCode = 400;
+            throw err;
+        }
+        return tokenData;
+    } catch (e) {
+        if (e.statusCode) throw e;
+        const err = new Error('Invalid or corrupted token!');
+        err.statusCode = 400;
+        throw err;
+    }
 };
 
 /** Prefer token partner when valid (>0); otherwise resolve by project + url. */
@@ -46,7 +77,8 @@ const resolveSupplierMapping = async (partnerid, projectid, project_url_id) => {
 export const addSurveyActivity = async (req, res) => {
     try {
         const token = req.body?.token || req.query?.token;
-        const uidRaw = req.body?.uid ?? req.query?.uid;
+   const encryUID = req.body?.uid ?? req.query?.uid;
+        const uidRaw = decryptUid(encryUID) || '';
         const tokenData = decodeToken(token);
 
         const UserId = normalizeUid(uidRaw);
@@ -152,7 +184,7 @@ export const addSurveyActivity = async (req, res) => {
             );
         }
 
-        // Bind uid → Vender_UserName on multi-link row (project + url + partner)
+        
         const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
             project_id: projectid,
             project_url_id,
