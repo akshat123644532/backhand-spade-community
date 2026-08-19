@@ -101,7 +101,7 @@ app.use('/api/survey', surveyDataRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/projects', reportRoutes);
+app.use('/api/project-reports', reportRoutes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
