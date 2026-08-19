@@ -198,7 +198,7 @@ export const addSurveyActivity = async (req, res) => {
             });
         }
 
-        // Bind uid → Vender_UserName on multi-link row (project + url + partner)
+        
         const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
             project_id: projectid,
             project_url_id,

@@ -206,7 +206,7 @@ export const inviteUsers = async (req, res) => {
                 survey_name: project.Project_Name,
                 survey_url: survey_link
             });
-            console.log('DEBUG rendered.body:', rendered.body); // TEMP — remove after debugging
+           
 
             transporter.sendMail({
                 to: panelist.email,
