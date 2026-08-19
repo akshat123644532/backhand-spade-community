@@ -324,6 +324,19 @@ generateUrlCode: async (project_id, conn = db) => {
             link_mode: urlInfo.link_mode,
             active_link: activeLink
         };
+    },
+
+    /** Close project URLs whose End_Date has passed (today > end date). */
+    closeExpiredByEndDate: async (conn = db) => {
+        const [result] = await conn.execute(
+            `UPDATE project_url_Info
+             SET Status = 'Closed', closed_at = NOW(), updated_at = NOW()
+             WHERE deleted_at IS NULL
+               AND End_Date IS NOT NULL
+               AND DATE(End_Date) < CURDATE()
+               AND Status <> 'Closed'`
+        );
+        return result.affectedRows || 0;
     }
 };
 

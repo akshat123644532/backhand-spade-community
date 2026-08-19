@@ -672,6 +672,10 @@ export const getMultiLinkStats = async (req, res) => {
 
         const { sampleSize, quotasAdded, remainingQuota } =
             await SupplierMapping.getQuotaStatsByProjectUrlId(project_url_id);
+        const completedSurveys = await SurveyData.getCompletedSurveysByProjectUrl({
+            projectid: Number(id),
+            project_url_id: Number(project_url_id)
+        });
 
         if (!isMultiLink(urlInfo.Project_Link_Type)) {
             return res.status(200).json({
@@ -683,6 +687,7 @@ export const getMultiLinkStats = async (req, res) => {
                     sampleSize,
                     quotasAdded,
                     remainingQuota,
+                    completedSurveys,
                     addPartner: remainingQuota > 0
                 }
             });
@@ -703,6 +708,7 @@ export const getMultiLinkStats = async (req, res) => {
                 totalMultiLinkCount,
                 remainingMultiLinkCount,
                 completedSurveyCount,
+                completedSurveys,
                 addPartner: remainingQuota > 0 && remainingMultiLinkCount > 0
             }
         });
