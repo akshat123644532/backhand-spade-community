@@ -76,9 +76,22 @@ const resolveSupplierMapping = async (partnerid, projectid, project_url_id) => {
  */
 export const addSurveyActivity = async (req, res) => {
     try {
-        const token = req.body?.token || req.query?.token;
-   const encryUID = req.body?.uid ?? req.query?.uid;
-        const uidRaw = decryptUid(encryUID) || '';
+       const token = req.body?.token || req.query?.token;
+        const rawUidParam = req.body?.uid ?? req.query?.uid;
+        if (!rawUidParam || typeof rawUidParam !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: 'uid is required! Replace [identifier] with the respondent id.'
+            });
+        }
+
+        let uidRaw;
+        try {
+            uidRaw = decryptUid(rawUidParam);
+        } catch {
+            uidRaw = rawUidParam;
+        }
+
         const tokenData = decodeToken(token);
 
         const UserId = normalizeUid(uidRaw);
