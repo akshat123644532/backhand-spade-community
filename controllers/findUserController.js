@@ -7,9 +7,29 @@ import transporter from '../config/mailer.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
+import { encryptUid } from '../utils/linkSecurityHelper.js';
 
 const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
+
+// uid = panelist_id directly. Simple, unique, and lets reward-points logic
+// match a completed survey (survery_data.UserId, decrypted) straight back to
+// a panelist via Panelist.findById(uid) — no extra lookup needed.
+const buildUidForPanelist = (panelist) => String(panelist.id);
+
+// Injects the encrypted uid into the vendor survey link as a `uid` query param.
+const applyEncryptedUidToLink = (link, uid) => {
+    const encrypted = encryptUid(uid);
+    try {
+        const url = new URL(link);
+        url.searchParams.set('uid', encrypted);
+        return url.toString();
+    } catch {
+        return link.includes('uid=')
+            ? link.replace(/uid=[^&]*/, `uid=${encrypted}`)
+            : `${link}${link.includes('?') ? '&' : '?'}uid=${encrypted}`;
+    }
+};
 
 export const getFilterQuestions = async (req, res) => {
     try {
@@ -88,12 +108,13 @@ export const searchUsers = async (req, res) => {
     }
 };
 
-// 👇 UPDATED: ab survey_link hardcoded nahi hai — Single/Multi Link ke hisab se
-// supplier_mapping ya project_mutiple_Url se sahi VenderURL uthaya jayega
+// Invite selected panelists. Vendor URL is picked from supplier_mapping (Single Link)
+// or project_mutiple_Url (Multi Link, round-robin). The uid used in the link is
+// derived from the panelist and never stored — only the encrypted link is emailed.
 export const inviteUsers = async (req, res) => {
     try {
         const { id } = req.params; // project_id
-        const { panelist_ids, email_template_id } = req.body;
+        const { panelist_ids, email_template_id, project_url_id } = req.body;
 
         if (!panelist_ids || !Array.isArray(panelist_ids) || panelist_ids.length === 0) {
             return res.status(400).json({ success: false, message: "panelist_ids array is required!" });
@@ -108,9 +129,37 @@ export const inviteUsers = async (req, res) => {
         const template = await EmailTemplate.getById(email_template_id);
         if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
 
-        const multiLink = isMultiLink(project.Project_Link_Type);
+        // Project_Link_Type lives on project_url_Info, not project_Info.
+        let urlInfo = null;
+        if (project_url_id) {
+            urlInfo = await ProjectUrl.getById(project_url_id);
+            if (!urlInfo || Number(urlInfo.project_id) !== Number(id)) {
+                return res.status(404).json({ success: false, message: "Project URL not found for this project!" });
+            }
+        } else {
+            const urlInfoRows = await ProjectUrl.getByProjectId(id);
+            if (!urlInfoRows || !urlInfoRows.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Add Project URL Info first before inviting users!"
+                });
+            }
+            if (urlInfoRows.length > 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Multiple Project URLs found for this project. Please pass project_url_id in the request body.",
+                    availableUrls: urlInfoRows.map(u => ({
+                        project_url_id: u.id,
+                        project_url_code: u.project_url_code,
+                        Project_Link_Type: u.Project_Link_Type
+                    }))
+                });
+            }
+            urlInfo = urlInfoRows[0];
+        }
 
-        // Link type ke hisab se VenderURL(s) nikaalo
+        const multiLink = isMultiLink(urlInfo.Project_Link_Type);
+
         let singleVenderUrl = null;
         let multiVenderUrls = [];
 
@@ -139,18 +188,25 @@ export const inviteUsers = async (req, res) => {
             const panelist = await Panelist.findById(panelistId);
             if (!panelist) continue;
 
-            // Multi link me har panelist ko round-robin se ek VenderURL milega
-            const survey_link = multiLink
+            // Multi link: each panelist gets one VenderURL, round-robin.
+            const rawLink = multiLink
                 ? multiVenderUrls[i % multiVenderUrls.length]
                 : singleVenderUrl;
 
-            // ✅ FIX: template placeholders {user_name}, {survey_name}, {survey_url}
-            // ke saath exact key names match honi chahiye, warna render() replace nahi karega
+            // uid auto-filled from panelist, then encrypted before going into the link.
+            const panelistUid = buildUidForPanelist(panelist);
+            console.log('DEBUG rawLink:', rawLink);          // TEMP — remove after debugging
+            console.log('DEBUG panelistUid:', panelistUid);  // TEMP — remove after debugging
+
+            const survey_link = applyEncryptedUidToLink(rawLink, panelistUid);
+            console.log('DEBUG survey_link:', survey_link);  // TEMP — remove after debugging
+
             const rendered = EmailTemplate.render(template, {
                 user_name: panelist.name,
                 survey_name: project.Project_Name,
                 survey_url: survey_link
             });
+            console.log('DEBUG rendered.body:', rendered.body); // TEMP — remove after debugging
 
             transporter.sendMail({
                 to: panelist.email,
@@ -158,6 +214,7 @@ export const inviteUsers = async (req, res) => {
                 html: rendered.body
             }).catch(err => console.error('Invite email failed:', err.message));
 
+            // No uid / survey_link stored — table stays exactly as it was.
             await ProjectInvitedUser.create({
                 project_id: id,
                 panelist_id: panelistId,
@@ -176,7 +233,7 @@ export const inviteUsers = async (req, res) => {
 export const listInvitedUsers = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
 

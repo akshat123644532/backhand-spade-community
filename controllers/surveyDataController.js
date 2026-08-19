@@ -5,7 +5,7 @@ import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import Project from '../models/projectModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
-
+import {decryptUid } from '../utils/linkSecurityHelper.js';
 const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined', 'xxxxxx']);
 
 const SURVEY_STATUS_ALIASES = {
@@ -91,7 +91,8 @@ const getClientIp = (req) => {
 export const addSurveyActivity = async (req, res) => {
     try {
         const token = req.body?.token || req.query?.token;
-        const uidRaw = req.body?.uid ?? req.query?.uid;
+   const encryUID = req.body?.uid ?? req.query?.uid;
+        const uidRaw = decryptUid(encryUID) || '';
         const tokenData = decodeToken(token);
 
         const UserId = normalizeUid(uidRaw);
