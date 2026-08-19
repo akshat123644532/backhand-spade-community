@@ -7,9 +7,25 @@ import transporter from '../config/mailer.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
+import { encryptUid } from '../utils/linkSecurityHelper.js';
 
 const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
+
+const buildUidForPanelist = (panelist) => String(panelist.id);
+
+const applyEncryptedUidToLink = (link, uid) => {
+    const encrypted = encryptUid(uid);
+    try {
+        const url = new URL(link);
+        url.searchParams.set('uid', encrypted);
+        return url.toString();
+    } catch {
+        return link.includes('uid=')
+            ? link.replace(/uid=[^&]*/, `uid=${encrypted}`)
+            : `${link}${link.includes('?') ? '&' : '?'}uid=${encrypted}`;
+    }
+};
 
 export const getFilterQuestions = async (req, res) => {
     try {
@@ -33,7 +49,7 @@ export const getAnswerOptions = async (req, res) => {
 
 export const getEligibleProjectUrls = async (req, res) => {
     try {
-        const { id } = req.params; // project_id
+        const { id } = req.params;
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
@@ -46,8 +62,8 @@ export const getEligibleProjectUrls = async (req, res) => {
 
 export const searchUsers = async (req, res) => {
     try {
-        const { id } = req.params; // project_id
-        const { filters, page, limit } = req.body; // filters = [{ question_id, answers: [...] }, ...]
+        const { id } = req.params;
+        const { filters, page, limit } = req.body;
 
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
@@ -90,8 +106,8 @@ export const searchUsers = async (req, res) => {
 
 export const inviteUsers = async (req, res) => {
     try {
-        const { id } = req.params; 
-        const { panelist_ids, email_template_id, project_url_id: bodyUrlId, partner_id } = req.body;
+        const { id } = req.params;
+        let { panelist_ids, email_template_id, project_url_id } = req.body;
 
         if (!panelist_ids || !Array.isArray(panelist_ids) || panelist_ids.length === 0) {
             return res.status(400).json({ success: false, message: "panelist_ids array is required!" });
@@ -106,21 +122,39 @@ export const inviteUsers = async (req, res) => {
             ProjectUrl.getByProjectId(id),
             Panelist.findByIds(panelist_ids)
         ]);
+
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
         if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
 
-        let project_url_id = bodyUrlId || null;
-        let selectedUrl = null;
+        if (!urls || !urls.length) {
+            return res.status(400).json({
+                success: false,
+                message: "Add Project URL Info first before inviting users!"
+            });
+        }
 
+        if (!project_url_id && urls.length > 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Multiple Project URLs found for this project. Please pass project_url_id in the request body.",
+                availableUrls: urls.map(u => ({
+                    project_url_id: u.id,
+                    project_url_code: u.project_url_code,
+                    Project_Link_Type: u.Project_Link_Type
+                }))
+            });
+        }
+
+        let selectedUrl = null;
         if (project_url_id) {
             selectedUrl = urls.find(u => Number(u.id) === Number(project_url_id)) || null;
             if (!selectedUrl) {
                 return res.status(400).json({
                     success: false,
-                    message: "No project_url_Info found for this project!"
+                    message: "Project URL not found for this project!"
                 });
             }
-        } else if (urls?.length) {
+        } else {
             selectedUrl = urls[0];
             project_url_id = selectedUrl.id;
         }
@@ -128,8 +162,18 @@ export const inviteUsers = async (req, res) => {
         const multiLink = isMultiLink(selectedUrl?.Project_Link_Type);
 
         let singleVenderUrl = null;
-        if (!multiLink) {
-            // Single link — direct shared vendor URL, no per-user assignment needed
+        let multiVenderUrls = [];
+
+        if (multiLink) {
+            const rows = await ProjectMultipleUrl.getActiveVenderUrlsByProjectId(id);
+            multiVenderUrls = rows.map(r => r.VenderURL);
+            if (!multiVenderUrls.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: "No active Vendor URL found in project_mutiple_Url for this project!"
+                });
+            }
+        } else {
             singleVenderUrl = await SupplierMapping.getVenderUrlByProjectId(id);
             if (!singleVenderUrl) {
                 return res.status(400).json({
@@ -137,52 +181,30 @@ export const inviteUsers = async (req, res) => {
                     message: "No active Vendor URL found in supplier_mapping for this project!"
                 });
             }
-        } else if (!project_url_id) {
-            return res.status(400).json({
-                success: false,
-                message: "No project_url_Info found for this project!"
-            });
         }
 
         const panelistById = new Map(panelistRows.map(p => [Number(p.id), p]));
         const skipped = [];
         const inviteRows = [];
 
-        for (const panelistId of panelist_ids) {
+        for (let i = 0; i < panelist_ids.length; i++) {
+            const panelistId = panelist_ids[i];
             const panelist = panelistById.get(Number(panelistId));
-            if (!panelist) continue;
-
-            let survey_link;
-
-            if (multiLink) {
-                // Multi-link: only hand out a link if a free (unassigned) slot exists
-                const slot = await ProjectMultipleUrl.getUnassignedSlot(id, project_url_id);
-                if (!slot) {
-                    skipped.push({ panelist_id: panelistId, reason: 'No survey available — all slots are already assigned' });
-                    continue;
-                }
-
-                const assigned = await ProjectMultipleUrl.assignSlotToPartner(
-                    slot.id,
-                    partner_id || null,
-                    panelist.email
-                );
-                if (!assigned) {
-                    // Race condition — someone else grabbed this slot first
-                    skipped.push({ panelist_id: panelistId, reason: 'Slot was just taken, please retry' });
-                    continue;
-                }
-
-                survey_link = slot.VenderURL || slot.Live_Link;
-            } else {
-                // Single link — direct shared vendor URL
-                survey_link = singleVenderUrl;
-            }
-
-            if (!survey_link) {
-                skipped.push({ panelist_id: panelistId, reason: 'No survey link resolved' });
+            if (!panelist) {
+                skipped.push({ panelist_id: panelistId, reason: "Panelist not found" });
                 continue;
             }
+
+            const rawLink = multiLink
+                ? multiVenderUrls[i % multiVenderUrls.length]
+                : singleVenderUrl;
+
+            const panelistUid = buildUidForPanelist(panelist);
+            console.log('DEBUG rawLink:', rawLink);
+            console.log('DEBUG panelistUid:', panelistUid);
+
+            const survey_link = applyEncryptedUidToLink(rawLink, panelistUid);
+            console.log('DEBUG survey_link:', survey_link);
 
             const rendered = EmailTemplate.render(template, {
                 user_name: panelist.name,
@@ -204,7 +226,9 @@ export const inviteUsers = async (req, res) => {
             });
         }
 
-        await ProjectInvitedUser.createMany(inviteRows);
+        if (inviteRows.length > 0) {
+            await ProjectInvitedUser.createMany(inviteRows);
+        }
 
         return res.status(200).json({
             success: true,
@@ -216,10 +240,11 @@ export const inviteUsers = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
 export const listInvitedUsers = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
 
