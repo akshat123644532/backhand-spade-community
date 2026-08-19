@@ -144,7 +144,7 @@ generateUrlCode: async (project_id, conn = db) => {
             Project_Link_Type, action_by
         } = normalized;
 
-        const project_url_code = await ProjectUrl.generateUrlCode(conn);
+        const project_url_code = await ProjectUrl.generateUrlCode(project_id, conn);
 
         const [result] = await conn.execute(
             `INSERT INTO project_url_Info
@@ -192,7 +192,7 @@ generateUrlCode: async (project_id, conn = db) => {
                 action_by || null
             ]
         );
-        return result.insertId;
+        return { id: result.insertId, project_url_code };
     },
 
     getByProjectId: async (project_id) => {
@@ -298,7 +298,7 @@ generateUrlCode: async (project_id, conn = db) => {
     },
   getEligibleByProjectId: async (project_id) => {
         const [rows] = await db.execute(
-            `SELECT id, project_url_code, Status, link_mode, Live_Link, Test_Link
+            `SELECT id, project_url_code, Status, Project_Link_Type, Live_Link, Test_Link
              FROM project_url_Info
              WHERE project_id = ? AND deleted_at IS NULL AND Status = 'Open'
              ORDER BY id DESC`,
@@ -324,6 +324,19 @@ generateUrlCode: async (project_id, conn = db) => {
             link_mode: urlInfo.link_mode,
             active_link: activeLink
         };
+    },
+
+    /** Close project URLs whose End_Date has passed (today > end date). */
+    closeExpiredByEndDate: async (conn = db) => {
+        const [result] = await conn.execute(
+            `UPDATE project_url_Info
+             SET Status = 'Closed', closed_at = NOW(), updated_at = NOW()
+             WHERE deleted_at IS NULL
+               AND End_Date IS NOT NULL
+               AND DATE(End_Date) < CURDATE()
+               AND Status <> 'Closed'`
+        );
+        return result.affectedRows || 0;
     }
 };
 

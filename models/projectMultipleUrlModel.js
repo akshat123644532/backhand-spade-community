@@ -137,7 +137,34 @@ const ProjectMultipleUrl = {
             completedSurveyCount: completedSurvey
         };
     },
+/**
+     * Multi-link: find an unassigned slot (partner_id IS NULL) for this project + url.
+     */
+    getUnassignedSlot: async (project_id, project_url_id, conn = db) => {
+        const [rows] = await conn.execute(
+            `SELECT id, partner_id, project_id, project_url_id, Live_Link, VenderURL,
+                    Vender_UserName, UserType, Status
+             FROM project_mutiple_Url
+             WHERE project_id = ?
+               AND project_url_id = ?
+               AND partner_id IS NULL
+             ORDER BY id ASC
+             LIMIT 1`,
+            [project_id, project_url_id]
+        );
+        return rows[0] || null;
+    },
 
+    /** Assign a partner + uid to a specific unassigned slot (race-safe). */
+    assignSlotToPartner: async (id, partner_id, uid, conn = db) => {
+        const [result] = await conn.execute(
+            `UPDATE project_mutiple_Url
+             SET partner_id = ?, Vender_UserName = ?, UserType = 'PARTNER'
+             WHERE id = ? AND partner_id IS NULL`,
+            [partner_id, uid || null, id]
+        );
+        return result.affectedRows > 0;
+    },
     getUnassignedIds: async (project_id, limit, conn = db, project_url_id = null) => {
         let sql = `SELECT id FROM project_mutiple_Url
              WHERE project_id = ?
@@ -270,6 +297,7 @@ const ProjectMultipleUrl = {
              WHERE project_id = ?
                AND project_url_id = ?
                AND LOWER(Vender_UserName) = LOWER(?)
+               AND LOWER(Status) IN ('initiated', 'active')
                ${partnerSql}`,
             params
         );
@@ -292,6 +320,23 @@ const ProjectMultipleUrl = {
         );
         const partnerId = rows[0]?.partner_id;
         return partnerId == null || partnerId === '' ? null : Number(partnerId);
+    },
+
+    /** First active multi-link row for partner + project + project_url */
+    getFirstActiveByPartnerProjectUrl: async ({ project_id, project_url_id, partner_id }) => {
+        const [rows] = await db.execute(
+            `SELECT id, partner_id, project_id, project_url_id, Live_Link, VenderURL,
+                    Vender_UserName, UserType, Status
+             FROM project_mutiple_Url
+             WHERE project_id = ?
+               AND project_url_id = ?
+               AND partner_id = ?
+               AND LOWER(Status) = 'active'
+             ORDER BY id ASC
+             LIMIT 1`,
+            [project_id, project_url_id, partner_id]
+        );
+        return rows[0] || null;
     },
 
     /**

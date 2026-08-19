@@ -10,7 +10,7 @@ import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import { encryptUid } from '../utils/linkSecurityHelper.js';
 
 const isMultiLink = (type) =>
-    String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
+    String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
 // uid = panelist_id directly. Simple, unique, and lets reward-points logic
 // match a completed survey (survery_data.UserId, decrypted) straight back to
@@ -123,10 +123,13 @@ export const inviteUsers = async (req, res) => {
             return res.status(400).json({ success: false, message: "email_template_id is required!" });
         }
 
-        const project = await Project.getById(id);
+        const [project, template, urls, panelistRows] = await Promise.all([
+            Project.getById(id),
+            EmailTemplate.getById(email_template_id),
+            ProjectUrl.getByProjectId(id),
+            Panelist.findByIds(panelist_ids)
+        ]);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
-
-        const template = await EmailTemplate.getById(email_template_id);
         if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
 
         // Project_Link_Type lives on project_url_Info, not project_Info.
@@ -163,16 +166,24 @@ export const inviteUsers = async (req, res) => {
         let singleVenderUrl = null;
         let multiVenderUrls = [];
 
-        if (multiLink) {
-            const rows = await ProjectMultipleUrl.getActiveVenderUrlsByProjectId(id);
-            multiVenderUrls = rows.map(r => r.VenderURL);
-            if (!multiVenderUrls.length) {
+        if (project_url_id) {
+            selectedUrl = urls.find(u => Number(u.id) === Number(project_url_id)) || null;
+            if (!selectedUrl) {
                 return res.status(400).json({
                     success: false,
-                    message: "No active Vendor URL found in project_mutiple_Url for this project!"
+                    message: "No project_url_Info found for this project!"
                 });
             }
-        } else {
+        } else if (urls?.length) {
+            selectedUrl = urls[0];
+            project_url_id = selectedUrl.id;
+        }
+
+        const multiLink = isMultiLink(selectedUrl?.Project_Link_Type);
+
+        let singleVenderUrl = null;
+        if (!multiLink) {
+            // Single link — direct shared vendor URL, no per-user assignment needed
             singleVenderUrl = await SupplierMapping.getVenderUrlByProjectId(id);
             if (!singleVenderUrl) {
                 return res.status(400).json({
@@ -180,12 +191,19 @@ export const inviteUsers = async (req, res) => {
                     message: "No active Vendor URL found in supplier_mapping for this project!"
                 });
             }
+        } else if (!project_url_id) {
+            return res.status(400).json({
+                success: false,
+                message: "No project_url_Info found for this project!"
+            });
         }
 
-        let invited = 0;
-        for (let i = 0; i < panelist_ids.length; i++) {
-            const panelistId = panelist_ids[i];
-            const panelist = await Panelist.findById(panelistId);
+        const panelistById = new Map(panelistRows.map(p => [Number(p.id), p]));
+        const skipped = [];
+        const inviteRows = [];
+
+        for (const panelistId of panelist_ids) {
+            const panelist = panelistById.get(Number(panelistId));
             if (!panelist) continue;
 
             // Multi link: each panelist gets one VenderURL, round-robin.
@@ -221,15 +239,20 @@ export const inviteUsers = async (req, res) => {
                 email_template_id,
                 message: rendered.subject
             });
-            invited++;
         }
 
-        return res.status(200).json({ success: true, message: `${invited} user(s) invited successfully!` });
+        await ProjectInvitedUser.createMany(inviteRows);
+
+        return res.status(200).json({
+            success: true,
+            message: `${inviteRows.length} user(s) invited successfully!`,
+            skipped_count: skipped.length,
+            skipped
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
-
 export const listInvitedUsers = async (req, res) => {
     try {
         const { id } = req.params;

@@ -2,11 +2,11 @@ import Client from '../models/clientModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { decrypt, encrypt } from '../utils/cryptoHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+
 const prepareApiSecretKeyForStorage = (apiSecretKey) => {
     if (apiSecretKey === undefined || apiSecretKey === null || apiSecretKey === '') {
         return apiSecretKey;
     }
-    // Validate ciphertext from client, then re-encrypt for consistent DB storage.
     const plainSecret = decrypt(apiSecretKey);
     return encrypt(plainSecret);
 };
@@ -20,7 +20,6 @@ const withDecryptedApiSecret = (client) => {
             api_secret_key: decrypt(client.api_secret_key),
         };
     } catch (error) {
-        // Legacy plaintext rows can still be returned as stored.
         return client;
     }
 };
@@ -91,9 +90,9 @@ export const updateClient = async (req, res) => {
         const client = await Client.getById(id);
         if (!client) return res.status(404).json({ success: false, message: "Client not found!" });
 
-        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status } = req.body;
+        const { name, country, contact_no, website_url, api_base_url, api_secret_key, api_header_key, status } = req.body;
 
-        const updateData = { name, country, contact_no, website_url, api_base_url, api_secret_key, api_body, status };
+        const updateData = { name, country, contact_no, website_url, api_base_url, api_secret_key, api_header_key, status };
         Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
 
         if (Object.prototype.hasOwnProperty.call(updateData, 'api_secret_key') && updateData.api_secret_key) {
@@ -128,6 +127,7 @@ export const deleteClient = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
 export const exportClientsCsv = async (req, res) => {
     try {
         const search = req.query.search || '';

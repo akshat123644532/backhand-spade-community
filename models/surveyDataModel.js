@@ -110,7 +110,7 @@ const SurveyData = {
 
     /**
      * Finalize survey activity: set Status, FinalIP, EndDate.
-     * Matches partner + project + url + UserId (latest row).
+     * Only updates when current Status is Initiated or active.
      */
     finalizeStatus: async ({ partnerid, projectid, project_url_id, UserId, Status, FinalIP }) => {
         const [existing] = await db.execute(
@@ -127,14 +127,21 @@ const SurveyData = {
 
         if (!existing[0]) return null;
 
-        await db.execute(
+        const [result] = await db.execute(
             `UPDATE \`${TABLE}\`
              SET Status = ?, FinalIP = ?, EndDate = NOW()
-             WHERE id = ?`,
+             WHERE id = ?
+               AND LOWER(Status) IN ('initiated', 'active')`,
             [Status, FinalIP, existing[0].id]
         );
 
-        return SurveyData.getById(existing[0].id);
+        if (!result.affectedRows) {
+            const current = await SurveyData.getById(existing[0].id);
+            return { alreadyFilled: true, currentStatus: current?.Status || existing[0].Status };
+        }
+
+        const row = await SurveyData.getById(existing[0].id);
+        return { alreadyFilled: false, row };
     },
 
     getById: async (id) => {
@@ -143,6 +150,26 @@ const SurveyData = {
             [id]
         );
         return rows[0] || null;
+    },
+
+    getCompletedSurveysByProjectUrl: async ({ projectid, project_url_id }) => {
+        const [rows] = await db.execute(
+            `SELECT COUNT(*) AS completedSurveys
+             FROM \`${TABLE}\` sd
+             WHERE sd.projectid = ?
+               AND sd.project_url_id = ?
+               AND LOWER(sd.Status) = 'completed'
+               AND EXISTS (
+                    SELECT 1
+                    FROM supplier_mapping sm
+                    WHERE sm.projectid = sd.projectid
+                      AND sm.projectUrlId = sd.project_url_id
+                      AND sm.partnerid <=> sd.partnerid
+                      AND sm.deleted_at IS NULL
+               )`,
+            [projectid, project_url_id]
+        );
+        return Number(rows[0]?.completedSurveys || 0);
     }
 };
 

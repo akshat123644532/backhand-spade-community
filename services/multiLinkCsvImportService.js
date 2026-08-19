@@ -166,31 +166,43 @@ export const processMultiLinkCsvJob = async (jobId) => {
     }
 };
 
+/** Kick off background processing after the job row is committed. */
+export const startMultiLinkCsvImport = (jobId) => {
+    setImmediate(() => {
+        processMultiLinkCsvJob(jobId).catch((err) => {
+            console.error(`[MultiLinkCSV] Unhandled background error | jobId=${jobId} | error=${err.message}`);
+        });
+    });
+};
+
 /**
- * Persist job + kick off background processing (non-blocking).
- * API callers should return immediately after this.
+ * Persist job + optionally kick off background processing (non-blocking).
+ * Pass `conn` to join an open transaction. Use `startProcessing: false` when
+ * the caller will commit first, then call startMultiLinkCsvImport(jobId).
  */
 export const enqueueMultiLinkCsvImport = async ({
     project_id,
     project_url_id,
     partner_id,
     user_type,
-    rows
+    rows,
+    conn,
+    startProcessing = true
 }) => {
-    const jobId = await MultiLinkCsvJob.create({
-        project_id,
-        project_url_id,
-        partner_id,
-        user_type,
-        rows
-    });
+    const jobId = await MultiLinkCsvJob.create(
+        {
+            project_id,
+            project_url_id,
+            partner_id,
+            user_type,
+            rows
+        },
+        conn
+    );
 
-    // Detach from request lifecycle
-    setImmediate(() => {
-        processMultiLinkCsvJob(jobId).catch((err) => {
-            console.error(`[MultiLinkCSV] Unhandled background error | jobId=${jobId} | error=${err.message}`);
-        });
-    });
+    if (startProcessing) {
+        startMultiLinkCsvImport(jobId);
+    }
 
     return jobId;
 };
@@ -215,6 +227,7 @@ export const resumePendingMultiLinkCsvJobs = async () => {
 
 export default {
     enqueueMultiLinkCsvImport,
+    startMultiLinkCsvImport,
     processMultiLinkCsvJob,
     getImportJobStatus,
     getLatestImportJobStatus,

@@ -2,7 +2,7 @@ import { db } from '../config/db.js';
 
 const FindUser = {
 
-    // Question Filter dropdown — Panel Questionnaire ke saare active questions
+   
     getFilterQuestions: async () => {
         const [rows] = await db.execute(
             `SELECT id, question_title, question_type, options

@@ -41,6 +41,7 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
+import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
 
 
 if (!fs.existsSync('uploads')) {
@@ -104,4 +105,5 @@ const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     resumePendingMultiLinkCsvJobs();
+    startProjectUrlCloseScheduler();
 });

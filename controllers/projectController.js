@@ -10,6 +10,7 @@ import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import Partner from '../models/partnerModel.js';
 import {
     enqueueMultiLinkCsvImport,
+    startMultiLinkCsvImport,
     getImportJobStatus,
     getLatestImportJobStatus
 } from '../services/multiLinkCsvImportService.js';
@@ -17,6 +18,7 @@ import {
 import { getCountryFromIp, verifyLinkSignature } from '../utils/linkSecurityHelper.js';
 // 👇 NAYA: Unique IP check ke liye — path apne project ke hisab se confirm/adjust kar lena
 import SurveyData from '../models/surveyDataModel.js';
+import SupplierMapping from '../models/supplierMappingModel.js';
 
 const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
@@ -133,7 +135,7 @@ export const addProject = async (req, res) => {
     try {
         const {
             Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description,
-            Project_Link_Type, Notes, Status, startDate, endDate
+            Notes, Status
         } = req.body;
 
         if (!Project_Name) {
@@ -142,7 +144,7 @@ export const addProject = async (req, res) => {
 
         const { id, Project_code } = await Project.create({
             Project_Name, Clients, Project_Manager, Sales_Manager, RFQ,
-            Project_Description, Project_Link_Type, Notes, Status, startDate, endDate,
+            Project_Description, Notes, Status,
             action_by: req.user?.id || null
         });
 
@@ -190,7 +192,7 @@ export const getProjectById = async (req, res) => {
 export const updateProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Project_Link_Type, Notes, Status, startDate, endDate } = req.body;
+        const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Notes, Status } = req.body;
 
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
@@ -202,11 +204,8 @@ export const updateProject = async (req, res) => {
         if (Sales_Manager) updateData.Sales_Manager = Sales_Manager;
         if (RFQ) updateData.RFQ = RFQ;
         if (Project_Description) updateData.Project_Description = Project_Description;
-        if (Project_Link_Type) updateData.Project_Link_Type = Project_Link_Type;
         if (Notes) updateData.Notes = Notes;
         if (Status) updateData.Status = Status;
-        if (startDate !== undefined) updateData.startDate = startDate;
-        if (endDate !== undefined) updateData.endDate = endDate;
 
         if (Object.keys(updateData).length > 0) await Project.update(id, updateData);
 
@@ -340,18 +339,26 @@ export const addProjectUrl = async (req, res) => {
             connection
         );
 
-        await connection.commit();
-        started = false;
-
         let jobId = null;
         if (normalizedRows) {
+            // Same transaction as URL insert — if job create fails, URL rolls back too
             jobId = await enqueueMultiLinkCsvImport({
                 project_id: Number(id),
                 project_url_id: urlId,
                 partner_id: partnerMeta.partner_id,
                 user_type: partnerMeta.UserType,
-                rows: normalizedRows
+                rows: normalizedRows,
+                conn: connection,
+                startProcessing: false
             });
+        }
+
+        await connection.commit();
+        started = false;
+
+        // Start background import only after both rows are committed
+        if (jobId) {
+            startMultiLinkCsvImport(jobId);
         }
 
         return res.status(201).json({
@@ -666,17 +673,31 @@ export const getMultiLinkStats = async (req, res) => {
             return res.status(404).json({ success: false, message: "Project URL not found!" });
         }
 
-        // Single link: only allow partner add flag
+        const { sampleSize, quotasAdded, remainingQuota } =
+            await SupplierMapping.getQuotaStatsByProjectUrlId(project_url_id);
+        const completedSurveys = await SurveyData.getCompletedSurveysByProjectUrl({
+            projectid: Number(id),
+            project_url_id: Number(project_url_id)
+        });
+
         if (!isMultiLink(urlInfo.Project_Link_Type)) {
             return res.status(200).json({
                 success: true,
-                data: { addPartner: true, Project_Link_Type: urlInfo.Project_Link_Type || 'SingleLink' }
+                data: {
+                    project_id: Number(id),
+                    project_url_id: Number(project_url_id),
+                    Project_Link_Type: urlInfo.Project_Link_Type || 'SingleLink',
+                    sampleSize,
+                    quotasAdded,
+                    remainingQuota,
+                    completedSurveys,
+                    addPartner: remainingQuota > 0
+                }
             });
         }
 
         const { totalMultiLinkCount, remainingMultiLinkCount, completedSurveyCount } =
             await ProjectMultipleUrl.getStatsByProjectId(id, project_url_id);
-        const addPartner = remainingMultiLinkCount > 0;
 
         return res.status(200).json({
             success: true,
@@ -684,10 +705,14 @@ export const getMultiLinkStats = async (req, res) => {
                 project_id: Number(id),
                 project_url_id: Number(project_url_id),
                 Project_Link_Type: urlInfo.Project_Link_Type || 'MultiLink',
+                sampleSize,
+                quotasAdded,
+                remainingQuota,
                 totalMultiLinkCount,
                 remainingMultiLinkCount,
                 completedSurveyCount,
-                addPartner
+                completedSurveys,
+                addPartner: remainingQuota > 0 && remainingMultiLinkCount > 0
             }
         });
     } catch (error) {
