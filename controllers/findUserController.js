@@ -12,12 +12,8 @@ import { encryptUid } from '../utils/linkSecurityHelper.js';
 const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'multi link';
 
-// uid = panelist_id directly. Simple, unique, and lets reward-points logic
-// match a completed survey (survery_data.UserId, decrypted) straight back to
-// a panelist via Panelist.findById(uid) — no extra lookup needed.
 const buildUidForPanelist = (panelist) => String(panelist.id);
 
-// Injects the encrypted uid into the vendor survey link as a `uid` query param.
 const applyEncryptedUidToLink = (link, uid) => {
     const encrypted = encryptUid(uid);
     try {
@@ -53,7 +49,7 @@ export const getAnswerOptions = async (req, res) => {
 
 export const getEligibleProjectUrls = async (req, res) => {
     try {
-        const { id } = req.params; // project_id
+        const { id } = req.params;
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
@@ -66,8 +62,8 @@ export const getEligibleProjectUrls = async (req, res) => {
 
 export const searchUsers = async (req, res) => {
     try {
-        const { id } = req.params; // project_id
-        const { filters, page, limit } = req.body; // filters = [{ question_id, answers: [...] }, ...]
+        const { id } = req.params;
+        const { filters, page, limit } = req.body;
 
         const project = await Project.getById(id);
         if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
@@ -108,12 +104,9 @@ export const searchUsers = async (req, res) => {
     }
 };
 
-// Invite selected panelists. Vendor URL is picked from supplier_mapping (Single Link)
-// or project_mutiple_Url (Multi Link, round-robin). The uid used in the link is
-// derived from the panelist and never stored — only the encrypted link is emailed.
 export const inviteUsers = async (req, res) => {
     try {
-        const { id } = req.params; // project_id
+        const { id } = req.params;
         const { panelist_ids, email_template_id, project_url_id } = req.body;
 
         if (!panelist_ids || !Array.isArray(panelist_ids) || panelist_ids.length === 0) {
@@ -129,7 +122,6 @@ export const inviteUsers = async (req, res) => {
         const template = await EmailTemplate.getById(email_template_id);
         if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
 
-        // Project_Link_Type lives on project_url_Info, not project_Info.
         let urlInfo = null;
         if (project_url_id) {
             urlInfo = await ProjectUrl.getById(project_url_id);
@@ -188,25 +180,22 @@ export const inviteUsers = async (req, res) => {
             const panelist = await Panelist.findById(panelistId);
             if (!panelist) continue;
 
-            // Multi link: each panelist gets one VenderURL, round-robin.
             const rawLink = multiLink
                 ? multiVenderUrls[i % multiVenderUrls.length]
                 : singleVenderUrl;
 
-            // uid auto-filled from panelist, then encrypted before going into the link.
             const panelistUid = buildUidForPanelist(panelist);
-            console.log('DEBUG rawLink:', rawLink);          // TEMP — remove after debugging
-            console.log('DEBUG panelistUid:', panelistUid);  // TEMP — remove after debugging
+            console.log('DEBUG rawLink:', rawLink);
+            console.log('DEBUG panelistUid:', panelistUid);
 
             const survey_link = applyEncryptedUidToLink(rawLink, panelistUid);
-            console.log('DEBUG survey_link:', survey_link);  // TEMP — remove after debugging
+            console.log('DEBUG survey_link:', survey_link);
 
             const rendered = EmailTemplate.render(template, {
                 user_name: panelist.name,
                 survey_name: project.Project_Name,
                 survey_url: survey_link
             });
-           
 
             transporter.sendMail({
                 to: panelist.email,
@@ -214,7 +203,6 @@ export const inviteUsers = async (req, res) => {
                 html: rendered.body
             }).catch(err => console.error('Invite email failed:', err.message));
 
-            // No uid / survey_link stored — table stays exactly as it was.
             await ProjectInvitedUser.create({
                 project_id: id,
                 panelist_id: panelistId,
