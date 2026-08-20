@@ -79,14 +79,6 @@ const resolveSupplierMapping = async (partnerid, projectid, project_url_id) => {
     return mapping;
 };
 
-/**
- * POST /api/survey/activity
- * Body/query: { token, uid }
- * Creates survey activity with Status = Initiated and InitalIP = client IP.
- * Blocks if same partnerid + projectid + project_url_id + UserId + InitalIP
- * already exists with Status other than Initiated.
- * Also binds uid → Vender_UserName on project_mutiple_Url for project + url + partner.
- */
 export const addSurveyActivity = async (req, res) => {
     try {
        const token = req.body?.token || req.query?.token;
@@ -98,10 +90,8 @@ export const addSurveyActivity = async (req, res) => {
             });
         }
 
-        let uidRaw;
-        try {
-            uidRaw = decryptUid(rawUidParam);
-        } catch {
+        let uidRaw = decryptUid(rawUidParam);
+        if (uidRaw === null || uidRaw === undefined) {
             uidRaw = rawUidParam;
         }
 
