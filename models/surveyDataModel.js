@@ -211,6 +211,95 @@ const SurveyData = {
             params
         );
         return rows;
+    },
+
+    getSupplierReport: async ({
+        project_id,
+        partner_id,
+        page = 1,
+        limit = 10,
+        paginate = true
+    }) => {
+        const p = Math.max(parseInt(page, 10) || 1, 1);
+        const l = Math.max(parseInt(limit, 10) || 10, 1);
+        const offset = (p - 1) * l;
+
+        const baseParams = [project_id, partner_id];
+        const [countRows] = await db.execute(
+            `SELECT COUNT(*) AS total
+             FROM \`${TABLE}\` sd
+             WHERE sd.projectid = ?
+               AND sd.partnerid = ?`,
+            baseParams
+        );
+        const total = Number(countRows?.[0]?.total || 0);
+
+        const query = `SELECT
+                sd.partnerid AS supplierId,
+                sd.partnerid AS partnerId,
+                p.name AS partnerName,
+                COALESCE(c.name, pi.Clients) AS clientName,
+                sd.UserId AS partnersIdentifier,
+                sd.Status AS status,
+                sd.StartDate AS surveyStartDate,
+                sd.EndDate AS surveyEndDate,
+                pui.\`LOI(Minute)\` AS LOI,
+                sd.InitalIP AS ipAddress,
+                sd.FinalIP AS finalIp,
+                sm.IsTest AS isTestLink,
+                sd.project_url_id AS projectUrlId,
+                (
+                    SELECT pmu.VenderURL
+                    FROM project_mutiple_Url pmu
+                    WHERE pmu.project_id = sd.projectid
+                      AND pmu.project_url_id = sd.project_url_id
+                      AND pmu.partner_id = sd.partnerid
+                      AND pmu.VenderURL IS NOT NULL
+                      AND pmu.VenderURL <> ''
+                      AND (
+                            LOWER(COALESCE(pmu.Vender_UserName, '')) = LOWER(COALESCE(sd.UserId, ''))
+                            OR pmu.Vender_UserName IS NULL
+                            OR TRIM(pmu.Vender_UserName) = ''
+                      )
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(COALESCE(pmu.Vender_UserName, '')) = LOWER(COALESCE(sd.UserId, '')) THEN 0
+                            ELSE 1
+                        END,
+                        pmu.id ASC
+                    LIMIT 1
+                ) AS multiLinkUrl
+             FROM \`${TABLE}\` sd
+             LEFT JOIN project_Info pi
+               ON pi.id = sd.projectid
+             LEFT JOIN clients c
+               ON (c.id = pi.Clients OR c.name = pi.Clients)
+             LEFT JOIN partners p
+               ON p.id = sd.partnerid
+             LEFT JOIN project_url_Info pui
+               ON pui.id = sd.project_url_id
+             LEFT JOIN supplier_mapping sm
+               ON sm.projectid = sd.projectid
+              AND sm.partnerid <=> sd.partnerid
+              AND sm.projectUrlId = sd.project_url_id
+              AND sm.deleted_at IS NULL
+             WHERE sd.projectid = ?
+               AND sd.partnerid = ?
+             ORDER BY sd.id DESC`;
+
+        if (!paginate) {
+            const [rows] = await db.execute(query, baseParams);
+            return { rows, total };
+        }
+
+        const [rows] = await db.query(`${query} LIMIT ? OFFSET ?`, [...baseParams, Number(l), Number(offset)]);
+        return {
+            rows,
+            total,
+            page: p,
+            limit: l,
+            totalPages: Math.ceil(total / l)
+        };
     }
 };
 

@@ -81,3 +81,114 @@ export const downloadProjectReportCsv = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
+const formatSupplierReportRows = (rows) =>
+    rows.map((row) => {
+        const { country, city } = getLocationFromIp(row.ipAddress);
+        return {
+            supplierId: row.supplierId,
+            partnerId: row.partnerId,
+            partnerName: row.partnerName || null,
+            clientName: row.clientName || null,
+            partnersIdentifier: row.partnersIdentifier || null,
+            status: row.status || null,
+            surveyStartDate: row.surveyStartDate || null,
+            surveyEndDate: row.surveyEndDate || null,
+            LOI: row.LOI ?? null,
+            ipAddress: row.ipAddress || null,
+            geoLocation: [city, country].filter(Boolean).join(', ') || null,
+            isTestLink: Number(row.isTestLink) === 1,
+            finalIp: row.finalIp || null,
+            multiLinkUrl: row.multiLinkUrl || null
+        };
+    });
+
+// GET /api/project-reports/:projectId/supplier/:partnerId
+export const getSupplierReport = async (req, res) => {
+    try {
+        const projectId = Number(req.params.projectId);
+        const partnerId = Number(req.params.partnerId);
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+
+        if (!Number.isFinite(projectId) || !Number.isFinite(partnerId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'projectId and partnerId must be valid numbers!'
+            });
+        }
+
+        const project = await Project.getById(projectId);
+        if (!project) {
+            return res.status(404).json({ success: false, message: 'Project not found!' });
+        }
+
+        const result = await SurveyData.getSupplierReport({
+            project_id: projectId,
+            partner_id: partnerId,
+            page,
+            limit,
+            paginate: true
+        });
+
+        const data = formatSupplierReportRows(result.rows || []);
+        return res.status(200).json({
+            success: true,
+            data,
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Server error!', error: error.message });
+    }
+};
+
+// GET /api/project-reports/:projectId/supplier/:partnerId/export/csv
+export const downloadSupplierReportCsv = async (req, res) => {
+    try {
+        const projectId = Number(req.params.projectId);
+        const partnerId = Number(req.params.partnerId);
+
+        if (!Number.isFinite(projectId) || !Number.isFinite(partnerId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'projectId and partnerId must be valid numbers!'
+            });
+        }
+
+        const project = await Project.getById(projectId);
+        if (!project) {
+            return res.status(404).json({ success: false, message: 'Project not found!' });
+        }
+
+        const result = await SurveyData.getSupplierReport({
+            project_id: projectId,
+            partner_id: partnerId,
+            paginate: false
+        });
+
+        const data = formatSupplierReportRows(result.rows || []);
+        const csv = buildCsv(data, [
+            { label: 'supplierId/partnerId', key: 'partnerId' },
+            { label: 'Partner Name', key: 'partnerName' },
+            { label: 'Client Name', key: 'clientName' },
+            { label: 'partners Identifier', key: 'partnersIdentifier' },
+            { label: 'status', key: 'status' },
+            { label: 'survey startDate', key: 'surveyStartDate' },
+            { label: 'survey end Date', key: 'surveyEndDate' },
+            { label: 'LOI', key: 'LOI' },
+            { label: 'Ip address', key: 'ipAddress' },
+            { label: 'geoLocation', key: 'geoLocation' },
+            { label: 'isTest link', key: 'isTestLink' },
+            { label: 'finalIp', key: 'finalIp' },
+            { label: 'MultiLinkUrl', key: 'multiLinkUrl' }
+        ]);
+
+        const safeName = String(project.Project_Name || 'project').replace(/[^a-z0-9]+/gi, '_');
+        return sendCsv(res, `supplier_report_${safeName}_${partnerId}.csv`, csv);
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Server error!', error: error.message });
+    }
+};
