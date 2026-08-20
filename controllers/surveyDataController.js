@@ -3,8 +3,21 @@ import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
-import {decryptUid } from '../utils/linkSecurityHelper.js';
+import { decryptUid } from '../utils/linkSecurityHelper.js';
+import { decodeSurveyToken } from '../utils/Encryptionhelper.js';
+import { appendUidToLink, appendPidToLink, normalizeUid, getClientIp } from '../utils/surveyHelper.js';
+import { finalizeSurveyOutcome } from '../services/surveyStatusService.js';
+
 const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined', 'xxxxxx']);
+
+const sendError = (res, error) => {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+        success: false,
+        message: statusCode === 500 ? 'Server error!' : error.message,
+        error: error.message
+    });
+};
 
 const SURVEY_STATUS_ALIASES = {
     completed: 'completed',
