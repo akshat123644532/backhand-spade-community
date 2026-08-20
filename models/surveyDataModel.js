@@ -1,5 +1,5 @@
 import { db } from '../config/db.js';
-
+import { getLocationFromIp } from '../utils/linkSecurityHelper.js';
 const TABLE = 'survery_data';
 const STATUS_INITIATED = 'Initiated';
 
@@ -95,18 +95,18 @@ const SurveyData = {
         );
         return rows[0] || null;
     },
+createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
+    await SurveyData.ensureIndex();
+    const { country } = getLocationFromIp(InitalIP);
 
-    createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
-        await SurveyData.ensureIndex();
-
-        const [result] = await db.execute(
-            `INSERT INTO \`${TABLE}\`
-             (partnerid, projectid, project_url_id, UserId, InitalIP, StartDate, Status)
-             VALUES (?, ?, ?, ?, ?, NOW(), ?)`,
-            [partnerid, projectid, project_url_id, UserId, InitalIP, STATUS_INITIATED]
-        );
-        return result.insertId;
-    },
+    const [result] = await db.execute(
+        `INSERT INTO \`${TABLE}\`
+         (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+        [partnerid, projectid, project_url_id, UserId, InitalIP, country, STATUS_INITIATED]
+    );
+    return result.insertId;
+},
 
     /**
      * Finalize survey activity: set Status, FinalIP, EndDate.
@@ -172,9 +172,7 @@ const SurveyData = {
         return Number(rows[0]?.completedSurveys || 0);
     },
 
-    // 👇 NAYA: Project Report table ke liye — ek row per survey attempt,
-    // supplier + client info ke saath joined. partner_id diya to sirf
-    // us ek supplier ka data (dropdown filter jaisa screenshot me tha).
+   
     getProjectReport: async (project_id, { partner_id = null } = {}) => {
         const params = [project_id];
         let partnerSql = '';
@@ -200,6 +198,7 @@ const SurveyData = {
                     ELSE NULL
                 END AS loi_minutes,
                 sd.InitalIP AS ip_address,
+                sd.GeoLocation AS country,
                 sm.IsTest AS is_test_link
              FROM \`${TABLE}\` sd
              LEFT JOIN supplier_mapping sm

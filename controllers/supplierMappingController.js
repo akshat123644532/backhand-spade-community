@@ -2,7 +2,7 @@ import SupplierMapping from '../models/supplierMappingModel.js';
 import Partner from '../models/partnerModel.js';
 import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
-
+import { getCountryFromIp } from '../utils/linkSecurityHelper.js';
 export const addSupplierMapping = async (req, res) => {
     try {
         const {
@@ -242,7 +242,8 @@ export const deleteSupplierMapping = async (req, res) => {
 };
 
 
-// Respondent-facing redirect — public, no auth
+
+
 export const handleSupplierRedirect = async (req, res) => {
     try {
         const { hash } = req.params;
@@ -256,6 +257,16 @@ export const handleSupplierRedirect = async (req, res) => {
 
         if (mapping.status !== 'active') {
             return res.redirect(mapping.TerminateURL || '/inactive');
+        }
+
+        // 🔒 Geo-location security check
+        if (Number(mapping.GeoLocation) === 1 && mapping.country) {
+            const respondentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+            const detectedCountry = getCountryFromIp(respondentIp);
+
+            if (!detectedCountry || detectedCountry.toLowerCase() !== String(mapping.country).toLowerCase()) {
+                return res.redirect(mapping.TerminateURL || '/geo-blocked');
+            }
         }
 
         // Token se startDate / endDate check (agar present ho)
