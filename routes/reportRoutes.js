@@ -4,9 +4,7 @@ import verifyToken from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/project/:id/report', verifyToken, getProjectReport);
-
-
-router.get('/project/:id/report/export/csv', verifyToken, downloadProjectReportCsv);
+router.get('/:id/report', verifyToken, getProjectReport);
+router.get('/:id/report/export/csv', verifyToken, downloadProjectReportCsv);
 
 export default router;
