@@ -295,34 +295,34 @@ const SupplierMapping = {
         return rows;
     },
 
-    getByDynamicHash: async (token) => {
-        let tokenData;
-        try {
-            tokenData = decodeSurveyToken(token);
-        } catch {
-            const [rows] = await db.execute(
-                `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
-                 FROM supplier_mapping sm
-                 LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
-                 WHERE sm.dynamic_url LIKE ? AND sm.deleted_at IS NULL`,
-                [`%/dosurvey/${token}%`]
-            );
-            return rows[0] || null;
-        }
-
+   getByDynamicHash: async (token) => {
+    let tokenData;
+    try {
+        tokenData = decodeSurveyToken(token);
+    } catch {
         const [rows] = await db.execute(
-            `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode
+            `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode, pu.country, pu.GeoLocation
              FROM supplier_mapping sm
              LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
-             WHERE sm.partnerid <=> ? AND sm.projectid = ? AND sm.projectUrlId = ?
-               AND sm.deleted_at IS NULL
-             ORDER BY sm.id DESC LIMIT 1`,
-            [tokenData.partnerid, tokenData.projectid, tokenData.projectUrlId]
+             WHERE sm.dynamic_url LIKE ? AND sm.deleted_at IS NULL`,
+            [`%/dosurvey/${token}%`]
         );
+        return rows[0] || null;
+    }
 
-        if (!rows[0]) return null;
-        return { ...rows[0], tokenData };
-    },
+    const [rows] = await db.execute(
+        `SELECT sm.*, pu.Live_Link, pu.Test_Link, pu.link_mode, pu.country, pu.GeoLocation
+         FROM supplier_mapping sm
+         LEFT JOIN project_url_Info pu ON pu.id = sm.projectUrlId
+         WHERE sm.partnerid <=> ? AND sm.projectid = ? AND sm.projectUrlId = ?
+           AND sm.deleted_at IS NULL
+         ORDER BY sm.id DESC LIMIT 1`,
+        [tokenData.partnerid, tokenData.projectid, tokenData.projectUrlId]
+    );
+
+    if (!rows[0]) return null;
+    return { ...rows[0], tokenData };
+},
 
     update: async (id, data, { partner_name, isMultiLink } = {}) => {
         const connection = await db.getConnection();
