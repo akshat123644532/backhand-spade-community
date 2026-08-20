@@ -3,7 +3,6 @@ import verifyToken from '../middleware/authMiddleware.js';
 import csvUploadMiddleware from '../middleware/csvUploadMiddleware.js';
 import { toggleLinkMode, getActiveSurveyLink } from '../controllers/projectController.js';
 
-
 import {
     addProject, getAllProjects, getProjectById,
     updateProject, deleteProject, toggleProjectStatus,
@@ -11,7 +10,8 @@ import {
     generateProjectUrlCode,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
     uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate,
-    getMultiLinkCsvImportStatus
+    getMultiLinkCsvImportStatus,
+    addRecontactProject
 } from '../controllers/projectController.js';
 
 const router = express.Router();
@@ -69,5 +69,10 @@ router.get('/:id/multiple-url/csv-import-status', verifyToken, getMultiLinkCsvIm
 router.patch('/url/:urlId/link-mode', verifyToken, toggleLinkMode);
 router.get('/url/:urlId/active-link', getActiveSurveyLink);
 
+
+
+router.post('/add',                 verifyToken, addProject);
+router.post('/recontact/add',       verifyToken, csvUploadFlexible, addRecontactProject);
+router.get('/list',                 verifyToken, getAllProjects);
 
 export default router;
