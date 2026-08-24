@@ -1,10 +1,5 @@
 import express from 'express';
-import { getProjectReport, downloadProjectReportCsv } from '../controllers/reportController.js';
-import verifyToken from '../middleware/authMiddleware.js';
-
+import { handleSupplierRedirect } from '../controllers/supplierMappingController.js';
 const router = express.Router();
-
-router.get('/:id/report', verifyToken, getProjectReport);
-router.get('/:id/report/export/csv', verifyToken, downloadProjectReportCsv);
-
+router.get('/:hash', handleSupplierRedirect);
 export default router;
