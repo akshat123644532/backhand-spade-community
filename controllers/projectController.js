@@ -743,6 +743,104 @@ export const toggleLinkMode = async (req, res) => {
     }
 };
 
+export const getProjectSummaryList = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+
+        
+        const projectResult = await Project.getAll({ page, limit, search, status });
+
+      
+        const data = await Promise.all(projectResult.data.map(async (project) => {
+            const urlRows = await ProjectUrl.getByProjectId(project.id);
+
+            let urlCountTotal = 0;          
+            let sampleSizeTotal = 0;
+            let quotaAddedTotal = 0;
+            let remainingQuotaTotal = 0;
+            let completedTotal = 0;
+            let terminateTotal = 0;
+            let hasMultiLink = false;
+            let hasSingleLink = false;
+
+            
+            let country = null, language = null, cpi = null, loi = null;
+
+            for (const u of urlRows) {
+                const multiLink = isMultiLink(u.Project_Link_Type);
+                multiLink ? (hasMultiLink = true) : (hasSingleLink = true);
+
+                if (country == null && u.country) country = u.country;
+                if (language == null && u.Language) language = u.Language;
+                if (cpi == null && u.CPI != null) cpi = u.CPI;
+                if (loi == null && u['LOI(Minute)'] != null) loi = u['LOI(Minute)'];
+
+                const { sampleSize, quotasAdded, remainingQuota } =
+                    await SupplierMapping.getQuotaStatsByProjectUrlId(u.id);
+
+                sampleSizeTotal += sampleSize;
+                quotaAddedTotal += quotasAdded;
+                remainingQuotaTotal += remainingQuota;
+
+                if (multiLink) {
+                    const stats = await ProjectMultipleUrl.getStatsByProjectId(project.id, u.id);
+                    urlCountTotal += stats.totalMultiLinkCount;
+                    completedTotal += stats.completedSurveyCount;
+                    terminateTotal += await ProjectMultipleUrl.getTerminatedCountByProjectUrl(project.id, u.id);
+                } else {
+                    completedTotal += await SurveyData.getCompletedSurveysByProjectUrl({
+                        projectid: project.id,
+                        project_url_id: u.id
+                    });
+                    terminateTotal += await SurveyData.getTerminatedSurveysByProjectUrl({
+                        projectid: project.id,
+                        project_url_id: u.id
+                    });
+                }
+            }
+
+            const linkTypeLabel = hasMultiLink && hasSingleLink
+                ? 'Mixed'
+                : hasMultiLink ? 'MultiLink' : hasSingleLink ? 'SingleLink' : null;
+
+            return {
+                project_id: project.id,
+                Project_Name: project.Project_Name,
+                Clients: project.Clients,
+                Status: project.Status,
+                Sales_Manager: project.Sales_Manager,
+                Project_Manager: project.Project_Manager,
+                country,
+                Language: language,
+                Project_Link_Type: linkTypeLabel,
+                URL_Count: hasMultiLink ? urlCountTotal : null,   // sirf multilink me value, warna null
+                CPI: cpi,
+                LOI: loi,
+                CompletedCount: completedTotal,
+                SampleSize: sampleSizeTotal,
+                QuotaAdded: quotaAddedTotal,
+                RemainingQuota: remainingQuotaTotal,
+                Terminate: terminateTotal,
+                QuotaFull: sampleSizeTotal > 0 && remainingQuotaTotal <= 0
+            };
+        }));
+
+        return res.status(200).json({
+            success: true,
+            data,
+            total: projectResult.total,
+            page: projectResult.page,
+            limit: projectResult.limit,
+            totalPages: projectResult.totalPages
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const getActiveSurveyLink = async (req, res) => {
     try {
         const { urlId } = req.params;

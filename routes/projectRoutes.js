@@ -69,6 +69,7 @@ router.get('/:id/multiple-url/csv-import-status', verifyToken, getMultiLinkCsvIm
 router.patch('/url/:urlId/link-mode', verifyToken, toggleLinkMode);
 router.get('/url/:urlId/active-link', getActiveSurveyLink);
 
+router.get('/summary', getProjectSummaryList);
 
 
 router.post('/add',                 verifyToken, addProject);
