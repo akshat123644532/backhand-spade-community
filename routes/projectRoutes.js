@@ -10,7 +10,7 @@ import {
     generateProjectUrlCode,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
     uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate,
-    getMultiLinkCsvImportStatus,
+    getMultiLinkCsvImportStatus,getSingleProjectSummary, 
     addRecontactProject
 } from '../controllers/projectController.js';
 
@@ -68,9 +68,8 @@ router.post('/:id/multiple-url/csv-upload', verifyToken, csvUploadFlexible, uplo
 router.get('/:id/multiple-url/csv-import-status', verifyToken, getMultiLinkCsvImportStatus);
 router.patch('/url/:urlId/link-mode', verifyToken, toggleLinkMode);
 router.get('/url/:urlId/active-link', getActiveSurveyLink);
-
-router.get('/summary', getProjectSummaryList);
-
+router.get('/:id/summary', verifyToken, getSingleProjectSummary);
+router.get('/single/:id', getSingleProjectSummary);
 
 router.post('/add',                 verifyToken, addProject);
 router.post('/recontact/add',       verifyToken, csvUploadFlexible, addRecontactProject);

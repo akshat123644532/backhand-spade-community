@@ -743,98 +743,95 @@ export const toggleLinkMode = async (req, res) => {
     }
 };
 
-export const getProjectSummaryList = async (req, res) => {
+export const getSingleProjectSummary = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const search = req.query.search || '';
-        const status = req.query.status || '';
+        const { id } = req.params;
 
-        
-        const projectResult = await Project.getAll({ page, limit, search, status });
+        const project = await Project.getById(id);
+        if (!project) {
+            return res.status(404).json({ success: false, message: "Project not found!" });
+        }
 
-      
-        const data = await Promise.all(projectResult.data.map(async (project) => {
-            const urlRows = await ProjectUrl.getByProjectId(project.id);
+        const urlRows = await ProjectUrl.getByProjectId(id);
 
-            let urlCountTotal = 0;          
-            let sampleSizeTotal = 0;
-            let quotaAddedTotal = 0;
-            let remainingQuotaTotal = 0;
-            let completedTotal = 0;
-            let terminateTotal = 0;
-            let hasMultiLink = false;
-            let hasSingleLink = false;
+        let sampleSizeTotal = 0;
+        let quotaAddedTotal = 0;
+        let remainingQuotaTotal = 0;
+        let completedTotal = 0;
+        let terminateTotal = 0;
 
-            
-            let country = null, language = null, cpi = null, loi = null;
+        const urlDetails = [];
 
-            for (const u of urlRows) {
-                const multiLink = isMultiLink(u.Project_Link_Type);
-                multiLink ? (hasMultiLink = true) : (hasSingleLink = true);
+        for (const u of urlRows) {
+            const multiLink = isMultiLink(u.Project_Link_Type);
 
-                if (country == null && u.country) country = u.country;
-                if (language == null && u.Language) language = u.Language;
-                if (cpi == null && u.CPI != null) cpi = u.CPI;
-                if (loi == null && u['LOI(Minute)'] != null) loi = u['LOI(Minute)'];
+            const { sampleSize, quotasAdded, remainingQuota } =
+                await SupplierMapping.getQuotaStatsByProjectUrlId(u.id);
 
-                const { sampleSize, quotasAdded, remainingQuota } =
-                    await SupplierMapping.getQuotaStatsByProjectUrlId(u.id);
+            sampleSizeTotal += sampleSize;
+            quotaAddedTotal += quotasAdded;
+            remainingQuotaTotal += remainingQuota;
 
-                sampleSizeTotal += sampleSize;
-                quotaAddedTotal += quotasAdded;
-                remainingQuotaTotal += remainingQuota;
+            let uCompleted = 0;
+            let uTerminate = 0;
+            let uUrlCount = 0;
 
-                if (multiLink) {
-                    const stats = await ProjectMultipleUrl.getStatsByProjectId(project.id, u.id);
-                    urlCountTotal += stats.totalMultiLinkCount;
-                    completedTotal += stats.completedSurveyCount;
-                    terminateTotal += await ProjectMultipleUrl.getTerminatedCountByProjectUrl(project.id, u.id);
-                } else {
-                    completedTotal += await SurveyData.getCompletedSurveysByProjectUrl({
-                        projectid: project.id,
-                        project_url_id: u.id
-                    });
-                    terminateTotal += await SurveyData.getTerminatedSurveysByProjectUrl({
-                        projectid: project.id,
-                        project_url_id: u.id
-                    });
-                }
+            if (multiLink) {
+                const stats = await ProjectMultipleUrl.getStatsByProjectId(id, u.id);
+                uUrlCount = stats.totalMultiLinkCount;
+                uCompleted = stats.completedSurveyCount;
+                uTerminate = await ProjectMultipleUrl.getTerminatedCountByProjectUrl(id, u.id);
+                
+                completedTotal += uCompleted;
+                terminateTotal += uTerminate;
+            } else {
+                uCompleted = await SurveyData.getCompletedSurveysByProjectUrl({
+                    projectid: id,
+                    project_url_id: u.id
+                });
+                uTerminate = await SurveyData.getTerminatedSurveysByProjectUrl({
+                    projectid: id,
+                    project_url_id: u.id
+                });
+
+                completedTotal += uCompleted;
+                terminateTotal += uTerminate;
             }
 
-            const linkTypeLabel = hasMultiLink && hasSingleLink
-                ? 'Mixed'
-                : hasMultiLink ? 'MultiLink' : hasSingleLink ? 'SingleLink' : null;
+            urlDetails.push({
+                url_id: u.id,
+                Project_Link_Type: u.Project_Link_Type,
+                country: u.country,
+                Language: u.Language,
+                CPI: u.CPI,
+                LOI: u['LOI(Minute)'],
+                CompletedCount: uCompleted,
+                Terminate: uTerminate,
+                SampleSize: sampleSize,
+                QuotaAdded: quotasAdded,
+                RemainingQuota: remainingQuota
+            });
+        }
 
-            return {
-                project_id: project.id,
-                Project_Name: project.Project_Name,
-                Clients: project.Clients,
-                Status: project.Status,
-                Sales_Manager: project.Sales_Manager,
-                Project_Manager: project.Project_Manager,
-                country,
-                Language: language,
-                Project_Link_Type: linkTypeLabel,
-                URL_Count: hasMultiLink ? urlCountTotal : null,   // sirf multilink me value, warna null
-                CPI: cpi,
-                LOI: loi,
-                CompletedCount: completedTotal,
-                SampleSize: sampleSizeTotal,
-                QuotaAdded: quotaAddedTotal,
-                RemainingQuota: remainingQuotaTotal,
-                Terminate: terminateTotal,
-                QuotaFull: sampleSizeTotal > 0 && remainingQuotaTotal <= 0
-            };
-        }));
+        const responseData = {
+            project_id: project.id,
+            Project_Name: project.Project_Name,
+            Clients: project.Clients,
+            Status: project.Status,
+            Sales_Manager: project.Sales_Manager,
+            Project_Manager: project.Project_Manager,
+            urls: urlDetails,
+            totalCompletedCount: completedTotal,
+            totalSampleSize: sampleSizeTotal,
+            totalQuotaAdded: quotaAddedTotal,
+            totalRemainingQuota: remainingQuotaTotal,
+            Ttotalerminate: terminateTotal,
+            totalQuotaFull: sampleSizeTotal > 0 && remainingQuotaTotal <= 0
+        };
 
         return res.status(200).json({
             success: true,
-            data,
-            total: projectResult.total,
-            page: projectResult.page,
-            limit: projectResult.limit,
-            totalPages: projectResult.totalPages
+            data: responseData
         });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
