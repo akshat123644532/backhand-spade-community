@@ -171,6 +171,26 @@ createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP
         );
         return Number(rows[0]?.completedSurveys || 0);
     },
+   
+getTerminatedSurveysByProjectUrl: async ({ projectid, project_url_id }) => {
+    const [rows] = await db.execute(
+        `SELECT COUNT(*) AS terminatedSurveys
+         FROM \`${TABLE}\` sd
+         WHERE sd.projectid = ?
+           AND sd.project_url_id = ?
+           AND LOWER(sd.Status) = 'terminated'
+           AND EXISTS (
+                SELECT 1
+                FROM supplier_mapping sm
+                WHERE sm.projectid = sd.projectid
+                  AND sm.projectUrlId = sd.project_url_id
+                  AND sm.partnerid <=> sd.partnerid
+                  AND sm.deleted_at IS NULL
+           )`,
+        [projectid, project_url_id]
+    );
+    return Number(rows[0]?.terminatedSurveys || 0);
+},
 
    
     getProjectReport: async (project_id, { partner_id = null } = {}) => {

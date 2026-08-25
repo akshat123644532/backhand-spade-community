@@ -743,6 +743,101 @@ export const toggleLinkMode = async (req, res) => {
     }
 };
 
+export const getSingleProjectSummary = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const project = await Project.getById(id);
+        if (!project) {
+            return res.status(404).json({ success: false, message: "Project not found!" });
+        }
+
+        const urlRows = await ProjectUrl.getByProjectId(id);
+
+        let sampleSizeTotal = 0;
+        let quotaAddedTotal = 0;
+        let remainingQuotaTotal = 0;
+        let completedTotal = 0;
+        let terminateTotal = 0;
+
+        const urlDetails = [];
+
+        for (const u of urlRows) {
+            const multiLink = isMultiLink(u.Project_Link_Type);
+
+            const { sampleSize, quotasAdded, remainingQuota } =
+                await SupplierMapping.getQuotaStatsByProjectUrlId(u.id);
+
+            sampleSizeTotal += sampleSize;
+            quotaAddedTotal += quotasAdded;
+            remainingQuotaTotal += remainingQuota;
+
+            let uCompleted = 0;
+            let uTerminate = 0;
+            let uUrlCount = 0;
+
+            if (multiLink) {
+                const stats = await ProjectMultipleUrl.getStatsByProjectId(id, u.id);
+                uUrlCount = stats.totalMultiLinkCount;
+                uCompleted = stats.completedSurveyCount;
+                uTerminate = await ProjectMultipleUrl.getTerminatedCountByProjectUrl(id, u.id);
+                
+                completedTotal += uCompleted;
+                terminateTotal += uTerminate;
+            } else {
+                uCompleted = await SurveyData.getCompletedSurveysByProjectUrl({
+                    projectid: id,
+                    project_url_id: u.id
+                });
+                uTerminate = await SurveyData.getTerminatedSurveysByProjectUrl({
+                    projectid: id,
+                    project_url_id: u.id
+                });
+
+                completedTotal += uCompleted;
+                terminateTotal += uTerminate;
+            }
+
+            urlDetails.push({
+                url_id: u.id,
+                Project_Link_Type: u.Project_Link_Type,
+                country: u.country,
+                Language: u.Language,
+                CPI: u.CPI,
+                LOI: u['LOI(Minute)'],
+                CompletedCount: uCompleted,
+                Terminate: uTerminate,
+                SampleSize: sampleSize,
+                QuotaAdded: quotasAdded,
+                RemainingQuota: remainingQuota
+            });
+        }
+
+        const responseData = {
+            project_id: project.id,
+            Project_Name: project.Project_Name,
+            Clients: project.Clients,
+            Status: project.Status,
+            Sales_Manager: project.Sales_Manager,
+            Project_Manager: project.Project_Manager,
+            urls: urlDetails,
+            totalCompletedCount: completedTotal,
+            totalSampleSize: sampleSizeTotal,
+            totalQuotaAdded: quotaAddedTotal,
+            totalRemainingQuota: remainingQuotaTotal,
+            Ttotalerminate: terminateTotal,
+            totalQuotaFull: sampleSizeTotal > 0 && remainingQuotaTotal <= 0
+        };
+
+        return res.status(200).json({
+            success: true,
+            data: responseData
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const getActiveSurveyLink = async (req, res) => {
     try {
         const { urlId } = req.params;
@@ -869,5 +964,197 @@ export const exportProjectsCsv = async (req, res) => {
         return sendCsv(res, 'projects.csv', csv);
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+// ReContact Survey — clone Clients + Country from a reference project, rest is new
+export const addRecontactProject = async (req, res) => {
+    const connection = await db.getConnection();
+    let started = false;
+    try {
+        const metadata = parseMaybeJson(req.body?.metadata);
+        const metaObj = (metadata && typeof metadata === 'object' && !Array.isArray(metadata))
+            ? metadata
+            : {};
+        const body = { ...(req.body || {}), ...metaObj };
+        delete body.metadata;
+        delete body.file;
+
+        const { reference_project_id } = body;
+        if (!reference_project_id) {
+            return res.status(400).json({
+                success: false,
+                message: "reference_project_id is required!"
+            });
+        }
+
+        const referenceProject = await Project.getById(reference_project_id);
+        if (!referenceProject) {
+            return res.status(404).json({
+                success: false,
+                message: "Reference project not found!"
+            });
+        }
+
+        const referenceUrls = await ProjectUrl.getByProjectId(reference_project_id);
+        if (!referenceUrls || !referenceUrls.length) {
+            return res.status(400).json({
+                success: false,
+                message: "Reference project has no Project URL Info to copy the country from!"
+            });
+        }
+        const referenceCountry = referenceUrls[0].country || null;
+
+        const {
+            Project_Name, Project_Manager, Sales_Manager, RFQ, Project_Description,
+            Notes, Status
+        } = body;
+
+        if (!Project_Name) {
+            return res.status(400).json({ success: false, message: "Project name is required!" });
+        }
+
+        const urlPayload = { ...body };
+        delete urlPayload.reference_project_id;
+        delete urlPayload.Project_Name;
+        delete urlPayload.Project_Manager;
+        delete urlPayload.Sales_Manager;
+        delete urlPayload.RFQ;
+        delete urlPayload.Project_Description;
+        delete urlPayload.Notes;
+        delete urlPayload.Status;
+        delete urlPayload.Clients;   // locked from reference, never trust client input
+        delete urlPayload.country;   // locked from reference, never trust client input
+
+        const rawLinkType = urlPayload.Project_Link_Type
+            ?? urlPayload.project_link_type
+            ?? urlPayload.projectLinkType
+            ?? urlPayload.linkType;
+        const projectLinkType = resolveProjectLinkType(rawLinkType);
+        if (rawLinkType !== undefined && rawLinkType !== null && rawLinkType !== '' && projectLinkType === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: "Project_Link_Type must be 'MultiLink' or 'SingleLink'!"
+            });
+        }
+        if (projectLinkType) {
+            urlPayload.Project_Link_Type = projectLinkType;
+        }
+
+        const multiLink = isMultiLink(urlPayload.Project_Link_Type);
+        const sampleSize = Number(urlPayload.SampleSize);
+
+        let normalizedRows = null;
+        if (multiLink) {
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    message: "CSV file is required for Multi Link projects! Send as multipart/form-data with field name 'file' (or 'csv' / 'csvFile')."
+                });
+            }
+
+            const csvRows = parseCsvFile(req.file.path);
+            normalizedRows = normalizeCsvRows(csvRows);
+
+            if (!normalizedRows.length) {
+                return res.status(400).json({ success: false, message: "CSV file is empty!" });
+            }
+            if (!Number.isFinite(sampleSize) || sampleSize <= 0) {
+                return res.status(400).json({ success: false, message: "SampleSize is required for Multi Link projects!" });
+            }
+            if (sampleSize !== normalizedRows.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Sample size and no. of links not equal",
+                    sampleSize,
+                    linksCount: normalizedRows.length
+                });
+            }
+            validateMultiLinkCsvRows(normalizedRows);
+        }
+
+        const partnerMeta = await resolvePartnerMeta(urlPayload.partner_id || body.partner_id || null);
+
+        await connection.beginTransaction();
+        started = true;
+
+        // Step 1: create project_Info — Clients locked from reference
+        const [projectResult] = await connection.execute(
+            `INSERT INTO project_Info
+             (Project_Name, Project_code, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Notes, Status, action_by, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [
+                Project_Name,
+                await Project.generateProjectCode(connection),
+                referenceProject.Clients || null,
+                Project_Manager || null,
+                Sales_Manager || null,
+                RFQ || null,
+                Project_Description || null,
+                Notes || null,
+                Status || 'active',
+                req.user?.id || null
+            ]
+        );
+        const newProjectId = projectResult.insertId;
+
+        // Step 2: create project_url_Info — country locked from reference
+        const { id: urlId, project_url_code } = await ProjectUrl.create(
+            {
+                ...urlPayload,
+                project_id: newProjectId,
+                country: referenceCountry,
+                action_by: req.user?.id || null
+            },
+            connection
+        );
+
+        let jobId = null;
+        if (normalizedRows) {
+            jobId = await enqueueMultiLinkCsvImport({
+                project_id: Number(newProjectId),
+                project_url_id: urlId,
+                partner_id: partnerMeta.partner_id,
+                user_type: partnerMeta.UserType,
+                rows: normalizedRows,
+                conn: connection,
+                startProcessing: false
+            });
+        }
+
+        await connection.commit();
+        started = false;
+
+        if (jobId) {
+            startMultiLinkCsvImport(jobId);
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: "ReContact survey created successfully!",
+            data: {
+                project_id: newProjectId,
+                project_url_id: urlId,
+                project_url_code,
+                Clients: referenceProject.Clients,
+                country: referenceCountry,
+                reference_project_id: Number(reference_project_id),
+                jobId,
+                importStatus: jobId ? 'pending' : null
+            }
+        });
+    } catch (error) {
+        if (started) await connection.rollback();
+        const status = error.statusCode || 500;
+        return res.status(status).json({
+            success: false,
+            message: status === 500 ? "Server error!" : error.message,
+            error: error.message,
+            ...(error.invalidRows ? { invalidRows: error.invalidRows } : {})
+        });
+    } finally {
+        connection.release();
+        if (req.file?.path && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch { /* ignore cleanup errors */ }
+        }
     }
 };

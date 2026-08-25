@@ -254,7 +254,16 @@ const ProjectMultipleUrl = {
         return rows;
     },
 
-    /** Resolve multi-link survey row by project + url + vendor email (uid) */
+getTerminatedCountByProjectUrl: async (project_id, project_url_id, conn = db) => {
+    const [rows] = await conn.execute(
+        `SELECT COUNT(*) AS terminatedCount
+         FROM project_mutiple_Url
+         WHERE project_id = ? AND project_url_id = ? AND LOWER(Status) = 'terminated'`,
+        [project_id, project_url_id]
+    );
+    return Number(rows[0]?.terminatedCount || 0);
+},
+   
     getSurveyByAccess: async ({ project_id, project_url_id, Vender_UserName, partner_id = null }) => {
         const params = [project_id, project_url_id, String(Vender_UserName || '').trim()];
         let partnerSql = '';
@@ -304,9 +313,7 @@ const ProjectMultipleUrl = {
         return result.affectedRows;
     },
 
-    /**
-     * Get a mapped partner_id for this project + project_url_id (multi-link).
-     */
+  
     getMappedPartnerId: async (project_id, project_url_id) => {
         const [rows] = await db.execute(
             `SELECT partner_id
@@ -322,7 +329,7 @@ const ProjectMultipleUrl = {
         return partnerId == null || partnerId === '' ? null : Number(partnerId);
     },
 
-    /** First active multi-link row for partner + project + project_url */
+   
     getFirstActiveByPartnerProjectUrl: async ({ project_id, project_url_id, partner_id }) => {
         const [rows] = await db.execute(
             `SELECT id, partner_id, project_id, project_url_id, Live_Link, VenderURL,
@@ -339,11 +346,7 @@ const ProjectMultipleUrl = {
         return rows[0] || null;
     },
 
-    /**
-     * On survey start: bind uid → Vender_UserName for the first unbound row
-     * (NULL or legacy XXXXXX placeholder) for this project_id + project_url_id
-     * (+ partner when provided). If already set to this uid, leave it unchanged.
-     */
+   
     bindUidOnSurveyStart: async ({ project_id, project_url_id, partner_id, uid }) => {
         const userName = String(uid || '').trim();
         if (!userName) return null;
