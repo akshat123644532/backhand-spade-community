@@ -3,14 +3,16 @@ import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
-import { decryptUid } from '../utils/linkSecurityHelper.js';
+import {decryptUid } from '../utils/linkSecurityHelper.js';
+import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import { decodeSurveyToken } from '../utils/Encryptionhelper.js';
 import { appendUidToLink, appendPidToLink, normalizeUid, getClientIp } from '../utils/surveyHelper.js';
 import { finalizeSurveyOutcome } from '../services/surveyStatusService.js';
-
+import surveyPreScreenAnswers from '../models/preScreenAnswers.js';
+import { getPreScreenResponseId, ALLOWED_PRESCREEN_STATUSES } from '../utils/surveyHelper.js';
 const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined', 'xxxxxx']);
 
-const sendError = (res, error) => {
+export const sendError = (res, error) => {
     const statusCode = error.statusCode || 500;
     return res.status(statusCode).json({
         success: false,
@@ -211,6 +213,17 @@ export const addSurveyActivity = async (req, res) => {
         const id = await SurveyData.createInitiated({
             partnerid, projectid, project_url_id, UserId, InitalIP
         });
+
+        const preScreenAdded = await surveyPreScreenResponse.createInitiated({
+            survey_data_id: id,
+            UserId,
+        });
+        if (!preScreenAdded) {
+            return res.status(400).json({
+                success: false,
+                message: 'Failed to add pre-screen response!'
+            });
+        }
         const row = await SurveyData.getById(id);
 
         return res.status(201).json({
@@ -241,6 +254,9 @@ export const getSurveyPreScreen = async (req, res) => {
         const project_url_id = Number(tokenData.projectUrlId);
 
         const urlInfo = await ProjectUrl.getById(project_url_id);
+        // console.log('urlInfo', urlInfo);
+        // console.log('projectid', projectid);
+        // console.log('project_url_id', project_url_id);
         if (!urlInfo) {
             return res.status(404).json({ success: false, message: 'Project URL not found!' });
         }
@@ -269,7 +285,30 @@ export const getSurveyPreScreen = async (req, res) => {
                 message: 'PreScreen is enabled but PreScreenid is missing!'
             });
         }
+        const surveyDataId = await SurveyData.getId(projectid,project_url_id);
 
+        if (!surveyDataId) {
+            return res.status(404).json({
+                success: false,
+                required: true,
+                message: 'Survey data not found!'
+            });
+        }
+
+        const preScreenResponseStatus = await surveyPreScreenResponse.getPreScreenResponseBySurveyDataIdUserId(surveyDataId.id, surveyDataId.UserId);
+        if (preScreenResponseStatus.status === 'COMPLETED') {
+            return res.status(200).json({
+                success: true,
+                required: true,
+                message: 'PreScreen already completed!'
+            });
+        } else if (preScreenResponseStatus.status === 'TERMINATED') {
+            return res.status(200).json({
+                success: true,
+                required: true,
+                message: 'PreScreen already terminated!'
+            });
+        };
         const group = await QuestionnaireGroup.getById(preScreenId);
         if (!group) {
             return res.status(404).json({
@@ -473,3 +512,123 @@ export const terminateSurvey = handleSurveyOutcome('terminate');
 export const quotaFullSurvey = handleSurveyOutcome('Quota full');
 export const qualityTermSurvey = handleSurveyOutcome('qualityTerm');
 export const surveyClosedSurvey = handleSurveyOutcome('surveyClosed');
+
+export const savePreScreenResponse = async (req, res) => {
+    try {
+        const token = req.body?.token || req.query?.token;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: 'Token is required!'
+            });
+        }
+
+        const tokenData = decodeToken(token);
+
+        const {
+            question_id,
+            question_text,
+            question_type,
+            answer
+        } = req.body;
+
+        if (
+            !question_id ||
+            !question_text ||
+            !question_type ||
+            answer === undefined
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'question_id, question_text, question_type and answer are required!'
+            });
+        }
+
+        const preScreenResponseId = await getPreScreenResponseId(
+            tokenData.projectid,
+            tokenData.projectUrlId
+        );
+
+        if (!preScreenResponseId) {
+            return res.status(404).json({
+                success: false,
+                message: 'PreScreen response not found!'
+            });
+        }
+
+        const preScreenAnswer =
+            await surveyPreScreenAnswers.createOrUpdateAnswer({
+                survey_prescreen_response_id: preScreenResponseId,
+                question_id,
+                question_text,
+                question_type,
+                answer
+            });
+
+        if (!preScreenAnswer) {
+            return res.status(400).json({
+                success: false,
+                message: 'Failed to add pre-screen answer!'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'PreScreen answer added successfully!'
+        });
+
+    } catch (error) {
+        return sendError(res, error);
+    }
+};
+
+export const updatePreScreenResponseStatus = async (req, res) => {
+    try {
+        const token = req.body?.token || req.query?.token;
+        const tokenData = decodeToken(token);
+        const status = req.query?.status;
+        if (!status) {
+            return res.status(400).json({
+                success: false,
+                message: 'Status is required!'
+            });
+        }
+
+        if (!ALLOWED_PRESCREEN_STATUSES.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid status type!'
+            });
+        }
+        const preScreenResponseId = await getPreScreenResponseId(
+            tokenData.projectid,
+            tokenData.projectUrlId
+        );
+
+        if (!preScreenResponseId) {
+            return res.status(404).json({
+                success: false,
+                message: 'PreScreen response not found!'
+            });
+        }
+        
+        const preScreenResponse = await surveyPreScreenResponse.updateStatus({
+            id: preScreenResponseId,
+            status
+        });
+        if (!preScreenResponse) {
+            return res.status(400).json({
+                success: false,
+                message: 'Failed to update pre-screen response status!'
+            });
+        }
+        
+        return res.status(200).json({
+            success: true,
+            message: 'PreScreen response status updated successfully!'
+        });
+    } catch (error) {
+        return sendError(res, error);
+    }
+};

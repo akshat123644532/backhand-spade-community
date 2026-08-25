@@ -1,5 +1,13 @@
 import { decodeSurveyToken } from './Encryptionhelper.js';
+import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
+import SurveyData from '../models/surveyDataModel.js';
 
+export const ALLOWED_PRESCREEN_STATUSES = [
+    'NOT_STARTED',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'TERMINATED'
+];
 export const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined', 'xxxxxx']);
 
 export const SURVEY_STATUS_ALIASES = {
@@ -130,4 +138,24 @@ export const getStatusRedirectUrl = (mapping, status, uid) => {
     const url = mapping?.[field] || null;
     if (!url) return null;
     return uid ? appendUidToLink(url, uid) : url;
+};
+
+export const getPreScreenResponseId = async (projectId, projectUrlId) => {
+    const surveyData = await SurveyData.getId(projectId, projectUrlId);
+
+    if (!surveyData) {
+        return null;
+    }
+
+    const preScreenResponse =
+        await surveyPreScreenResponse.getPreScreenResponseIdBySurveyDataIdUserId(
+            surveyData.id,
+            surveyData.UserId
+        );
+
+    if (!preScreenResponse) {
+        return null;
+    }
+
+    return preScreenResponse.id;
 };
