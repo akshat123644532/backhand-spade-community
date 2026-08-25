@@ -7,7 +7,9 @@ import {
     terminateSurvey,
     quotaFullSurvey,
     qualityTermSurvey,
-    surveyClosedSurvey
+    surveyClosedSurvey,
+    savePreScreenResponse,
+    updatePreScreenResponseStatus
 } from '../controllers/surveyDataController.js';
 
 const router = express.Router();
@@ -29,5 +31,8 @@ router.post('/terminate', terminateSurvey);
 router.post('/quota', quotaFullSurvey);
 router.post('/quality', qualityTermSurvey);
 router.post('/closed', surveyClosedSurvey);
+
+router.post('/prescreenResponse', savePreScreenResponse);
+router.get('/prescreenResponseEnd', updatePreScreenResponseStatus);
 
 export default router;

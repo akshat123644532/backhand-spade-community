@@ -152,6 +152,14 @@ createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP
         return rows[0] || null;
     },
 
+    getId: async (projectid,project_url_id) => {
+        const [rows] = await db.execute(
+            `SELECT id,UserId FROM \`${TABLE}\` WHERE projectid = ? AND project_url_id = ? LIMIT 1`,
+            [projectid,project_url_id]
+        );
+        return rows[0] || null;
+    },
+
     getCompletedSurveysByProjectUrl: async ({ projectid, project_url_id }) => {
         const [rows] = await db.execute(
             `SELECT COUNT(*) AS completedSurveys

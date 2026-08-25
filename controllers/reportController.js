@@ -2,7 +2,8 @@ import Project from '../models/projectModel.js';
 import SurveyData from '../models/surveyDataModel.js';
 import { getLocationFromIp } from '../utils/linkSecurityHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
-
+import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
+import { sendError } from './surveyDataController.js';
 // Shared: fetch + shape the report rows (used by both the JSON view and the CSV download)
 const buildReportRows = async (project_id, partner_id) => {
     const rows = await SurveyData.getProjectReport(project_id, { partner_id: partner_id || null });
@@ -101,7 +102,7 @@ const formatSupplierReportRows = (rows) =>
             finalIp: row.finalIp || null,
             multiLinkUrl: row.multiLinkUrl || null
         };
-    });
+});
 
 // GET /api/project-reports/:projectId/supplier/:partnerId
 export const getSupplierReport = async (req, res) => {
@@ -190,5 +191,107 @@ export const downloadSupplierReportCsv = async (req, res) => {
         return sendCsv(res, `supplier_report_${safeName}_${partnerId}.csv`, csv);
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Server error!', error: error.message });
+    }
+};
+
+export const getPreScreenReport = async (req, res) => {
+    try {
+        const projectid = req.query.projectid;
+
+        if (!projectid) {
+            return res.status(400).json({
+                success: false,
+                message: 'projectid is required!'
+            });
+        }
+
+        const data = await surveyPreScreenResponse.getPreScreenReport({
+            projectid
+        });
+
+        return res.status(200).json({
+            success: true,
+            data
+        });
+
+    } catch (error) {
+        return sendError(res, error);
+    }
+};
+
+export const exportPreScreenReport = async (req, res) => {
+    try {
+        const projectid = req.query.projectid;
+
+        if (!projectid) {
+            return res.status(400).json({
+                success: false,
+                message: 'projectid is required!'
+            });
+        }
+
+        const data = await surveyPreScreenResponse.getPreScreenReport({
+            projectid
+        });
+
+        const headers = [
+            'S. No.',
+            'Partner ID',
+            'Partner Name',
+            'Client Name',
+            'IP Address',
+            'Question',
+            'Answer',
+            'Status'
+        ];
+
+        const escapeCsvValue = (value) => {
+            if (value === null || value === undefined) {
+                return '';
+            }
+
+            const stringValue = String(value);
+
+            if (
+                stringValue.includes(',') ||
+                stringValue.includes('"') ||
+                stringValue.includes('\n') ||
+                stringValue.includes('\r')
+            ) {
+                return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+
+            return stringValue;
+        };
+
+        const csvRows = [
+            headers.join(',')
+        ];
+
+        for (const row of data) {
+            csvRows.push([
+                row.serial_no,
+                row.partner_id,
+                row.partner_name,
+                row.client_name,
+                row.ip_address,
+                row.question,
+                row.answer,
+                row.status
+            ].map(escapeCsvValue).join(','));
+        }
+
+        const csv = csvRows.join('\n');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="pre-screen-report-${projectid}.csv"`
+        );
+
+        return res.status(200).send(csv);
+
+    } catch (error) {
+        return sendError(res, error);
     }
 };
