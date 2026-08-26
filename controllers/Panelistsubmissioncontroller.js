@@ -4,7 +4,7 @@ import PanelistSubmissionResponse from '../models/panelistSubmissionResponseMode
 import { decryptId } from '../utils/Encryptionhelper.js';
 
 
-const QUESTIONNAIRE_COMPLETION_POINTS = 50.00;
+const QUESTIONNAIRE_COMPLETION_POINTS = 200;
 
 export const getQuestionnaireByUrl = async (req, res) => {
     try {
