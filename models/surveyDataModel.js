@@ -192,6 +192,105 @@ getTerminatedSurveysByProjectUrl: async ({ projectid, project_url_id }) => {
     return Number(rows[0]?.terminatedSurveys || 0);
 },
 
+getSupplierSummaryByProjectId: async (project_id) => {
+    const [rows] = await db.execute(
+        `SELECT
+            agg.partnerid AS supplier_id,
+            agg.total_respondent,
+            agg.complete,
+            agg.terminate,
+            agg.over_quota,
+            agg.quality_term,
+            agg.dropout,
+            sm.partner_code AS supplier_code,
+            p.name AS supplier_name
+         FROM (
+            SELECT
+                partnerid,
+                COUNT(*) AS total_respondent,
+                SUM(CASE WHEN LOWER(Status) = 'completed' THEN 1 ELSE 0 END) AS complete,
+                SUM(CASE WHEN LOWER(Status) = 'terminated' THEN 1 ELSE 0 END) AS terminate,
+                SUM(CASE WHEN LOWER(Status) IN ('overquota','over quota') THEN 1 ELSE 0 END) AS over_quota,
+                SUM(CASE WHEN LOWER(Status) IN ('qualityterm','quality term') THEN 1 ELSE 0 END) AS quality_term,
+                SUM(CASE WHEN LOWER(Status) NOT IN ('completed','terminated','overquota','over quota','qualityterm','quality term','initiated') THEN 1 ELSE 0 END) AS dropout,
+                MIN(id) AS first_id
+            FROM \`${TABLE}\`
+            WHERE projectid = ?
+            GROUP BY partnerid
+         ) agg
+         LEFT JOIN (
+            SELECT partnerid, MIN(partner_code) AS partner_code, MIN(id) AS sm_id
+            FROM supplier_mapping
+            WHERE projectid = ? AND deleted_at IS NULL
+            GROUP BY partnerid
+         ) sm ON sm.partnerid <=> agg.partnerid
+         LEFT JOIN partners p ON p.id = agg.partnerid
+         ORDER BY agg.first_id ASC`,
+        [project_id, project_id]
+    );
+
+    return rows.map((r, idx) => ({
+        s_no: idx + 1,
+        supplier_id: r.supplier_id,
+        supplier_code: r.supplier_code || (r.supplier_id != null ? `P${r.supplier_id}` : 'DIRECT'),
+        supplier_name: r.supplier_name || (r.supplier_id != null ? 'Unknown' : 'Direct / No Partner'),
+        total_respondent: Number(r.total_respondent || 0),
+        complete: Number(r.complete || 0),
+        terminate: Number(r.terminate || 0),
+        over_quota: Number(r.over_quota || 0),
+        quality_term: Number(r.quality_term || 0),
+        dropout: Number(r.dropout || 0)
+    }));
+},
+getSupplierSummaryByProjectId: async (project_id) => {
+    const [rows] = await db.execute(
+        `SELECT
+            sm.id AS mapping_id,
+            sm.partnerid AS supplier_id,
+            sm.partner_code AS supplier_code,
+            p.name AS supplier_name,
+            sm.quota,
+            COALESCE(agg.total_respondent, 0) AS total_respondent,
+            COALESCE(agg.complete, 0) AS complete,
+            COALESCE(agg.terminate, 0) AS terminate,
+            COALESCE(agg.over_quota, 0) AS over_quota,
+            COALESCE(agg.quality_term, 0) AS quality_term,
+            COALESCE(agg.dropout, 0) AS dropout
+         FROM supplier_mapping sm
+         LEFT JOIN partners p ON p.id = sm.partnerid
+         LEFT JOIN (
+            SELECT
+                partnerid,
+                COUNT(*) AS total_respondent,
+                SUM(CASE WHEN LOWER(Status) = 'completed' THEN 1 ELSE 0 END) AS complete,
+                SUM(CASE WHEN LOWER(Status) = 'terminated' THEN 1 ELSE 0 END) AS terminate,
+                SUM(CASE WHEN LOWER(Status) IN ('overquota','over quota') THEN 1 ELSE 0 END) AS over_quota,
+                SUM(CASE WHEN LOWER(Status) IN ('qualityterm','quality term') THEN 1 ELSE 0 END) AS quality_term,
+                SUM(CASE WHEN LOWER(Status) NOT IN ('completed','terminated','overquota','over quota','qualityterm','quality term','initiated') THEN 1 ELSE 0 END) AS dropout
+            FROM \`${TABLE}\`
+            WHERE projectid = ?
+            GROUP BY partnerid
+         ) agg ON agg.partnerid <=> sm.partnerid
+         WHERE sm.projectid = ?
+           AND sm.deleted_at IS NULL
+         ORDER BY sm.id ASC`,
+        [project_id, project_id]
+    );
+
+    return rows.map((r, idx) => ({
+        s_no: idx + 1,
+        supplier_id: r.supplier_id,
+        supplier_code: r.supplier_code || (r.supplier_id != null ? `P${r.supplier_id}` : 'DIRECT'),
+        supplier_name: r.supplier_name || 'Unknown',
+        quota: Number(r.quota || 0),
+        total_respondent: Number(r.total_respondent || 0),
+        complete: Number(r.complete || 0),
+        terminate: Number(r.terminate || 0),
+        over_quota: Number(r.over_quota || 0),
+        quality_term: Number(r.quality_term || 0),
+        dropout: Number(r.dropout || 0)
+    }));
+},
    
     getProjectReport: async (project_id, { partner_id = null } = {}) => {
         const params = [project_id];
