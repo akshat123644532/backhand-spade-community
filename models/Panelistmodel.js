@@ -75,13 +75,17 @@ const Panelist = {
         );
     },
 
-    // Combines questionnaire completion + points credit + verify panelist in a single UPDATE
+    // NOTE: points param kept for backward compatibility (so existing call sites
+    // don't break), but it is no longer applied to balance_point.
+    // Reward points are only credited once, at signup (see addRewardPoints in
+    // panelistController.js -> signup). This function now only marks the
+    // questionnaire as completed and verifies the panelist.
     completeQuestionnaireWithPoints: async (id, points, connection = db) => {
         await connection.execute(
             `UPDATE panelists
-             SET questionnaire = 'yes', is_verified = 1, balance_point = balance_point + ?, updated_at = NOW()
+             SET questionnaire = 'yes', is_verified = 1, updated_at = NOW()
              WHERE id = ?`,
-            [points, id]
+            [id]
         );
     },
 
