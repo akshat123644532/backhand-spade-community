@@ -23,8 +23,9 @@ const Panelist = {
     create: async (data) => {
         const { name, email, phone, photo, password, activation_token, activation_token_expires, questionnaire_url } = data;
         const [result] = await db.execute(
-            `INSERT INTO panelists (name, email, phone, photo, password, activation_token, activation_token_expires, questionnaire_url)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO panelists
+             (name, email, phone, photo, password, activation_token, activation_token_expires, questionnaire_url, balance_point)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
             [name, email, phone || null, photo || null, password, activation_token, activation_token_expires, questionnaire_url]
         );
         return result.insertId;
@@ -95,7 +96,6 @@ const Panelist = {
         let where = `WHERE deleted_at IS NULL`;
         const params = [];
 
-        // FIX: trim whitespace + case-insensitive match so full-name search works
         const cleanSearch = (search || '').trim();
 
         if (cleanSearch) {

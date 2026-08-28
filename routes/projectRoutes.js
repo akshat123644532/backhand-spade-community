@@ -11,7 +11,7 @@ import {
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
     uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate,
     getMultiLinkCsvImportStatus,getSingleProjectSummary, 
-    addRecontactProject
+    addRecontactProject  ,getProjectSupplierDetails
 } from '../controllers/projectController.js';
 
 const router = express.Router();
@@ -74,5 +74,5 @@ router.get('/single/:id', getSingleProjectSummary);
 router.post('/add',                 verifyToken, addProject);
 router.post('/recontact/add',       verifyToken, csvUploadFlexible, addRecontactProject);
 router.get('/list',                 verifyToken, getAllProjects);
-
+router.get('/:id/partners', verifyToken, getProjectSupplierDetails);
 export default router;
