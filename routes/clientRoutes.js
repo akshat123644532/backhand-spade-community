@@ -1,5 +1,4 @@
 import express from 'express';
-const router = express.Router();
 import {
     addClient,
     getAllClients,
@@ -9,6 +8,7 @@ import {
     exportClientsCsv
 } from '../controllers/clientController.js';
 import verifyToken from '../middleware/authMiddleware.js';
+import { allowRoles } from '../middleware/roleMiddleware.js';
 import {
     validateAddClient,
     validateUpdateClient,
@@ -16,11 +16,14 @@ import {
     validateGetAllClients
 } from '../validations/clientValidations.js';
 
-router.post('/add', verifyToken, validateAddClient, addClient);
-router.get('/all', verifyToken, validateGetAllClients, getAllClients);
-router.get('/export/csv', verifyToken, exportClientsCsv);
-router.get('/:id', verifyToken, validateClientId, getClientById);
-router.put('/update/:id', verifyToken, validateUpdateClient, updateClient);
-router.delete('/delete/:id', verifyToken, validateClientId, deleteClient);
-export default router;
+const router = express.Router();
+const canReadClients = [verifyToken, allowRoles('admin', 'project_manager', 'sales_manager')];
+const requireAdmin = [verifyToken, allowRoles('admin')];
 
+router.post('/add', ...requireAdmin, validateAddClient, addClient);
+router.get('/all', ...canReadClients, validateGetAllClients, getAllClients);
+router.get('/export/csv', ...requireAdmin, exportClientsCsv);
+router.get('/:id', ...canReadClients, validateClientId, getClientById);
+router.put('/update/:id', ...requireAdmin, validateUpdateClient, updateClient);
+router.delete('/delete/:id', ...requireAdmin, validateClientId, deleteClient);
+export default router;

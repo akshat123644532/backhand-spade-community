@@ -15,16 +15,18 @@ import {
 } from '../controllers/projectManagerController.js';
 import { validateAddProjectManager, validateUpdateProjectManager, validateProjectManagerId, validateToggleStatus, validateGetAllProjectManagers } from '../validations/projectManagerValidations.js';
 import { validateImageFile } from '../middleware/imageValidationMiddleware.js';
+
 const router = express.Router();
+const requireAdmin = [verifyToken, allowRoles('admin')];
 
-router.post('/login',       loginProjectManager);
-router.get('/me',           verifyToken, allowRoles('project_manager'),                                                   getSelfProjectManager);
+router.post('/login', loginProjectManager);
+router.get('/me', verifyToken, allowRoles('project_manager'), getSelfProjectManager);
 
-router.post('/add',         verifyToken, upload.single('profile_image'), validateImageFile, validateAddProjectManager,    addProjectManager);
-router.get('/list',         verifyToken, validateGetAllProjectManagers,                                                   getAllProjectManagers);
-router.get('/export/csv',   verifyToken, exportProjectManagersCsv);
-router.get('/:id',          verifyToken, validateProjectManagerId,                                                        getProjectManagerById);
-router.put('/:id',          verifyToken, upload.single('profile_image'), validateImageFile, validateUpdateProjectManager, updateProjectManager);
-router.patch('/:id/status', verifyToken, validateToggleStatus,                                                            toggleStatus);
-router.delete('/:id',       verifyToken, validateProjectManagerId,                                                        deleteProjectManager);
+router.post('/add', ...requireAdmin, upload.single('profile_image'), validateImageFile, validateAddProjectManager, addProjectManager);
+router.get('/list', ...requireAdmin, validateGetAllProjectManagers, getAllProjectManagers);
+router.get('/export/csv', ...requireAdmin, exportProjectManagersCsv);
+router.get('/:id', ...requireAdmin, validateProjectManagerId, getProjectManagerById);
+router.put('/:id', ...requireAdmin, upload.single('profile_image'), validateImageFile, validateUpdateProjectManager, updateProjectManager);
+router.patch('/:id/status', ...requireAdmin, validateToggleStatus, toggleStatus);
+router.delete('/:id', ...requireAdmin, validateProjectManagerId, deleteProjectManager);
 export default router;

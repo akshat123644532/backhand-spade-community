@@ -97,7 +97,7 @@ export const loginAdmin = async (req, res) => {
         const isMatch = await verifyPassword(plainPassword, admin.password);
         if (!isMatch) return res.status(401).json({ success: false, message: "Invalid password!" });
 
-        const token = jwt.sign({ id: admin.id, email: admin.email }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        const token = jwt.sign({ id: admin.id, email: admin.email, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '1d' });
         await Admin.updateToken(admin.id, token);
 
         await logActivity({
