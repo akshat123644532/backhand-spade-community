@@ -23,14 +23,27 @@ jobs:
           username: deploy
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            set -e
+
             cd /var/www/SpadeCommunityAPI
 
+            echo "Fetching latest code..."
             git fetch origin main
             git reset --hard origin/main
 
+            echo "Restoring production environment..."
+            sudo /usr/bin/cp /etc/spade-community/api.env /var/www/SpadeCommunityAPI/.env
+
+            echo "Installing dependencies..."
             npm ci --omit=dev
 
-            sudo systemctl restart spade-api
-            sudo systemctl is-active --quiet spade-api
+            echo "Restarting API..."
+            sudo /usr/bin/systemctl restart spade-api
 
+            echo "Checking API service..."
+            sudo /usr/bin/systemctl is-active spade-api
+
+            echo "Checking API health..."
             curl -f http://127.0.0.1:5050/health
+
+            echo "Deployment successful!"
