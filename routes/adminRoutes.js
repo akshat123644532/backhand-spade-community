@@ -18,6 +18,7 @@ import {
 import verifyToken from '../middleware/authMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js';
 import { validateImageFile } from '../middleware/imageValidationMiddleware.js';
+import { checkPermission } from '../middleware/checkPermission.js';
 import {
     validateLogin,
     validateSignup,
@@ -49,7 +50,7 @@ router.post('/reset-password', validateResetPassword, resetPassword);
 router.get('/all', verifyToken, validateGetAllAdmins, getAllAdmins);
 
 // '/:id' se upar rakha hai, warna 'export' ko id samajh lega
-router.get('/export/csv', verifyToken, exportAdminsCsv);
+router.get('/export/csv', verifyToken, checkPermission('Admin', 'csv_download'), exportAdminsCsv);
 
 router.get('/:id', verifyToken, validateAdminId, getAdminById);
 
