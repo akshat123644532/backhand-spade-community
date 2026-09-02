@@ -22,7 +22,6 @@ jobs:
           host: 45.77.107.111
           username: deploy
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script_stop: true
           script: |
             cd /var/www/SpadeCommunityAPI
 
