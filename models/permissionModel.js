@@ -2,35 +2,34 @@ import { db } from "../config/db.js";
 
 const Permission = {
 
-    set: async (adminId, permissions) => {
-        const encoded = Buffer.from(JSON.stringify(permissions)).toString('base64');
-        await db.execute(`UPDATE admins SET permissions = ? WHERE id = ?`, [encoded, adminId]);
-    },
-
-    getByAdmin: async (adminId) => {
-        const [rows] = await db.execute(`SELECT permissions FROM admins WHERE id = ?`, [adminId]);
-        if (!rows.length || !rows[0].permissions) return [];
-        try {
-            const decoded = Buffer.from(rows[0].permissions, 'base64').toString('utf8');
-            const parsed = JSON.parse(decoded);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
-    },
-
-    // action: 'read' | 'write' | 'csv_download'
-    check: async (adminId, moduleName, action = 'read') => {
-        const list = await Permission.getByAdmin(adminId);
-        const entry = list.find(p => p.module === moduleName);
-        if (!entry) return false;
-
-        if (action === 'write') return !!entry.write;
-        if (action === 'csv_download') return !!entry.csv_download;
-        return !!entry.read;
+  add: async (adminId, permissions) => {
+    for (const p of permissions) {
+      await db.execute(
+        `INSERT INTO permissions
+        (admin_id, module_name, can_read, can_write, can_download)
+        VALUES (?, ?, ?, ?, ?)`,
+        [
+          adminId,
+          p.module,
+          p.read ? 1 : 0,
+          p.write ? 1 : 0,
+          p.download ? 1 : 0
+        ]
+      );
     }
+  },
+
+  // Ek helper jo check karega ki given admin ke paas
+  // kisi module par download permission hai ya nahi
+  hasDownloadAccess: async (adminId, moduleName) => {
+    const [rows] = await db.execute(
+      `SELECT can_download FROM permissions WHERE admin_id = ? AND module_name = ?`,
+      [adminId, moduleName]
+    );
+    if (!rows.length) return false;
+    return rows[0].can_download === 1;
+  }
 
 };
 
 export default Permission;
-

@@ -97,12 +97,7 @@ export const loginAdmin = async (req, res) => {
         const isMatch = await verifyPassword(plainPassword, admin.password);
         if (!isMatch) return res.status(401).json({ success: false, message: "Invalid password!" });
 
-        // ✅ CHANGED: permission_type ab JWT payload mein add ho raha hai
-        const token = jwt.sign(
-            { id: admin.id, email: admin.email, permission_type: admin.permission_type },
-            process.env.JWT_SECRET,
-            { expiresIn: '1d' }
-        );
+        const token = jwt.sign({ id: admin.id, email: admin.email }, process.env.JWT_SECRET, { expiresIn: '1d' });
         await Admin.updateToken(admin.id, token);
 
         await logActivity({
