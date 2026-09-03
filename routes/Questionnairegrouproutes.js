@@ -1,5 +1,6 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
+import { checkCsvDownloadPermission } from '../middleware/checkCsvDownloadPermission.js';
 import {
     addQuestionnaireGroup,
     getAllQuestionnaireGroups,
@@ -23,7 +24,7 @@ const router = express.Router();
 
 router.post('/add',                     verifyToken, validateAddQuestionnaireGroup,     addQuestionnaireGroup);
 router.get('/list',                     verifyToken, validateGetAllQuestionnaireGroups, getAllQuestionnaireGroups);
-router.get('/export/csv',               verifyToken, exportQuestionnaireGroupsCsv);
+router.get('/export/csv',               verifyToken, checkCsvDownloadPermission('QuestionnaireGroup'), exportQuestionnaireGroupsCsv);
 router.get('/public/:id/questions',     getGroupQuestions);
 router.post('/public/:id/submit',       submitGroupAnswers);
 router.get('/:id',                      verifyToken, validateQuestionnaireGroupId,      getQuestionnaireGroupById);

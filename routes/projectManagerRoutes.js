@@ -2,6 +2,7 @@ import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
 import { allowRoles } from '../middleware/roleMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js';
+import { checkCsvDownloadPermission } from '../middleware/checkCsvDownloadPermission.js';
 import {
     loginProjectManager,
     addProjectManager,
@@ -22,7 +23,7 @@ router.get('/me',           verifyToken, allowRoles('project_manager'),         
 
 router.post('/add',         verifyToken, upload.single('profile_image'), validateImageFile, validateAddProjectManager,    addProjectManager);
 router.get('/list',         verifyToken, validateGetAllProjectManagers,                                                   getAllProjectManagers);
-router.get('/export/csv',   verifyToken, exportProjectManagersCsv);
+router.get('/export/csv',   verifyToken, checkCsvDownloadPermission('ProjectManager'), exportProjectManagersCsv);
 router.get('/:id',          verifyToken, validateProjectManagerId,                                                        getProjectManagerById);
 router.put('/:id',          verifyToken, upload.single('profile_image'), validateImageFile, validateUpdateProjectManager, updateProjectManager);
 router.patch('/:id/status', verifyToken, validateToggleStatus,                                                            toggleStatus);

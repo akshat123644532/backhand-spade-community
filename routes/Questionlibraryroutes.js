@@ -1,5 +1,6 @@
 import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
+import { checkCsvDownloadPermission } from '../middleware/checkCsvDownloadPermission.js';
 import {
     addLibraryQuestion,
     getAllLibraryQuestions,
@@ -24,7 +25,7 @@ const router = express.Router();
 
 router.post('/add',                 verifyToken, validateAddLibraryQuestion,     addLibraryQuestion);
 router.get('/list',                 verifyToken, validateGetAllLibraryQuestions, getAllLibraryQuestions);
-router.get('/export/csv',           verifyToken, exportLibraryQuestionsCsv);
+router.get('/export/csv',           verifyToken, checkCsvDownloadPermission('QuestionLibrary'), exportLibraryQuestionsCsv);
 router.get('/language/:language',   verifyToken, validateGetByLanguage,          getLibraryQuestionsByLanguage);
 router.put('/sort-order',           verifyToken,                                 updateLibraryQuestionSortOrder);
 router.get('/:id',                  verifyToken, validateLibraryQuestionId,      getLibraryQuestionById);

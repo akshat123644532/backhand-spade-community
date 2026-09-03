@@ -2,6 +2,7 @@ import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
 import { allowRoles } from '../middleware/roleMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js';
+import { checkCsvDownloadPermission } from '../middleware/checkCsvDownloadPermission.js';
 import {
     loginSalesManager,
     addSalesManager,
@@ -22,7 +23,7 @@ router.get('/me',           verifyToken, allowRoles('sales_manager'),           
 
 router.post('/',            verifyToken, upload.single('profile_image'), validateImageFile, validateAddSalesManager,    addSalesManager);
 router.get('/list',         verifyToken, validateGetAllSalesManagers,                                                   getAllSalesManagers);
-router.get('/export/csv',   verifyToken, exportSalesManagersCsv);
+router.get('/export/csv',   verifyToken, checkCsvDownloadPermission('SalesManager'), exportSalesManagersCsv);
 router.get('/:id',          verifyToken, validateSalesManagerId,                                                        getSalesManagerById);
 router.put('/:id',          verifyToken, upload.single('profile_image'), validateImageFile, validateUpdateSalesManager, updateSalesManager);
 router.patch('/status/:id', verifyToken, validateToggleStatus,                                                          toggleStatus);
