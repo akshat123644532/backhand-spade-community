@@ -4,7 +4,7 @@ import { getSettings, updateSettings } from '../controllers/rewardSettingControl
 
 const router = express.Router();
 
-router.get('/get',    verifyToken, getSettings);
+router.get('/get', verifyToken, getSettings);
 router.put('/update', verifyToken, updateSettings);
 
 export default router;

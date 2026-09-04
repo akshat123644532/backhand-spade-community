@@ -9,7 +9,7 @@ import {
     exportClientsCsv
 } from '../controllers/clientController.js';
 import verifyToken from '../middleware/authMiddleware.js';
-import { checkPermission } from '../middleware/checkPermission.js';
+import { checkCsvDownloadPermission } from '../middleware/checkCsvDownloadPermission.js';
 import {
     validateAddClient,
     validateUpdateClient,
@@ -19,7 +19,7 @@ import {
 
 router.post('/add', verifyToken, validateAddClient, addClient);
 router.get('/all', verifyToken, validateGetAllClients, getAllClients);
-router.get('/export/csv', verifyToken, checkPermission('Client', 'csv_download'), exportClientsCsv);
+router.get('/export/csv', verifyToken, checkCsvDownloadPermission('Client'), exportClientsCsv);
 router.get('/:id', verifyToken, validateClientId, getClientById);
 router.put('/update/:id', verifyToken, validateUpdateClient, updateClient);
 router.delete('/delete/:id', verifyToken, validateClientId, deleteClient);
