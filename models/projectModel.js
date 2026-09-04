@@ -19,6 +19,19 @@ const Project = {
 
     create: async (data, conn = db) => {
         const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Notes, Status, action_by } = data;
+        
+        // Check for duplicate project name
+        const [existing] = await conn.execute(
+            `SELECT id FROM project_Info WHERE Project_Name = ? AND (isdeleted = 0 OR isdeleted IS NULL) LIMIT 1`,
+            [Project_Name]
+        );
+        
+        if (existing.length > 0) {
+            const error = new Error('Project name already exists');
+            error.code = 'DUPLICATE_PROJECT_NAME';
+            throw error;
+        }
+
         const Project_code = await Project.generateProjectCode(conn);
 
         const [result] = await conn.execute(
@@ -123,3 +136,4 @@ const Project = {
 
 
 export default Project;
+
