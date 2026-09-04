@@ -3,7 +3,23 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import fs from 'fs';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ✅ FIX: Load .env from correct path
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.join(__dirname, '.env');
+
+console.log('📁 Loading .env from:', envPath);
+const envConfig = dotenv.config({ path: envPath });
+
+if (envConfig.error) {
+    console.error('❌ .env file not found or cannot be read:', envConfig.error.message);
+    console.error('Expected at:', envPath);
+} else {
+    console.log('✅ .env loaded successfully');
+    console.log('✅ CRYPTO_SECRET:', !!process.env.CRYPTO_SECRET ? 'loaded' : 'MISSING!');
+}
 
 import adminRoutes from './routes/adminRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
@@ -14,7 +30,6 @@ import salesProjectRoutes from './routes/salesProjectRoutes.js';
 import salesManagerRoutes from './routes/salesManagerRoutes.js';
 import questionLibraryRoutes from './routes/Questionlibraryroutes.js';
 import questionnaireGroupRoutes from './routes/Questionnairegrouproutes.js';
-
 import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
 import salesLogRoutes from './routes/salesLogRoutes.js';
 import surveyPageRoutes from './routes/surveyPageRoutes.js';
@@ -30,19 +45,16 @@ import panelistSubmissionRoutes from './routes/panelistSubmissionRoutes.js';
 import rewardRoutes from './routes/rewardRoutes.js';
 import panelistPortalRoutes from './routes/panelistPortalRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
-// import {encrypt} from './utils/cryptoHelper.js';
 import findUserRoutes from './routes/findUserRoutes.js';
 import systemSettingRoutes from './routes/systemSettingRoutes.js';
 import supplierMappingRoutes from './routes/supplierMappingRoutes.js';
 import supplierRedirectRoutes from './routes/supplierRedirectRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
-
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
-
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -56,7 +68,7 @@ app.use(helmet({
 app.use(cors());
 app.use('/uploads', express.static('uploads'));
 app.set("trust proxy", 2);
-// console.log(encrypt("123456"));
+
 app.use((req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
@@ -66,9 +78,12 @@ app.use((req, res, next) => {
         express.urlencoded({ limit: "10mb", extended: true })(req, res, next);
     });
 });
+
 app.get('/health', (req, res) => {
     res.status(200).json({ success: true, message: "Server is running!" });
 });
+
+// Routes
 app.use('/api/admin', adminRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/partner', partnerRoutes);
@@ -78,7 +93,6 @@ app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
 app.use('/api/question-library', questionLibraryRoutes);
 app.use('/api/questionnaire-group', questionnaireGroupRoutes);
-
 app.use('/api/sales/log', salesLogRoutes);
 app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
 app.use('/api/survey-pages', surveyPageRoutes);
@@ -105,7 +119,7 @@ app.use('/api/project-reports', reportRoutes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
     resumePendingMultiLinkCsvJobs();
     startProjectUrlCloseScheduler();
 });
