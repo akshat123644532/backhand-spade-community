@@ -1,0 +1,61 @@
+name: Deploy API
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: 45.77.107.111
+          username: deploy
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /var/www/SpadeCommunityAPI
+
+            echo "Fetching latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "Restoring production environment..."
+            sudo /usr/bin/cp /etc/spade-community/api.env /var/www/SpadeCommunityAPI/.env
+
+            echo "Installing dependencies..."
+            npm ci --omit=dev
+
+            echo "Restarting API..."
+            sudo /usr/bin/systemctl restart spade-api
+
+            echo "Checking API service..."
+            sudo /usr/bin/systemctl is-active spade-api
+
+            echo "Waiting for API to become ready..."
+
+            for i in {1..15}; do
+              if curl -sf http://127.0.0.1:5050/health; then
+                echo
+                echo "API is healthy!"
+                echo "Deployment successful!"
+                exit 0
+              fi
+
+              echo "API not ready yet... attempt $i/15"
+              sleep 2
+            done
+
+            echo "API failed to become healthy."
+            exit 1
