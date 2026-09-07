@@ -14,6 +14,7 @@ import salesProjectRoutes from './routes/salesProjectRoutes.js';
 import salesManagerRoutes from './routes/salesManagerRoutes.js';
 import questionLibraryRoutes from './routes/Questionlibraryroutes.js';
 import questionnaireGroupRoutes from './routes/Questionnairegrouproutes.js';
+import surveySettingRoutes from './routes/surveySettingRoutes.js'; // ✅ ADDED
 
 import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
 import salesLogRoutes from './routes/salesLogRoutes.js';
@@ -78,6 +79,7 @@ app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
 app.use('/api/question-library', questionLibraryRoutes);
 app.use('/api/questionnaire-group', questionnaireGroupRoutes);
+app.use('/api/survey-settings', surveySettingRoutes); // ✅ ADDED
 
 app.use('/api/sales/log', salesLogRoutes);
 app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
