@@ -14,6 +14,7 @@ import salesProjectRoutes from './routes/salesProjectRoutes.js';
 import salesManagerRoutes from './routes/salesManagerRoutes.js';
 import questionLibraryRoutes from './routes/Questionlibraryroutes.js';
 import questionnaireGroupRoutes from './routes/Questionnairegrouproutes.js';
+import surveySettingRoutes from './routes/surveySettingRoutes.js'; // ✅ ADD THIS
 
 import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
 import salesLogRoutes from './routes/salesLogRoutes.js';
@@ -42,7 +43,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
-
+import surveySettingRoutes from './routes/surveySettingRoutes.js';
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -78,6 +79,7 @@ app.use('/api/sales/project', salesProjectRoutes);
 app.use('/api/salesmanager', salesManagerRoutes);
 app.use('/api/question-library', questionLibraryRoutes);
 app.use('/api/questionnaire-group', questionnaireGroupRoutes);
+app.use('/api/survey-settings', surveySettingRoutes); // ✅ ADD THIS
 
 app.use('/api/sales/log', salesLogRoutes);
 app.use('/api/survey/groupproject', surveyGroupProjectRoutes);
@@ -102,7 +104,7 @@ app.use('/dosurvey', supplierRedirectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/project-reports', reportRoutes);
-
+app.use('/api/survey-settings', surveySettingRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
