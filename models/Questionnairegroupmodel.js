@@ -48,29 +48,41 @@ const QuestionnaireGroup = {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        let where = `WHERE deleted_at IS NULL`;
+        let where = `WHERE qg.deleted_at IS NULL`;
         const params = [];
 
         if (search) {
-            where += ` AND group_title LIKE ?`;
+            where += ` AND qg.group_title LIKE ?`;
             params.push(`%${search}%`);
         }
         if (status) {
-            where += ` AND status = ?`;
+            where += ` AND qg.status = ?`;
             params.push(status);
         }
         if (language) {
-            where += ` AND language = ?`;
+            where += ` AND qg.language = ?`;
             params.push(language);
         }
 
+        // ✅ JOIN with question count
         const [rows] = await db.query(
-            `SELECT id, group_title AS surveyTitle, language, website_url, status, created_at AS createdAt
-             FROM questionnaire_groups ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT 
+                qg.id, 
+                qg.group_title AS surveyTitle, 
+                qg.language, 
+                qg.website_url, 
+                qg.status, 
+                qg.created_at AS createdAt,
+                COUNT(qqg.question_library_id) AS questionCount
+             FROM questionnaire_groups qg
+             LEFT JOIN questionnaire_group_questions qqg ON qg.id = qqg.questionnaire_group_id
+             ${where}
+             GROUP BY qg.id
+             ORDER BY qg.created_at DESC LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
         const [countResult] = await db.query(
-            `SELECT COUNT(*) as total FROM questionnaire_groups ${where}`, params
+            `SELECT COUNT(*) as total FROM questionnaire_groups qg ${where}`, params
         );
         const total = countResult[0].total || 0;
 

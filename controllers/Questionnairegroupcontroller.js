@@ -26,6 +26,7 @@ export const addQuestionnaireGroup = async (req, res) => {
                 surveyTitle,
                 language,
                 website_url: group.website_url,
+                questionCount: group.questions.length,
                 questionIds: questionIds || []
             }
         });
@@ -45,7 +46,14 @@ export const getAllQuestionnaireGroups = async (req, res) => {
         const language = req.query.language || '';
 
         const result = await QuestionnaireGroup.getAll({ page, limit, search, status, language });
-        return res.status(200).json({ success: true, ...result });
+        
+        // ✅ MAP questionCount properly
+        const mappedData = result.data.map(item => ({
+            ...item,
+            questionCount: item.questionCount || 0  // ✅ Use questionCount from DB
+        }));
+
+        return res.status(200).json({ success: true, data: mappedData, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -75,6 +83,7 @@ export const getGroupQuestions = async (req, res) => {
                 id: group.id,
                 surveyTitle: group.surveyTitle,
                 language: group.language,
+                questionCount: group.questions.length,
                 questions: group.questions
             }
         });
@@ -184,6 +193,7 @@ export const exportQuestionnaireGroupsCsv = async (req, res) => {
             { label: 'ID', key: 'id' },
             { label: 'Survey Title', key: 'surveyTitle' },
             { label: 'Language', key: 'language' },
+            { label: 'Question Count', key: 'questionCount' },
             { label: 'Status', key: 'status' }
         ]);
 
