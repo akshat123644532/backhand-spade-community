@@ -43,7 +43,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
-
+import surveySettingRoutes from './routes/surveySettingRoutes.js';
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -104,7 +104,7 @@ app.use('/dosurvey', supplierRedirectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/project-reports', reportRoutes);
-
+app.use('/api/survey-settings', surveySettingRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
