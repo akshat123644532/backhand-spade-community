@@ -9,7 +9,7 @@ export const addQuestionnaireGroup = async (req, res) => {
             return res.status(400).json({ success: false, message: "Survey title and language are required!" });
         }
 
-        // Duplicate title check — same title + same language ka koi active group already exist na kare
+       
         const existing = await QuestionnaireGroup.findByTitle(surveyTitle, language);
         if (existing) {
             return res.status(400).json({ success: false, message: "A questionnaire group with this title already exists for this language!" });
