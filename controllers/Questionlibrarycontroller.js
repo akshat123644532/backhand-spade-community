@@ -1,5 +1,7 @@
 import QuestionLibrary from '../models/Questionlibrarymodel.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+const ANSWERABLE_TYPES = ['checkbox', 'dropdown', 'radio'];
+
 export const addLibraryQuestion = async (req, res) => {
     try {
         const { language, question_title, question_type, options, right_answer, status, sort_order } = req.body;
@@ -11,7 +13,18 @@ export const addLibraryQuestion = async (req, res) => {
             return res.status(400).json({ success: false, message: "Question type is required!" });
         }
 
-        const question_library_id = await QuestionLibrary.create({ language, question_title, question_type, options, right_answer, status, sort_order });
+       
+        const finalRightAnswer = ANSWERABLE_TYPES.includes(question_type) ? (right_answer || null) : null;
+
+        const question_library_id = await QuestionLibrary.create({
+            language,
+            question_title,
+            question_type,
+            options,
+            right_answer: finalRightAnswer,
+            status,
+            sort_order
+        });
 
         return res.status(201).json({
             success: true,
@@ -74,9 +87,20 @@ export const updateLibraryQuestion = async (req, res) => {
         if (question_title) updateData.question_title = question_title;
         if (question_type) updateData.question_type = question_type;
         if (options) updateData.options = options;
-        if (right_answer) updateData.right_answer = right_answer;
         if (status) updateData.status = status;
         if (sort_order !== undefined) updateData.sort_order = sort_order;
+
+        // Update ke baad ka effective type: agar naya type bheja hai to wo,
+        // warna DB me pehle se jo type saved hai wahi
+        const effectiveType = question_type || question.question_type;
+
+        if (!ANSWERABLE_TYPES.includes(effectiveType)) {
+            // textbox/textarea jaise type -> right_answer ka koi matlab nahi,
+            // isliye force clear karo taaki purana answer "leak" na ho
+            updateData.right_answer = null;
+        } else if (right_answer) {
+            updateData.right_answer = right_answer;
+        }
 
         if (Object.keys(updateData).length > 0) await QuestionLibrary.update(id, updateData);
 
@@ -126,6 +150,7 @@ export const deleteLibraryQuestion = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
 export const exportLibraryQuestionsCsv = async (req, res) => {
     try {
         const search = req.query.search || '';

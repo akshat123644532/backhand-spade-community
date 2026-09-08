@@ -72,6 +72,12 @@ const QuestionLibrary = {
             if (key === 'options') {
                 fields.push('options = ?');
                 values.push(JSON.stringify(data.options || []));
+            } else if (key === 'right_answer') {
+                // Explicitly allow null so we can CLEAR right_answer
+                // when question_type is switched to a non-answerable type
+                // (e.g. checkbox -> textarea).
+                fields.push('right_answer = ?');
+                values.push(data.right_answer === undefined ? null : data.right_answer);
             } else {
                 fields.push(`${key} = ?`);
                 values.push(data[key]);
