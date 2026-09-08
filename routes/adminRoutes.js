@@ -49,7 +49,7 @@ router.post('/reset-password', validateResetPassword, resetPassword);
 
 router.get('/all', verifyToken, validateGetAllAdmins, getAllAdmins);
 
-// '/:id' se upar rakha hai, warna 'export' ko id samajh lega
+
 router.get('/export/csv', verifyToken, checkCsvDownloadPermission('Admin'), exportAdminsCsv);
 
 router.get('/:id', verifyToken, validateAdminId, getAdminById);
