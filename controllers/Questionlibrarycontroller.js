@@ -2,6 +2,16 @@ import QuestionLibrary from '../models/Questionlibrarymodel.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const ANSWERABLE_TYPES = ['checkbox', 'dropdown', 'radio'];
 
+
+const stripRightAnswerIfNotAnswerable = (question) => {
+    if (!question) return question;
+    if (ANSWERABLE_TYPES.includes(question.question_type)) {
+        return question; // keep right_answer as-is
+    }
+    const { right_answer, ...rest } = question;
+    return rest;
+};
+
 export const addLibraryQuestion = async (req, res) => {
     try {
         const { language, question_title, question_type, options, right_answer, status, sort_order } = req.body;
@@ -26,10 +36,20 @@ export const addLibraryQuestion = async (req, res) => {
             sort_order
         });
 
+        // ✅ build response data and strip right_answer if not answerable
+        const responseData = stripRightAnswerIfNotAnswerable({
+            id: question_library_id,
+            question_title,
+            language,
+            question_type,
+            options: options || [],
+            right_answer: finalRightAnswer
+        });
+
         return res.status(201).json({
             success: true,
             message: "Question added to library successfully!",
-            data: { id: question_library_id, question_title, language, question_type, options: options || [] }
+            data: responseData
         });
 
     } catch (error) {
@@ -47,6 +67,10 @@ export const getAllLibraryQuestions = async (req, res) => {
         const question_type = req.query.question_type || '';
 
         const result = await QuestionLibrary.getAll({ page, limit, search, status, language, question_type });
+
+        // ✅ strip right_answer from every row where it doesn't apply
+        result.data = result.data.map(stripRightAnswerIfNotAnswerable);
+
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -58,7 +82,9 @@ export const getLibraryQuestionById = async (req, res) => {
         const { id } = req.params;
         const question = await QuestionLibrary.getById(id);
         if (!question) return res.status(404).json({ success: false, message: "Question not found in library!" });
-        return res.status(200).json({ success: true, data: question });
+
+        // ✅ strip right_answer if not applicable
+        return res.status(200).json({ success: true, data: stripRightAnswerIfNotAnswerable(question) });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -68,7 +94,11 @@ export const getLibraryQuestionsByLanguage = async (req, res) => {
     try {
         const { language } = req.params;
         const questions = await QuestionLibrary.getByLanguage(language);
-        return res.status(200).json({ success: true, count: questions.length, data: questions });
+
+        // ✅ strip right_answer from every row where it doesn't apply
+        const data = questions.map(stripRightAnswerIfNotAnswerable);
+
+        return res.status(200).json({ success: true, count: data.length, data });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -90,13 +120,11 @@ export const updateLibraryQuestion = async (req, res) => {
         if (status) updateData.status = status;
         if (sort_order !== undefined) updateData.sort_order = sort_order;
 
-        // Update ke baad ka effective type: agar naya type bheja hai to wo,
-        // warna DB me pehle se jo type saved hai wahi
+        
         const effectiveType = question_type || question.question_type;
 
         if (!ANSWERABLE_TYPES.includes(effectiveType)) {
-            // textbox/textarea jaise type -> right_answer ka koi matlab nahi,
-            // isliye force clear karo taaki purana answer "leak" na ho
+            
             updateData.right_answer = null;
         } else if (right_answer) {
             updateData.right_answer = right_answer;
