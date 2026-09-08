@@ -1,20 +1,74 @@
 import { db } from '../config/db.js';
 
+const ANSWERABLE_TYPES = ['checkbox', 'radio', 'dropdown'];
+
+const isAnswerableType = (type) => {
+    return ANSWERABLE_TYPES.includes(
+        String(type || '').toLowerCase()
+    );
+};
+
 const QuestionLibrary = {
 
     create: async (data) => {
-        const { language, question_title, question_type, options, right_answer, status, sort_order } = data;
+        const {
+            language,
+            question_title,
+            question_type,
+            options,
+            right_answer,
+            status,
+            sort_order
+        } = data;
+
+        const normalizedType = String(
+            question_type || 'textbox'
+        ).toLowerCase();
+
+        // Sirf allowed types ke liye right_answer save karo
+        const finalRightAnswer = isAnswerableType(normalizedType)
+            ? (right_answer ?? null)
+            : null;
+
         const [result] = await db.execute(
-            `INSERT INTO question_library (language, question_title, question_type, options, right_answer, status, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [language, question_title, question_type || 'textbox', JSON.stringify(options || []), right_answer || null, status || 'active', sort_order ?? 0]
+            `INSERT INTO question_library
+            (
+                language,
+                question_title,
+                question_type,
+                options,
+                right_answer,
+                status,
+                sort_order
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+                language,
+                question_title,
+                normalizedType,
+                JSON.stringify(options || []),
+                finalRightAnswer,
+                status || 'active',
+                sort_order ?? 0
+            ]
         );
+
         return result.insertId;
     },
 
-    getAll: async ({ page = 1, limit = 10, search = '', status = '', language = '', question_type = '' } = {}) => {
+    getAll: async ({
+        page = 1,
+        limit = 10,
+        search = '',
+        status = '',
+        language = '',
+        question_type = ''
+    } = {}) => {
+
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
+
         let where = `WHERE deleted_at IS NULL`;
         const params = [];
 
@@ -22,45 +76,87 @@ const QuestionLibrary = {
             where += ` AND question_title LIKE ?`;
             params.push(`%${search}%`);
         }
+
         if (status) {
             where += ` AND status = ?`;
             params.push(status);
         }
+
         if (language) {
             where += ` AND language = ?`;
             params.push(language);
         }
+
         if (question_type) {
             where += ` AND question_type = ?`;
             params.push(question_type);
         }
 
         const [rows] = await db.query(
-            `SELECT id, language, question_title, question_type, options, sort_order, right_answer, status, created_at 
-             FROM question_library ${where} ORDER BY sort_order ASC, created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT
+                id,
+                language,
+                question_title,
+                question_type,
+                options,
+                sort_order,
+                right_answer,
+                status,
+                created_at
+             FROM question_library
+             ${where}
+             ORDER BY sort_order ASC, created_at DESC
+             LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM question_library ${where}`, params);
+
+        const [countResult] = await db.query(
+            `SELECT COUNT(*) as total
+             FROM question_library
+             ${where}`,
+            params
+        );
+
         const total = countResult[0].total || 0;
 
-        return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
+        return {
+            data: rows,
+            total,
+            page: p,
+            limit: l,
+            totalPages: Math.ceil(total / l)
+        };
     },
 
     getById: async (id) => {
         const [rows] = await db.execute(
-            `SELECT * FROM question_library WHERE id = ? AND deleted_at IS NULL`, [id]
+            `SELECT *
+             FROM question_library
+             WHERE id = ?
+             AND deleted_at IS NULL`,
+            [id]
         );
+
         return rows[0] || null;
     },
 
     getByLanguage: async (language) => {
         const [rows] = await db.execute(
-            `SELECT id, question_title, question_type, sort_order, right_answer, options
+            `SELECT
+                id,
+                question_title,
+                question_type,
+                sort_order,
+                right_answer,
+                options
              FROM question_library
-             WHERE language = ? AND deleted_at IS NULL AND status = 'active'
+             WHERE language = ?
+             AND deleted_at IS NULL
+             AND status = 'active'
              ORDER BY sort_order ASC`,
             [language]
         );
+
         return rows;
     },
 
@@ -69,41 +165,57 @@ const QuestionLibrary = {
         const values = [];
 
         for (const key of Object.keys(data)) {
+
             if (key === 'options') {
                 fields.push('options = ?');
                 values.push(JSON.stringify(data.options || []));
+
             } else if (key === 'right_answer') {
-                // Explicitly allow null so we can CLEAR right_answer
-                // when question_type is switched to a non-answerable type
-                // (e.g. checkbox -> textarea).
                 fields.push('right_answer = ?');
-                values.push(data.right_answer === undefined ? null : data.right_answer);
+                values.push(data.right_answer ?? null);
+
             } else {
                 fields.push(`${key} = ?`);
                 values.push(data[key]);
             }
         }
 
+        if (fields.length === 0) {
+            return null;
+        }
+
         values.push(id);
+
         const [result] = await db.execute(
-            `UPDATE question_library SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+            `UPDATE question_library
+             SET ${fields.join(', ')},
+                 updated_at = NOW()
+             WHERE id = ?`,
             values
         );
+
         return result;
     },
 
     toggleStatus: async (id, status) => {
         const [result] = await db.execute(
-            `UPDATE question_library SET status = ?, updated_at = NOW() WHERE id = ?`,
+            `UPDATE question_library
+             SET status = ?,
+                 updated_at = NOW()
+             WHERE id = ?`,
             [status, id]
         );
+
         return result;
     },
 
     updateSortOrder: async (items) => {
         for (const item of items) {
             await db.execute(
-                `UPDATE question_library SET sort_order = ?, updated_at = NOW() WHERE id = ?`,
+                `UPDATE question_library
+                 SET sort_order = ?,
+                     updated_at = NOW()
+                 WHERE id = ?`,
                 [item.sort_order, item.id]
             );
         }
@@ -111,8 +223,12 @@ const QuestionLibrary = {
 
     delete: async (id) => {
         const [result] = await db.execute(
-            `UPDATE question_library SET deleted_at = NOW() WHERE id = ?`, [id]
+            `UPDATE question_library
+             SET deleted_at = NOW()
+             WHERE id = ?`,
+            [id]
         );
+
         return result;
     }
 };
