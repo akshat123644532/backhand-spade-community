@@ -15,7 +15,7 @@ export const getAllSurveySettings = async (req, res) => {
             ...result
         });
     } catch (error) {
-        console.error('GET ALL SURVEY SETTINGS error:', error);
+        console.error('GET ALL SURVEY SETTINGS error:', error.message);
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -28,14 +28,14 @@ export const getSurveySettingById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        if (!id || isNaN(id)) {
+        if (!id || isNaN(parseInt(id))) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid survey setting ID!"
             });
         }
 
-        const setting = await SurveySetting.getById(id);
+        const setting = await SurveySetting.getById(parseInt(id));
 
         if (!setting) {
             return res.status(404).json({
@@ -50,7 +50,7 @@ export const getSurveySettingById = async (req, res) => {
             data: setting
         });
     } catch (error) {
-        console.error('GET SURVEY SETTING BY ID error:', error);
+        console.error('GET SURVEY SETTING BY ID error:', error.message);
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -85,7 +85,7 @@ export const getSurveySettingByLanguage = async (req, res) => {
             data: setting
         });
     } catch (error) {
-        console.error('GET SURVEY SETTING BY LANGUAGE error:', error);
+        console.error('GET SURVEY SETTING BY LANGUAGE error:', error.message);
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -111,7 +111,6 @@ export const addSurveySetting = async (req, res) => {
             });
         }
 
-        // Check if language already exists
         const existing = await SurveySetting.getByLanguage(language);
         if (existing) {
             return res.status(409).json({
@@ -129,11 +128,11 @@ export const addSurveySetting = async (req, res) => {
         });
 
         await logActivity({
-            admin_id: req.user?.id,
+            admin_id: req.user?.id || null,
             action: 'CREATE',
             module: 'Survey Settings',
             description: `Survey setting created for language: ${language}`,
-            ip_address: req.ip
+            ip_address: req.ip || null
         });
 
         return res.status(201).json({
@@ -142,7 +141,7 @@ export const addSurveySetting = async (req, res) => {
             data: { id: settingId, language }
         });
     } catch (error) {
-        console.error('ADD SURVEY SETTING error:', error);
+        console.error('ADD SURVEY SETTING error:', error.message);
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -154,27 +153,30 @@ export const addSurveySetting = async (req, res) => {
 export const updateSurveySetting = async (req, res) => {
     try {
         const { id } = req.params;
-        const {
-            complete_redirect_content,
-            terminate_redirect_content,
-            quality_term_redirect_content,
-            survey_close_redirect_content
-        } = req.body;
 
-        if (!id || isNaN(id)) {
+        if (!id || isNaN(parseInt(id))) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid survey setting ID!"
             });
         }
 
-        const setting = await SurveySetting.getById(id);
+        const parsedId = parseInt(id);
+
+        const setting = await SurveySetting.getById(parsedId);
         if (!setting) {
             return res.status(404).json({
                 success: false,
                 message: "Survey setting not found!"
             });
         }
+
+        const {
+            complete_redirect_content,
+            terminate_redirect_content,
+            quality_term_redirect_content,
+            survey_close_redirect_content
+        } = req.body;
 
         const updateData = {};
 
@@ -198,22 +200,25 @@ export const updateSurveySetting = async (req, res) => {
             });
         }
 
-        await SurveySetting.update(id, updateData);
+        await SurveySetting.update(parsedId, updateData);
+
+        const updatedSetting = await SurveySetting.getById(parsedId);
 
         await logActivity({
-            admin_id: req.user?.id,
+            admin_id: req.user?.id || null,
             action: 'UPDATE',
             module: 'Survey Settings',
             description: `Survey setting updated for language: ${setting.language}`,
-            ip_address: req.ip
+            ip_address: req.ip || null
         });
 
         return res.status(200).json({
             success: true,
-            message: "Survey setting updated successfully!"
+            message: "Survey setting updated successfully!",
+            data: updatedSetting
         });
     } catch (error) {
-        console.error('UPDATE SURVEY SETTING error:', error);
+        console.error('UPDATE SURVEY SETTING error:', error.message);
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -226,14 +231,16 @@ export const deleteSurveySetting = async (req, res) => {
     try {
         const { id } = req.params;
 
-        if (!id || isNaN(id)) {
+        if (!id || isNaN(parseInt(id))) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid survey setting ID!"
             });
         }
 
-        const setting = await SurveySetting.getById(id);
+        const parsedId = parseInt(id);
+
+        const setting = await SurveySetting.getById(parsedId);
         if (!setting) {
             return res.status(404).json({
                 success: false,
@@ -241,14 +248,14 @@ export const deleteSurveySetting = async (req, res) => {
             });
         }
 
-        await SurveySetting.delete(id);
+        await SurveySetting.delete(parsedId);
 
         await logActivity({
-            admin_id: req.user?.id,
+            admin_id: req.user?.id || null,
             action: 'DELETE',
             module: 'Survey Settings',
             description: `Survey setting deleted for language: ${setting.language}`,
-            ip_address: req.ip
+            ip_address: req.ip || null
         });
 
         return res.status(200).json({
@@ -256,7 +263,7 @@ export const deleteSurveySetting = async (req, res) => {
             message: "Survey setting deleted successfully!"
         });
     } catch (error) {
-        console.error('DELETE SURVEY SETTING error:', error);
+        console.error('DELETE SURVEY SETTING error:', error.message);
         return res.status(500).json({
             success: false,
             message: "Server error!",
