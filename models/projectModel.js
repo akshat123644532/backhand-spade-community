@@ -134,9 +134,4 @@ const Project = {
 };
 
 
-<<<<<<< HEAD
 export default Project;
-=======
-export default Project;
-
->>>>>>> c8b90fdae627d6a8b3bb33d0dd0c0ed7483b1413
