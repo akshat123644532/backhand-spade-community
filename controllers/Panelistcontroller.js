@@ -28,6 +28,15 @@ const buildPanelistPhotoPath = (req) => {
     return `/uploads/${req.file.filename}`;
 };
 
+const linkifyPlainTextUrls = (text) => {
+    if (!text) return text;
+    const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
+    return text.replace(
+        urlRegex,
+        (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+    );
+};
+
 export const signup = async (req, res) => {
     try {
         const { name, email, password, phone, recaptchaToken } = req.body;
@@ -87,11 +96,14 @@ export const signup = async (req, res) => {
                     questionnaire_link: questionnaireLink
                 });
 
+              
+                const htmlBody = linkifyPlainTextUrls(body).replace(/\n/g, '<br>');
+
                 const result = await sendEmail({
                     to: email,
                     subject,
                     text: body,
-                    html: body.replace(/\n/g, '<br>')
+                    html: htmlBody
                 });
                 if (result?.skipped) {
                     emailWarning = 'SMTP is not configured. Signup email was skipped.';
@@ -308,8 +320,8 @@ export const toggleStatus = async (req, res) => {
 const buildQuestionnaireEmailHtml = (panelist, questionnaireLink) => `
     <p>Dear ${panelist.name},</p>
     <p>This is a reminder to complete your Spade Community questionnaire.</p>
-    <p><a href="${questionnaireLink}">Click here to fill your questionnaire.</a></p>
-    <p>Questionnaire link: ${questionnaireLink}</p>
+    <p><a href="${questionnaireLink}" target="_blank" rel="noopener noreferrer">Click here to fill your questionnaire.</a></p>
+    <p>Questionnaire link: <a href="${questionnaireLink}" target="_blank" rel="noopener noreferrer">${questionnaireLink}</a></p>
     <p>(If you run into any problems, simply copy and paste the entire link into your web browser.)</p>
     <p>Thank You,<br/>Spade Community</p>
 `;
