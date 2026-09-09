@@ -52,7 +52,7 @@ export const getDashboardSummary = async (req, res) => {
             safeQuery(`SELECT Status AS status, COUNT(*) AS total FROM project_Info WHERE isdeleted = 0 OR isdeleted IS NULL GROUP BY Status`),
             safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM project_Info WHERE (isdeleted = 0 OR isdeleted IS NULL) AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
             safeQuery(`SELECT RFQ AS rfq, COUNT(*) AS total FROM project_Info WHERE isdeleted = 0 OR isdeleted IS NULL GROUP BY RFQ`),
-            safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM project_Info WHERE (isdeleted = 0 OR isdeleted IS NULL) AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
+            safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, SUM(CASE WHEN RFQ IS NOT NULL THEN 1 ELSE 0 END) AS count FROM project_Info WHERE (isdeleted = 0 OR isdeleted IS NULL) AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
             safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM panelists WHERE deleted_at IS NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
             safeQuery(`SELECT status, COUNT(*) AS total FROM clients GROUP BY status`),
             safeQuery(`SELECT status, COUNT(*) AS total FROM partners WHERE deleted_at IS NULL GROUP BY status`),
@@ -79,19 +79,23 @@ export const getDashboardSummary = async (req, res) => {
 
         const rewardSummary = (rewardSummaryRows && rewardSummaryRows[0]) || {};
 
+        const totalClientsCount = Number(totalClientsRow?.[0]?.total || 0);
         const clientActive = (clientStatusRows || []).find(r => r.status === 'active');
-        const clientInactive = (clientStatusRows || []).filter(r => r.status !== 'active').reduce((s, r) => s + Number(r.total), 0);
+        const clientActiveCount = clientActive ? Number(clientActive.total) : 0;
+        const clientInactive = totalClientsCount - clientActiveCount;
 
+        const totalPartnersCount = Number(totalPartnersRow?.[0]?.total || 0);
         const partnerActive = (partnerStatusRows || []).find(r => r.status === 'active');
-        const partnerInactive = (partnerStatusRows || []).filter(r => r.status !== 'active').reduce((s, r) => s + Number(r.total), 0);
+        const partnerActiveCount = partnerActive ? Number(partnerActive.total) : 0;
+        const partnerInactive = totalPartnersCount - partnerActiveCount;
 
         return res.status(200).json({
             success: true,
             data: {
                 totals: {
                     total_users: Number(totalUsersRow?.[0]?.total || 0),
-                    total_clients: Number(totalClientsRow?.[0]?.total || 0),
-                    total_partners: Number(totalPartnersRow?.[0]?.total || 0),
+                    total_clients: totalClientsCount,
+                    total_partners: totalPartnersCount,
                     total_project_managers: Number(totalPMRow?.[0]?.total || 0)
                 },
                 survey: {
@@ -116,13 +120,13 @@ export const getDashboardSummary = async (req, res) => {
                     invoice_status_distribution: { paid: 0, pending: 0, overdue: 0 }
                 },
                 clients_overview: {
-                    total: Number(totalClientsRow?.[0]?.total || 0),
-                    active: clientActive ? Number(clientActive.total) : 0,
+                    total: totalClientsCount,
+                    active: clientActiveCount,
                     inactive: clientInactive
                 },
                 partners_overview: {
-                    total: Number(totalPartnersRow?.[0]?.total || 0),
-                    active: partnerActive ? Number(partnerActive.total) : 0,
+                    total: totalPartnersCount,
+                    active: partnerActiveCount,
                     inactive: partnerInactive
                 },
                 reward_statistics: {
