@@ -51,7 +51,17 @@ export const getDashboardSummary = async (req, res) => {
             safeQuery(`SELECT COUNT(*) AS total FROM project_managers WHERE deleted_at IS NULL`),
             safeQuery(`SELECT Status AS status, COUNT(*) AS total FROM project_Info WHERE isdeleted = 0 OR isdeleted IS NULL GROUP BY Status`),
             safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM project_Info WHERE (isdeleted = 0 OR isdeleted IS NULL) AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
-            safeQuery(`SELECT RFQ AS rfq, COUNT(*) AS total FROM project_Info WHERE isdeleted = 0 OR isdeleted IS NULL GROUP BY RFQ`),
+            // ✅ FIXED: Changed from RFQ to Status column
+            safeQuery(`
+                SELECT 
+                    LOWER(TRIM(Status)) AS rfq, 
+                    COUNT(*) AS total 
+                FROM project_Info 
+                WHERE (isdeleted = 0 OR isdeleted IS NULL)
+                AND Status IS NOT NULL
+                AND Status != ''
+                GROUP BY LOWER(TRIM(Status))
+            `),
             safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM project_Info WHERE (isdeleted = 0 OR isdeleted IS NULL) AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
             safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM panelists WHERE deleted_at IS NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
             safeQuery(`SELECT status, COUNT(*) AS total FROM clients GROUP BY status`),
@@ -71,10 +81,13 @@ export const getDashboardSummary = async (req, res) => {
             if (key in surveyStatusMap) surveyStatusMap[key] = Number(r.total);
         });
 
-        const rfqStatusMap = { won: 0, lost: 0, pending: 0 };
+        // ✅ FIXED: Dynamic RFQ status map (automatically includes all statuses from DB)
+        const rfqStatusMap = {};
         (rfqStatusRows || []).forEach(r => {
-            const key = String(r.rfq || '').toLowerCase();
-            if (key in rfqStatusMap) rfqStatusMap[key] = Number(r.total);
+            const key = String(r.rfq || '').toLowerCase().trim();
+            if (key) {
+                rfqStatusMap[key] = (rfqStatusMap[key] || 0) + Number(r.total);
+            }
         });
 
         const rewardSummary = (rewardSummaryRows && rewardSummaryRows[0]) || {};
