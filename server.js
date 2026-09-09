@@ -30,11 +30,8 @@ import salesProjectRoutes from './routes/salesProjectRoutes.js';
 import salesManagerRoutes from './routes/salesManagerRoutes.js';
 import questionLibraryRoutes from './routes/Questionlibraryroutes.js';
 import questionnaireGroupRoutes from './routes/Questionnairegrouproutes.js';
-<<<<<<< HEAD
 import surveySettingRoutes from './routes/surveySettingRoutes.js'; // ✅ ONLY ONE
 
-=======
->>>>>>> f1023c2dd18860165aa1ff97c314e282bf5cb948
 import surveyGroupProjectRoutes from './routes/surveyGroupProjectRoutes.js';
 import salesLogRoutes from './routes/salesLogRoutes.js';
 import surveyPageRoutes from './routes/surveyPageRoutes.js';
