@@ -51,29 +51,28 @@ export const getDashboardSummary = async (req, res) => {
             safeQuery(`SELECT COUNT(*) AS total FROM project_managers WHERE deleted_at IS NULL`),
             safeQuery(`SELECT Status AS status, COUNT(*) AS total FROM project_Info WHERE isdeleted = 0 OR isdeleted IS NULL GROUP BY Status`),
             safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM project_Info WHERE (isdeleted = 0 OR isdeleted IS NULL) AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
-        
+            // ✅ FIXED: Correct RFQ status mapping from sales_projects table
             safeQuery(`
                 SELECT 
                     CASE 
-                        WHEN LOWER(TRIM(Status)) = 'won' THEN 'won'
-                        WHEN LOWER(TRIM(Status)) IN ('wip', 'in progress', 'pending') THEN 'pending'
-                        WHEN LOWER(TRIM(Status)) IN ('lost', 'closed', 'rejected') THEN 'lost'
+                        WHEN status = 'won' THEN 'won'
+                        WHEN status = 'wip' THEN 'pending'
+                        WHEN status = 'lost' THEN 'lost'
                         ELSE 'pending'
                     END AS rfq, 
                     COUNT(*) AS total 
-                FROM project_Info 
-                WHERE (isdeleted = 0 OR isdeleted IS NULL)
-                AND Status IS NOT NULL
-                AND Status != ''
+                FROM sales_projects
+                WHERE status IS NOT NULL
+                AND status != ''
                 GROUP BY 
                     CASE 
-                        WHEN LOWER(TRIM(Status)) = 'won' THEN 'won'
-                        WHEN LOWER(TRIM(Status)) IN ('wip', 'in progress', 'pending') THEN 'pending'
-                        WHEN LOWER(TRIM(Status)) IN ('lost', 'closed', 'rejected') THEN 'lost'
+                        WHEN status = 'won' THEN 'won'
+                        WHEN status = 'wip' THEN 'pending'
+                        WHEN status = 'lost' THEN 'lost'
                         ELSE 'pending'
                     END
             `),
-            safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM project_Info WHERE (isdeleted = 0 OR isdeleted IS NULL) AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
+            safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM sales_projects WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
             safeQuery(`SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, COUNT(*) AS count FROM panelists WHERE deleted_at IS NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY YEAR(created_at), MONTH(created_at)`),
             safeQuery(`SELECT status, COUNT(*) AS total FROM clients GROUP BY status`),
             safeQuery(`SELECT status, COUNT(*) AS total FROM partners WHERE deleted_at IS NULL GROUP BY status`),
