@@ -364,6 +364,7 @@ export const deleteLibraryQuestion = async (req, res) => {
 };
 
 // EXPORT CSV
+// EXPORT CSV
 export const exportLibraryQuestionsCsv = async (req, res) => {
     try {
         const search = req.query.search || '';
@@ -371,29 +372,126 @@ export const exportLibraryQuestionsCsv = async (req, res) => {
         const language = req.query.language || '';
         const question_type = req.query.question_type || '';
 
-        const result = await QuestionLibrary.getAll({
-            page: 1,
-            limit: 1000000,
-            search,
-            status,
-            language,
-            question_type
-        });
+        const EXPORT_LIMIT = 1000;
 
-        const csv = buildCsv(result.data, [
-            { label: 'ID', key: 'id' },
-            { label: 'Language', key: 'language' },
-            { label: 'Question Title', key: 'question_title' },
-            { label: 'Question Type', key: 'question_type' },
-            { label: 'Status', key: 'status' }
+        let page = 1;
+        let allRows = [];
+
+        while (true) {
+            const result = await QuestionLibrary.getAll({
+                page,
+                limit: EXPORT_LIMIT,
+                search,
+                status,
+                language,
+                question_type
+            });
+
+            const rows = result?.data || [];
+
+            allRows.push(...rows);
+
+            // Agar current page par records kam aaye,
+            // iska matlab last page hai.
+            if (rows.length < EXPORT_LIMIT) {
+                break;
+            }
+
+            page++;
+
+            // Safety limit
+            if (page > 10000) {
+                break;
+            }
+        }
+
+        const csv = buildCsv(allRows, [
+            {
+                label: 'ID',
+                key: 'id'
+            },
+            {
+                label: 'Language',
+                key: 'language'
+            },
+            {
+                label: 'Question Title',
+                key: 'question_title'
+            },
+            {
+                label: 'Question Type',
+                key: 'question_type'
+            },
+            {
+                label: 'Options',
+                value: (row) => {
+                    if (!row.options) return '';
+
+                    return Array.isArray(row.options)
+                        ? JSON.stringify(row.options)
+                        : row.options;
+                }
+            },
+            {
+                label: 'Right Answer',
+                value: (row) => {
+                    const type = String(
+                        row.question_type || ''
+                    ).toLowerCase();
+
+                    if (
+                        ['checkbox', 'radio', 'dropdown']
+                            .includes(type)
+                    ) {
+                        return row.right_answer;
+                    }
+
+                    return '';
+                }
+            },
+            {
+                label: 'Status',
+                key: 'status'
+            },
+            {
+                label: 'Sort Order',
+                key: 'sort_order'
+            },
+            {
+                label: 'Created At',
+                value: (row) =>
+                    row.created_at ||
+                    row.createdAt ||
+                    ''
+            },
+            {
+                label: 'Updated At',
+                value: (row) =>
+                    row.updated_at ||
+                    row.updatedAt ||
+                    ''
+            }
         ]);
 
-        return sendCsv(res, 'question_library.csv', csv);
+        console.log(
+            `CSV Export: ${allRows.length} records exported`
+        );
+
+        return sendCsv(
+            res,
+            'question_library.csv',
+            csv
+        );
 
     } catch (error) {
+        console.error(
+            'exportLibraryQuestionsCsv error:',
+            error
+        );
+
         return res.status(500).json({
             success: false,
-            message: "Server error!",
+            message: 'Server error!',
             error: error.message
         });
     }
