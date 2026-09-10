@@ -9,13 +9,20 @@ import {
     changePassword,
     getRewardHistory,
     getRedeemRequests,
-    submitRedeemRequest
+    submitRedeemRequest,
+    forgotPassword,
+    verifyOTP,
+    resetPassword
 } from '../controllers/panelistPortalController.js';
 
 const upload = multer({ dest: 'uploads/' });
 const router = express.Router();
 
 router.post('/login',               login); 
+
+router.post('/forgot-password',     forgotPassword);
+router.post('/verify-otp',          verifyOTP);
+router.post('/reset-password',      resetPassword);
 
 router.get('/dashboard',            verifyPanelistToken, getDashboard);
 router.get('/profile',              verifyPanelistToken, getProfile);
