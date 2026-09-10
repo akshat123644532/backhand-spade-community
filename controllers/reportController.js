@@ -5,11 +5,12 @@ import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import { sendError } from './surveyDataController.js';
 // Shared: fetch + shape the report rows (used by both the JSON view and the CSV download)
-const buildReportRows = async (project_id, partner_id) => {
-    const rows = await SurveyData.getProjectReport(project_id, { partner_id: partner_id || null });
+const buildReportRows = async (project_id, filters = {}) => {
+    const rows = await SurveyData.getProjectReport(project_id, filters);
 
     return rows.map(row => {
         const { country, city } = getLocationFromIp(row.ip_address);
+
         return {
             supplier_id: row.supplier_id,
             supplier_name: row.supplier_name
@@ -33,12 +34,25 @@ const buildReportRows = async (project_id, partner_id) => {
 export const getProjectReport = async (req, res) => {
     try {
         const { id } = req.params;
-        const { partner_id } = req.query;
+
+        const filters = {
+            partner_id: req.query.partner_id || null,
+            supplier_name: req.query.supplier_name || '',
+            is_test: req.query.is_test ?? null,
+            startdate: req.query.startdate || '',
+            end_date: req.query.end_date || ''
+        };
 
         const project = await Project.getById(id);
-        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        const data = await buildReportRows(id, partner_id);
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project not found!'
+            });
+        }
+
+        const data = await buildReportRows(id, filters);
 
         return res.status(200).json({
             success: true,
@@ -46,7 +60,11 @@ export const getProjectReport = async (req, res) => {
             data
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        return res.status(500).json({
+            success: false,
+            message: 'Server error!',
+            error: error.message
+        });
     }
 };
 
