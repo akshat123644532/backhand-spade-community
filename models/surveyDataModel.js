@@ -152,10 +152,23 @@ createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP
         return rows[0] || null;
     },
 
-    getId: async (projectid,project_url_id) => {
+    getId: async (projectid, project_url_id, UserId) => {
+        if (UserId != null && String(UserId).trim() !== '') {
+            const [rows] = await db.execute(
+                `SELECT id, UserId FROM \`${TABLE}\`
+                 WHERE projectid = ? AND project_url_id = ? AND LOWER(UserId) = LOWER(?)
+                 ORDER BY id DESC
+                 LIMIT 1`,
+                [projectid, project_url_id, String(UserId).trim()]
+            );
+            return rows[0] || null;
+        }
         const [rows] = await db.execute(
-            `SELECT id,UserId FROM \`${TABLE}\` WHERE projectid = ? AND project_url_id = ? LIMIT 1`,
-            [projectid,project_url_id]
+            `SELECT id, UserId FROM \`${TABLE}\`
+             WHERE projectid = ? AND project_url_id = ?
+             ORDER BY id DESC
+             LIMIT 1`,
+            [projectid, project_url_id]
         );
         return rows[0] || null;
     },
