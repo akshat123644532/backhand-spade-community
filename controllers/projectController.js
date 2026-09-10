@@ -182,21 +182,7 @@ export const addProject = async (req, res) => {
             return res.status(500).json({ success: false, message: "Server error!", error: error.message });
         }
     };
-    export const getAllProjects = async (req, res) => {
-        try {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const search = req.query.search || '';
-            const status = req.query.status || '';
-        return res.status(201).json({
-            success: true,
-            message: "Project added successfully!",
-            data: { id, Project_code, Project_Name }
-        });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
-    }
-};
+
 export const getAllProjects = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
