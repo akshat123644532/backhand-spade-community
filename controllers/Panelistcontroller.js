@@ -69,7 +69,20 @@ export const signup = async (req, res) => {
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
-        const baseUrl = (process.env.CLIENT_BASE_URL || '').replace(/\/$/, '');
+        const settings = await RewardSetting.get();
+        const rewardPoints = settings?.registration_reward_points || 200; 
+
+        await addRewardPoints({
+            user_id: panelistId,
+            points: rewardPoints, // 
+            transaction_type: 'credit',
+            transaction_by: 'Admin',
+            remark: 'Registration Reward',
+            reference_id: null,
+            comment: 'Welcome bonus on signup'
+        });
+
+        const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com').replace(/\/$/, '');
         const questionnaireLink = `${baseUrl}/community-users?Userid=${encryptedUserId}`;
 
         let emailWarning = null;

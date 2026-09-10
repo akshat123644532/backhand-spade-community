@@ -12,7 +12,7 @@ const UID_PLACEHOLDER = 'XXXXXX';
 
 /** VenderURL = CLIENT_BASE_URL/dosurvey/{token}?pid={project_url_code}&uid=XXXXXX */
 const buildVenderUrl = ({ token, project_url_code }) => {
-    const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com/').replace(/\/$/, '');
+    const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com').replace(/\/$/, '');
     const params = new URLSearchParams();
     params.set('pid', String(project_url_code));
     params.set('uid', UID_PLACEHOLDER);

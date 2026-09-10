@@ -17,17 +17,28 @@ const Project = {
         return `PRJ${String(num).padStart(3, '0')}`;
     },
 
+    findByName: async (name, excludeId = null, conn = db) => {
+        const trimmed = String(name || '').trim();
+        if (!trimmed) return null;
+
+        let sql = `SELECT id FROM project_Info WHERE LOWER(TRIM(Project_Name)) = LOWER(?) AND (isdeleted = 0 OR isdeleted IS NULL)`;
+        const params = [trimmed];
+        if (excludeId) {
+            sql += ` AND id != ?`;
+            params.push(excludeId);
+        }
+        sql += ` LIMIT 1`;
+
+        const [rows] = await conn.execute(sql, params);
+        return rows[0] || null;
+    },
+
     create: async (data, conn = db) => {
         const { Project_Name, Clients, Project_Manager, Sales_Manager, RFQ, Project_Description, Notes, Status, action_by } = data;
         
-        // Check for duplicate project name
-        const [existing] = await conn.execute(
-            `SELECT id FROM project_Info WHERE Project_Name = ? AND (isdeleted = 0 OR isdeleted IS NULL) LIMIT 1`,
-            [Project_Name]
-        );
-        
-        if (existing.length > 0) {
-            const error = new Error('Project name already exists');
+        const existing = await Project.findByName(Project_Name, null, conn);
+        if (existing) {
+            const error = new Error('Project name should be unique');
             error.code = 'DUPLICATE_PROJECT_NAME';
             throw error;
         }

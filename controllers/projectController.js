@@ -152,6 +152,14 @@ export const addProject = async (req, res) => {
             Notes, Status
         } = req.body;
 
+            if (!Project_Name) {
+                return res.status(400).json({ success: false, message: "Project name is required!" });
+            }
+
+            const nameExists = await Project.findByName(Project_Name);
+            if (nameExists) {
+                return res.status(400).json({ success: false, message: "Project name should be unique" });
+            }
         if (!Project_Name) {
             return res.status(400).json({ success: false, message: "Project name is required!" });
         }
@@ -162,6 +170,24 @@ export const addProject = async (req, res) => {
             action_by: req.user?.id || null
         });
 
+            return res.status(201).json({
+                success: true,
+                message: "Project added successfully!",
+                data: { id, Project_code, Project_Name }
+            });
+        } catch (error) {
+            if (error.code === 'DUPLICATE_PROJECT_NAME') {
+                return res.status(400).json({ success: false, message: "Project name should be unique" });
+            }
+            return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        }
+    };
+    export const getAllProjects = async (req, res) => {
+        try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const search = req.query.search || '';
+            const status = req.query.status || '';
         return res.status(201).json({
             success: true,
             message: "Project added successfully!",
