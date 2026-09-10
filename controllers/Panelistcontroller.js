@@ -9,7 +9,7 @@ import { sendEmail } from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
-
+import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const resolvePanelistImageUrl = (imageUrl, req) => {
     if (!imageUrl) return null;
     if (imageUrl.startsWith('/uploads/')) {
@@ -368,6 +368,77 @@ export const resendInviteEmail = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+// =====================================================
+// EXPORT PANELISTS CSV
+// =====================================================
+export const exportPanelistsCsv = async (req, res) => {
+    try {
+        console.log("🔥 EXPORT API HIT");
+
+        const search = (req.query.search || '').trim();
+        const status = req.query.status || '';
+
+        const is_verified =
+            req.query.is_verified !== undefined
+                ? req.query.is_verified
+                : '';
+
+        const questionnaire =
+            req.query.questionnaire || '';
+
+        const rows = await Panelist.getAllForExport({
+            search,
+            status,
+            is_verified,
+            questionnaire
+        });
+        const csv = buildCsv(rows, [
+            {
+                label: 'ID',
+                key: 'id'
+            },
+            {
+                label: 'Name',
+                key: 'name'
+            },
+            {
+                label: 'Email address',
+                key: 'email'
+            },
+            {
+                label: 'Created at',
+                key: 'created_at'
+            },
+            {
+                label: 'Status',
+                key: 'status'
+            }
+        ]);
+
+        console.log(
+            `Panelists CSV Export: ${rows.length} records exported`
+        );
+
+        return sendCsv(
+            res,
+            'panelists.csv',
+            csv
+        );
+
+    } catch (error) {
+        console.error(
+            'exportPanelistsCsv error:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: 'Server error!',
+            error: error.message
+        });
+    }
+};
+
 
 // ✅ Multiple panelists — bulk invite/resend, per-panelist error isolation
 export const sendBulkInviteEmails = async (req, res) => {

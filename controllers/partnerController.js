@@ -162,7 +162,14 @@ export const exportPartnersCsv = async (req, res) => {
         const search = req.query.search || '';
         const status = req.query.status || '';
         const country = req.query.country || '';
-        const result = await Partner.getAll({ page: 1, limit: 1000000, search, status, country });
+
+        const result = await Partner.getAll({
+            page: 1,
+            limit: 1000000,
+            search,
+            status,
+            country
+        });
 
         const csv = buildCsv(result.data, [
             { label: 'ID', key: 'id' },
@@ -171,12 +178,19 @@ export const exportPartnersCsv = async (req, res) => {
             { label: 'Email', key: 'email' },
             { label: 'Contact Person', key: 'contact_person' },
             { label: 'Country', key: 'country' },
+            { label: 'Website URL', key: 'website_url' },
             { label: 'Panel Size', key: 'panel_size' },
-            { label: 'Status', key: 'status' }
+            { label: 'Status', key: 'status' },
+            { label: 'Created At', key: 'created_at' }
         ]);
 
         return sendCsv(res, 'partners.csv', csv);
+
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
