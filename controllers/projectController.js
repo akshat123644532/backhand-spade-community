@@ -142,6 +142,11 @@
                 return res.status(400).json({ success: false, message: "Project name is required!" });
             }
 
+            const nameExists = await Project.findByName(Project_Name);
+            if (nameExists) {
+                return res.status(400).json({ success: false, message: "Project name should be unique" });
+            }
+
             const { id, Project_code } = await Project.create({
                 Project_Name, Clients, Project_Manager, Sales_Manager, RFQ,
                 Project_Description, Notes, Status,
@@ -154,6 +159,9 @@
                 data: { id, Project_code, Project_Name }
             });
         } catch (error) {
+            if (error.code === 'DUPLICATE_PROJECT_NAME') {
+                return res.status(400).json({ success: false, message: "Project name should be unique" });
+            }
             return res.status(500).json({ success: false, message: "Server error!", error: error.message });
         }
     };

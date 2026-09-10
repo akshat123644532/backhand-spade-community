@@ -92,7 +92,7 @@ const SupplierMapping = {
                     projectUrlId,
                     projectid
                 });
-                const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com/').replace(/\/$/, '');
+                const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com').replace(/\/$/, '');
                 const params = new URLSearchParams();
                 params.set('pid', String(project_url_code));
                 params.set('uid', 'XXXXXX');
