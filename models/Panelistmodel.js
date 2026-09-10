@@ -140,7 +140,6 @@ const Panelist = {
     // Reward points are credited only once during signup.
     completeQuestionnaireWithPoints: async (
         id,
-        points,
         connection = db
     ) => {
         await connection.execute(

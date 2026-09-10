@@ -2,7 +2,7 @@ import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 import PanelistSubmissionResponse from '../models/panelistSubmissionResponseModel.js';
 import { decryptId } from '../utils/Encryptionhelper.js';
-
+import { addRewardPoints } from '../utils/rewardHelper.js';
 
 const QUESTIONNAIRE_COMPLETION_POINTS = 200;
 
@@ -53,7 +53,7 @@ export const getQuestionnaireByUrl = async (req, res) => {
 export const submitQuestionnaire = async (req, res) => {
     try {
         const { Userid } = req.query;
-        const { answers } = req.body; // [{ question_id, answer }, ...]
+        const { answers } = req.body;
 
         if (!Userid) {
             return res.status(400).json({ success: false, message: "Userid is required!" });
@@ -79,11 +79,17 @@ export const submitQuestionnaire = async (req, res) => {
             return res.status(409).json({ success: false, message: "Questionnaire already submitted!" });
         }
 
-        await PanelistSubmissionResponse.submitQuestionnaire(
-            panelist.id,
-            answers,
-            QUESTIONNAIRE_COMPLETION_POINTS
-        );
+        await PanelistSubmissionResponse.submitQuestionnaire(panelist.id, answers);
+
+        await addRewardPoints({
+            user_id: panelist.id,
+            points: QUESTIONNAIRE_COMPLETION_POINTS,
+            transaction_type: 'credit',
+            transaction_by: 'Admin',
+            remark: 'Registration Reward',
+            reference_id: null,
+            comment: 'Reward for completing panel questionnaire'
+        });
 
         return res.status(200).json({
             success: true,
