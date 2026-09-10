@@ -2,7 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import PanelistPortal from '../models/panelistPortalModel.js';
 import { submitRedeemRequest as submitRedeemRequestService } from '../services/panelistRedeemService.js';
-
+import { sendEmail } from '../utils/emailService.js';
+import { sendEmail } from '../config/mailer.js';
 export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -205,26 +206,80 @@ export const forgotPassword = async (req, res) => {
         const { email } = req.body;
 
         if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required!" });
+            return res.status(400).json({
+                success: false,
+                message: "Email is required!"
+            });
         }
 
         const panelist = await PanelistPortal.getByEmail(email);
 
         if (!panelist) {
-            return res.status(404).json({ success: false, message: "Email not registered!" });
+            return res.status(404).json({
+                success: false,
+                message: "Email not registered!"
+            });
         }
 
-        const otp = "123456"; // ⚠️ TEMP for testing — revert to random before going live
-        const otp_expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp_expires = new Date(Date.now() + 10 * 60 * 1000);
 
         await PanelistPortal.setResetToken(email, otp, otp_expires);
+
+        const emailText = `Dear ${panelist.name},
+
+We received a request to reset the password for your Spade Community account.
+
+Your One-Time Password (OTP) is:
+
+${otp}
+
+Please enter this OTP to continue with the password reset process.
+
+This OTP is valid for 10 minutes only. For your security, please do not share this OTP with anyone.
+
+If you did not request a password reset, please ignore this email. Your account will remain secure.
+
+Thank You,
+Spade Community`;
+
+        const emailHtml = `
+            <p>Dear ${panelist.name},</p>
+
+            <p>We received a request to reset the password for your Spade Community account.</p>
+
+            <p>Your One-Time Password (OTP) is:</p>
+
+            <h2>${otp}</h2>
+
+            <p>Please enter this OTP to continue with the password reset process.</p>
+
+            <p>This OTP is valid for <strong>10 minutes only</strong>. For your security, please do not share this OTP with anyone.</p>
+
+            <p>If you did not request a password reset, please ignore this email. Your account will remain secure.</p>
+
+            <p>Thank You,<br>Spade Community</p>
+        `;
+
+        await sendEmail({
+            to: email,
+            subject: "Your OTP for Password Reset - Spade Community",
+            html: emailHtml,
+            text: emailText
+        });
 
         return res.status(200).json({
             success: true,
             message: "OTP has been sent to your registered email."
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error("FORGOT PASSWORD ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
 
