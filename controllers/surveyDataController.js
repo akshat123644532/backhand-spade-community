@@ -247,50 +247,16 @@ export const addSurveyActivity = async (req, res) => {
  */
 export const getSurveyPreScreen = async (req, res) => {
     try {
-        console.log("========== getSurveyPreScreen DEBUG ==========");
-
         const token = req.body?.token || req.query?.token;
-        
-        console.log("Token received:", !!token);
-        console.log("Token length:", token?.length);
-        
-        if (!token) {
-            console.error("❌ TOKEN MISSING");
-        
-            return res.status(400).json({
-                success: false,
-                message: "Token is missing"
-            });
-        }
-        
-        let tokenData;
-        
-        try {
-            tokenData = decodeToken(token);
-            console.log("Decoded token:", tokenData);
-        } catch (error) {
-            console.error("❌ TOKEN DECODE ERROR:", error);
-        
-            return res.status(400).json({
-                success: false,
-                message: "Invalid token"
-            });
-        }
-        
+        const tokenData = decodeToken(token);
+
         const projectid = Number(tokenData.projectid);
         const project_url_id = Number(tokenData.projectUrlId);
-        
-        console.log("projectid:", projectid);
-        console.log("project_url_id:", project_url_id);
-        
-        console.log("Calling ProjectUrl.getById:", project_url_id);
-        
+
         const urlInfo = await ProjectUrl.getById(project_url_id);
-        
-        console.log("ProjectUrl.getById result:", urlInfo);
-        console.log('urlInfo', urlInfo);
-        console.log('projectid', projectid);
-        console.log('project_url_id', project_url_id);
+        // console.log('urlInfo', urlInfo);
+        // console.log('projectid', projectid);
+        // console.log('project_url_id', project_url_id);
         if (!urlInfo) {
             return res.status(404).json({ success: false, message: 'Project URL not found!' });
         }
