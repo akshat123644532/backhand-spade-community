@@ -82,7 +82,7 @@ export const signup = async (req, res) => {
             comment: 'Welcome bonus on signup'
         });
 
-        const baseUrl = (process.env.CLIENT_BASE_URL || '').replace(/\/$/, '');
+        const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com').replace(/\/$/, '');
         const questionnaireLink = `${baseUrl}/community-users?Userid=${encryptedUserId}`;
 
         let emailWarning = null;
