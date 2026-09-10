@@ -356,12 +356,23 @@ export const resetPassword = async (req, res) => {
         if (new Date() > new Date(otpRecord.expires_at)) return res.status(400).json({ success: false, message: "OTP has expired!" });
         if (otpRecord.is_verified !== 1) return res.status(400).json({ success: false, message: "OTP not verified!" });
 
+        // Get admin to fetch old password
+        const admin = await Admin.findByEmail(email);
+        if (!admin) return res.status(404).json({ success: false, message: "Admin not found!" });
+
         const plainPassword = decrypt(newPassword);
+        
+        // Check if new password is same as old password
+        const isSameAsOldPassword = await verifyPassword(plainPassword, admin.password);
+        if (isSameAsOldPassword) {
+            return res.status(400).json({ success: false, message: "New password cannot be the same as your old password!" });
+        }
+
         const hashedPassword = await encryptPasswordForStorage(plainPassword);
         await Admin.updatePassword(email, hashedPassword);
 
         await logActivity({
-            admin_id: null,
+            admin_id: admin.id,
             action: 'RESET_PASSWORD',
             module: 'Auth',
             description: `Password reset for ${email}`,

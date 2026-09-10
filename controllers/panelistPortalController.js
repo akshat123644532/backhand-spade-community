@@ -2,8 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import PanelistPortal from '../models/panelistPortalModel.js';
 import { submitRedeemRequest as submitRedeemRequestService } from '../services/panelistRedeemService.js';
-import { sendEmail } from '../utils/emailService.js';
 import { sendEmail } from '../config/mailer.js';
+
 export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -302,6 +302,18 @@ export const resetPassword = async (req, res) => {
 
         if (new Date(otpRecord.reset_token_expires) < new Date()) {
             return res.status(400).json({ success: false, message: "OTP has expired!" });
+        }
+
+        // Get panelist to fetch old password
+        const panelist = await PanelistPortal.getByEmail(email);
+        if (!panelist) {
+            return res.status(404).json({ success: false, message: "Panelist not found!" });
+        }
+
+        // Check if new password is same as old password
+        const isSameAsOldPassword = await bcrypt.compare(new_password, panelist.password);
+        if (isSameAsOldPassword) {
+            return res.status(400).json({ success: false, message: "New password cannot be the same as your old password!" });
         }
 
         const hashedPassword = await bcrypt.hash(new_password, 10);
