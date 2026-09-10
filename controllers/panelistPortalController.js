@@ -283,6 +283,32 @@ Spade Community`;
     }
 };
 
+export const verifyOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.status(400).json({ success: false, message: "Email and OTP are required!" });
+        }
+
+        const otpRecord = await PanelistPortal.getByResetToken(otp);
+        if (!otpRecord || otpRecord.email !== email) {
+            return res.status(400).json({ success: false, message: "Invalid email or OTP!" });
+        }
+
+        if (new Date(otpRecord.reset_token_expires) < new Date()) {
+            return res.status(400).json({ success: false, message: "OTP has expired!" });
+        }
+
+        // Mark OTP as verified (if you have this method in your model)
+        // await PanelistPortal.markOTPVerified(otp);
+
+        return res.status(200).json({ success: true, message: "OTP verified successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const resetPassword = async (req, res) => {
     try {
         const { email, otp, new_password, confirm_password } = req.body;
