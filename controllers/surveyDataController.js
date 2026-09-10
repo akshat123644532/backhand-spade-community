@@ -1,12 +1,11 @@
 import SurveyData from '../models/surveyDataModel.js';
-import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import QuestionnaireGroup from '../models/Questionnairegroupmodel.js';
 import {decryptUid } from '../utils/linkSecurityHelper.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import { decodeSurveyToken } from '../utils/Encryptionhelper.js';
-import { appendUidToLink, appendPidToLink, normalizeUid, getClientIp } from '../utils/surveyHelper.js';
+import { appendUidToLink, appendPidToLink, normalizeUid, getClientIp, resolveProjectUrlForSurvey } from '../utils/surveyHelper.js';
 import { finalizeSurveyOutcome } from '../services/surveyStatusService.js';
 import surveyPreScreenAnswers from '../models/preScreenAnswers.js';
 import { getPreScreenResponseId, ALLOWED_PRESCREEN_STATUSES } from '../utils/surveyHelper.js';
@@ -249,19 +248,19 @@ export const getSurveyPreScreen = async (req, res) => {
     try {
         const token = req.body?.token || req.query?.token;
         const tokenData = decodeToken(token);
+        const pid = req.body?.pid ?? req.query?.pid;
+        const UserId = normalizeUid(req.body?.uid ?? req.query?.uid);
 
-        const projectid = Number(tokenData.projectid);
-        const project_url_id = Number(tokenData.projectUrlId);
+        const { urlInfo, projectid, project_url_id } = await resolveProjectUrlForSurvey(
+            tokenData,
+            pid
+        );
 
-        const urlInfo = await ProjectUrl.getById(project_url_id);
-        // console.log('urlInfo', urlInfo);
-        // console.log('projectid', projectid);
-        // console.log('project_url_id', project_url_id);
         if (!urlInfo) {
             return res.status(404).json({ success: false, message: 'Project URL not found!' });
         }
 
-        if (Number(urlInfo.project_id) !== projectid) {
+        if (Number(urlInfo.project_id) !== Number(projectid)) {
             return res.status(400).json({
                 success: false,
                 message: 'Token projectid does not match project_url_id!'
@@ -285,7 +284,7 @@ export const getSurveyPreScreen = async (req, res) => {
                 message: 'PreScreen is enabled but PreScreenid is missing!'
             });
         }
-        const surveyDataId = await SurveyData.getId(projectid,project_url_id);
+        const surveyDataId = await SurveyData.getId(projectid, project_url_id, UserId);
 
         if (!surveyDataId) {
             return res.status(404).json({
@@ -295,20 +294,23 @@ export const getSurveyPreScreen = async (req, res) => {
             });
         }
 
-        const preScreenResponseStatus = await surveyPreScreenResponse.getPreScreenResponseBySurveyDataIdUserId(surveyDataId.id, surveyDataId.UserId);
-        if (preScreenResponseStatus.status === 'COMPLETED') {
+        const preScreenResponseStatus = await surveyPreScreenResponse.getPreScreenResponseBySurveyDataIdUserId(
+            surveyDataId.id,
+            UserId || surveyDataId.UserId
+        );
+        if (preScreenResponseStatus?.status === 'COMPLETED') {
             return res.status(200).json({
                 success: true,
-                required: true,
+                required: false,
                 message: 'PreScreen already completed!'
             });
-        } else if (preScreenResponseStatus.status === 'TERMINATED') {
+        } else if (preScreenResponseStatus?.status === 'TERMINATED') {
             return res.status(200).json({
                 success: true,
                 required: true,
                 message: 'PreScreen already terminated!'
             });
-        };
+        }
         const group = await QuestionnaireGroup.getById(preScreenId);
         if (!group) {
             return res.status(404).json({
@@ -361,8 +363,10 @@ export const getSurveyLink = async (req, res) => {
             });
         }
 
-        const projectid = Number(tokenData.projectid);
-        const project_url_id = Number(tokenData.projectUrlId);
+        const { urlInfo, projectid, project_url_id } = await resolveProjectUrlForSurvey(
+            tokenData,
+            req.query?.pid ?? req.body?.pid
+        );
         const partnerid =
             tokenData.partnerid == null || tokenData.partnerid === ''
                 ? null
@@ -382,8 +386,7 @@ export const getSurveyLink = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Survey is closed!' });
         }
 
-        const urlInfo = await ProjectUrl.getById(project_url_id);
-        if (!urlInfo || Number(urlInfo.project_id) !== projectid) {
+        if (!urlInfo) {
             return res.status(404).json({
                 success: false,
                 message: 'No survey found for this token and uid!'
@@ -545,9 +548,14 @@ export const savePreScreenResponse = async (req, res) => {
             });
         }
 
+        const { projectid, project_url_id } = await resolveProjectUrlForSurvey(
+            tokenData,
+            req.body?.pid ?? req.query?.pid
+        );
         const preScreenResponseId = await getPreScreenResponseId(
-            tokenData.projectid,
-            tokenData.projectUrlId
+            projectid,
+            project_url_id,
+            normalizeUid(req.body?.uid ?? req.query?.uid)
         );
 
         if (!preScreenResponseId) {
@@ -601,9 +609,14 @@ export const updatePreScreenResponseStatus = async (req, res) => {
                 message: 'Invalid status type!'
             });
         }
+        const { projectid, project_url_id } = await resolveProjectUrlForSurvey(
+            tokenData,
+            req.body?.pid ?? req.query?.pid
+        );
         const preScreenResponseId = await getPreScreenResponseId(
-            tokenData.projectid,
-            tokenData.projectUrlId
+            projectid,
+            project_url_id,
+            normalizeUid(req.body?.uid ?? req.query?.uid)
         );
 
         if (!preScreenResponseId) {
