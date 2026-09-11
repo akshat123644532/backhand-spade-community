@@ -315,57 +315,81 @@ getSupplierSummaryByProjectId: async (project_id) => {
    
 
 getProjectReport: async (
-  getProjectReport: async (
     project_id,
     {
         partner_id = null,
         supplier_name = '',
         is_test = null,
         startdate = '',
-        end_date = ''
+        end_date = '',
+        status = 'all'
     } = {}
 ) => {
     const params = [project_id];
     let filters = '';
 
+    // Partner filter
     if (
         partner_id !== null &&
         partner_id !== undefined &&
         String(partner_id).trim() !== ''
     ) {
-        partnerSql = ' AND sd.partnerid = ?';
-    if (partner_id !== null && partner_id !== '') {
         filters += ' AND sd.partnerid = ?';
         params.push(partner_id);
     }
 
+    // Supplier name filter
+    if (
+        supplier_name &&
+        String(supplier_name).trim() !== ''
+    ) {
+        filters += ' AND p.name LIKE ?';
+        params.push(`%${supplier_name}%`);
+    }
+
+    // Test link filter
+    if (
+        is_test !== null &&
+        is_test !== undefined &&
+        String(is_test).trim() !== ''
+    ) {
+        filters += ' AND sm.IsTest = ?';
+        params.push(Number(is_test));
+    }
+
+    // Start date filter
+    if (
+        startdate &&
+        String(startdate).trim() !== ''
+    ) {
+        filters += ' AND DATE(sd.StartDate) >= ?';
+        params.push(startdate);
+    }
+
+    // End date filter
+    if (
+        end_date &&
+        String(end_date).trim() !== ''
+    ) {
+        filters += ' AND DATE(sd.EndDate) <= ?';
+        params.push(end_date);
+    }
+
+    // Status filter
+    // status=all -> all statuses
+    // status=Initiated -> only Initiated
+    // status=Completed -> only Completed
     if (
         status &&
         String(status).trim() !== '' &&
         String(status).toLowerCase() !== 'all'
     ) {
-        statusSql = `
-            AND LOWER(TRIM(sd.Status)) = LOWER(TRIM(?))
+        filters += `
+            AND LOWER(TRIM(sd.Status)) =
+                LOWER(TRIM(?))
         `;
+
         params.push(status);
-    if (supplier_name) {
-        filters += ' AND p.name LIKE ?';
-        params.push(`%${supplier_name}%`);
-    }
-
-    if (is_test !== null && is_test !== '') {
-        filters += ' AND sm.IsTest = ?';
-        params.push(Number(is_test));
-    }
-
-    if (startdate) {
-        filters += ' AND DATE(sd.StartDate) >= ?';
-        params.push(startdate);
-    }
-
-    if (end_date) {
-        filters += ' AND DATE(sd.EndDate) <= ?';
-        params.push(end_date);
     }
 
     const [rows] = await db.execute(
@@ -388,15 +412,17 @@ getProjectReport: async (
             sd.StartDate AS survey_start_date,
 
             sd.EndDate AS survey_end_date,
-           CASE
-    WHEN sd.StartDate IS NOT NULL
-    THEN TIMESTAMPDIFF(
-        MINUTE,
-        sd.StartDate,
-        COALESCE(sd.EndDate, NOW())
-    )
-    ELSE NULL
-END AS loi_minutes,
+
+            CASE
+                WHEN sd.StartDate IS NOT NULL
+                THEN TIMESTAMPDIFF(
+                    MINUTE,
+                    sd.StartDate,
+                    COALESCE(sd.EndDate, NOW())
+                )
+                ELSE NULL
+            END AS loi_minutes,
+
             sd.InitalIP AS ip_address,
 
             sd.GeoLocation AS country,
@@ -406,13 +432,15 @@ END AS loi_minutes,
         FROM \`${TABLE}\` sd
 
         LEFT JOIN partners p
-         FROM \`${TABLE}\` sd
-         LEFT JOIN supplier_mapping sm
-            ON sm.partnerid <=> sd.partnerid
-            AND sm.projectid = sd.projectid
-         LEFT JOIN partners p
             ON p.id = sd.partnerid
 
+        /*
+         * One mapping row per
+         * project + project URL + partner
+         *
+         * This prevents duplicate report rows
+         * when supplier_mapping contains multiple rows.
+         */
         LEFT JOIN (
             SELECT
                 projectid,
@@ -432,25 +460,23 @@ END AS loi_minutes,
             AND sm.partnerid <=> sd.partnerid
 
         LEFT JOIN project_Info proj
-         LEFT JOIN project_Info proj
             ON proj.id = sd.projectid
 
+        /*
+         * Only selected project
+         */
         WHERE sd.projectid = ?
 
-        ${partnerSql}
-
-        ${statusSql}
+        ${filters}
 
         ORDER BY sd.id DESC
         `,
-         WHERE sd.projectid = ?
-         ${filters}
-         ORDER BY sd.id DESC`,
         params
     );
 
     return rows;
 },
+
 
     getSupplierReport: async ({
         project_id,
