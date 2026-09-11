@@ -151,6 +151,41 @@ export const getStatusRedirectUrl = (mapping, status, uid) => {
     return uid ? appendUidToLink(url, uid) : url;
 };
 
+/**
+ * Resolve project_url_Info from survey token (and optional pid code fallback).
+ */
+export const resolveProjectUrlForSurvey = async (tokenData, pidRaw) => {
+    const projectid = Number(tokenData?.projectid);
+    const tokenUrlId = Number(tokenData?.projectUrlId);
+
+    let urlInfo =
+        Number.isFinite(tokenUrlId) && tokenUrlId > 0
+            ? await ProjectUrl.getById(tokenUrlId)
+            : null;
+
+    if (
+        urlInfo &&
+        Number.isFinite(projectid) &&
+        Number(urlInfo.project_id) !== projectid
+    ) {
+        urlInfo = null;
+    }
+
+    const pid = String(pidRaw ?? '').trim();
+    if (!urlInfo && pid) {
+        const byCode = await ProjectUrl.getByCode(pid);
+        if (byCode) {
+            urlInfo = byCode;
+        }
+    }
+
+    return {
+        urlInfo,
+        projectid: urlInfo ? Number(urlInfo.project_id) : projectid,
+        project_url_id: urlInfo ? Number(urlInfo.id) : tokenUrlId
+    };
+};
+
 export const getPreScreenResponseId = async ({
     projectId,
     projectUrlId,
