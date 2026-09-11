@@ -12,14 +12,41 @@ export const getCountryFromIp = (ip) => {
     return countries.getName(geo.country, 'en') || geo.country;
 };
 
-/** Single geoip lookup -> { country, city }. Used by the project report (avoids a second lookup). */
+/**
+ * Local geoip-lite lookup (no network call). Approximate IP location only — not GPS.
+ * Returns country/region/city/ll plus a readable `label` for VARCHAR GeoLocation columns.
+ * On failure: all fields null (caller should continue without failing the request).
+ */
 export const getLocationFromIp = (ip) => {
-    if (!ip) return { country: null, city: null };
-    const geo = geoip.lookup(ip);
-    if (!geo) return { country: null, city: null };
-    const country = geo.country ? (countries.getName(geo.country, 'en') || geo.country) : null;
-    const city = geo.city || null;
-    return { country, city };
+    const empty = {
+        country: null,
+        region: null,
+        city: null,
+        ll: null,
+        label: null
+    };
+    if (!ip) return empty;
+
+    let geo;
+    try {
+        geo = geoip.lookup(String(ip).trim());
+    } catch {
+        return empty;
+    }
+    if (!geo) return empty;
+
+    const country = geo.country
+        ? (countries.getName(geo.country, 'en') || geo.country)
+        : null;
+    const region = geo.region ? String(geo.region).trim() || null : null;
+    const city = geo.city ? String(geo.city).trim() || null : null;
+    const ll = Array.isArray(geo.ll) && geo.ll.length >= 2 ? geo.ll : null;
+
+    // Prefer "Country, Region, City" — skip empty parts so text questions / reports stay readable
+    const labelParts = [country, region, city].filter(Boolean);
+    const label = labelParts.length ? labelParts.join(', ') : null;
+
+    return { country, region, city, ll, label };
 };
 
 const SIGNING_SECRET = process.env.LINK_SIGNING_SECRET || 'change-this-secret-in-env';

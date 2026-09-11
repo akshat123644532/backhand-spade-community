@@ -5,8 +5,12 @@ const STATUS_INITIATED = 'Initiated';
 
 let indexReady = false;
 
+export const isInitiatedStatus = (status) =>
+    String(status || '').trim().toLowerCase() === 'initiated';
+
 const SurveyData = {
     STATUS_INITIATED,
+    isInitiatedStatus,
 
     /** Composite index for duplicate / access checks */
     ensureIndex: async () => {
@@ -23,6 +27,30 @@ const SurveyData = {
             }
         }
         indexReady = true;
+    },
+
+    /**
+     * Serialize initiations for a partner/project/url scope (UserId + conditional UniqueIP races).
+     * Uses MySQL named locks — no schema change required.
+     */
+    withInitLock: async (lockKey, fn) => {
+        const name = String(lockKey || 'survey_init').slice(0, 64);
+        const [rows] = await db.query('SELECT GET_LOCK(?, 10) AS acquired', [name]);
+        if (!Number(rows?.[0]?.acquired)) {
+            const err = new Error('Survey initiation is busy. Please retry.');
+            err.statusCode = 503;
+            err.code = 'INIT_LOCK_TIMEOUT';
+            throw err;
+        }
+        try {
+            return await fn();
+        } finally {
+            try {
+                await db.query('SELECT RELEASE_LOCK(?)', [name]);
+            } catch {
+                // ignore release errors
+            }
+        }
     },
 
     /**
@@ -95,18 +123,27 @@ const SurveyData = {
         );
         return rows[0] || null;
     },
-createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
-    await SurveyData.ensureIndex();
-    const { country } = getLocationFromIp(InitalIP);
 
-    const [result] = await db.execute(
-        `INSERT INTO \`${TABLE}\`
-         (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
-         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
-        [partnerid, projectid, project_url_id, UserId, InitalIP, country, STATUS_INITIATED]
-    );
-    return result.insertId;
-},
+    createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
+        await SurveyData.ensureIndex();
+
+        // Local DB lookup — never fail initiation if geo is unavailable
+        let geoLabel = null;
+        try {
+            const loc = getLocationFromIp(InitalIP);
+            geoLabel = loc?.label || loc?.country || null;
+        } catch {
+            geoLabel = null;
+        }
+
+        const [result] = await db.execute(
+            `INSERT INTO \`${TABLE}\`
+             (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
+             VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+            [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
+        );
+        return result.insertId;
+    },
 
     /**
      * Finalize survey activity: set Status, FinalIP, EndDate.

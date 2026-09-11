@@ -80,16 +80,26 @@ export const isValidUid = (uid) => {
     return !PLACEHOLDER_UIDS.has(value.toLowerCase()) && !PLACEHOLDER_UIDS.has(value);
 };
 
+/**
+ * Real client IP behind Nginx/load balancers.
+ * Prefers Express `req.ip` when `trust proxy` is set (server.js), so hop counts
+ * are respected instead of blindly trusting the left-most X-Forwarded-For value.
+ */
 export const getClientIp = (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
     let ip = '';
-    if (typeof forwarded === 'string' && forwarded.trim()) {
-        ip = forwarded.split(',')[0].trim();
+
+    if (req?.ip) {
+        ip = String(req.ip).trim();
+    } else if (typeof req?.headers?.['x-forwarded-for'] === 'string' && req.headers['x-forwarded-for'].trim()) {
+        ip = req.headers['x-forwarded-for'].split(',')[0].trim();
     } else {
-        ip = req.ip || req.socket?.remoteAddress || '';
+        ip = req?.socket?.remoteAddress || '';
     }
+
     if (ip.startsWith('::ffff:')) ip = ip.slice(7);
-    return String(ip).slice(0, 20);
+    // Strip surrounding brackets from IPv6 literals if present
+    if (ip.startsWith('[') && ip.endsWith(']')) ip = ip.slice(1, -1);
+    return String(ip).slice(0, 45);
 };
 
 export const decodeToken = (rawToken) => {
