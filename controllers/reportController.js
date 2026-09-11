@@ -53,20 +53,10 @@ export const getProjectReport = async (req, res) => {
     try {
         const { id } = req.params;
 
-<<<<<<< Updated upstream
-        const filters = {
-            partner_id: req.query.partner_id || null,
-            supplier_name: req.query.supplier_name || '',
-            is_test: req.query.is_test ?? null,
-            startdate: req.query.startdate || '',
-            end_date: req.query.end_date || ''
-        };
-=======
         const {
             partner_id,
             status = 'all'
         } = req.query;
->>>>>>> Stashed changes
 
         const project = await Project.getById(id);
 
