@@ -4,26 +4,45 @@ import { getLocationFromIp } from '../utils/linkSecurityHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import { sendError } from './surveyDataController.js';
-// Shared: fetch + shape the report rows (used by both the JSON view and the CSV download)
-const buildReportRows = async (project_id, partner_id) => {
-    const rows = await SurveyData.getProjectReport(project_id, { partner_id: partner_id || null });
+
+const buildReportRows = async (
+    project_id,
+    partner_id,
+    status = 'all'
+) => {
+    const rows = await SurveyData.getProjectReport(project_id, {
+        partner_id: partner_id || null,
+        status: status || 'all'
+    });
 
     return rows.map(row => {
         const { country, city } = getLocationFromIp(row.ip_address);
+
         return {
             supplier_id: row.supplier_id,
+
             supplier_name: row.supplier_name
                 ? `${row.supplier_name} (${row.supplier_code || ''})`.trim()
                 : (row.supplier_code || null),
+
             client_id: row.client_id,
+
             supplier_identifier: row.supplier_identifier,
+
             status: row.status,
+
             survey_start_date: row.survey_start_date,
+
             survey_end_date: row.survey_end_date,
+
             loi_minutes: row.loi_minutes,
+
             ip_address: row.ip_address,
+
             country,
+
             city,
+
             is_test_link: !!row.is_test_link
         };
     });
@@ -72,32 +91,43 @@ export const getProjectReport = async (req, res) => {
 export const downloadProjectReportCsv = async (req, res) => {
     try {
         const { id } = req.params;
-        const { partner_id } = req.query;
+
+        const {
+            partner_id,
+            status = 'all'
+        } = req.query;
 
         const project = await Project.getById(id);
-        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        const data = await buildReportRows(id, partner_id);
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: "Project not found!"
+            });
+        }
 
-        const csv = buildCsv(data, [
-            { label: 'Supplier Id', key: 'supplier_id' },
-            { label: 'Supplier Name', key: 'supplier_name' },
-            { label: 'Client ID', key: 'client_id' },
-            { label: 'Supplier Identifier', key: 'supplier_identifier' },
-            { label: 'Status', key: 'status' },
-            { label: 'Survey Start Date', key: 'survey_start_date' },
-            { label: 'Survey End Date', key: 'survey_end_date' },
-            { label: 'LOI(mins)', key: 'loi_minutes' },
-            { label: 'IP Address', key: 'ip_address' },
-            { label: 'Country', key: 'country' },
-            { label: 'City', key: 'city' },
-            { label: 'Is Test Link', key: 'is_test_link' }
-        ]);
+        const data = await buildReportRows(
+            id,
+            partner_id,
+            status
+        );
 
-        const safeName = String(project.Project_Name || 'project').replace(/[^a-z0-9]+/gi, '_');
-        return sendCsv(res, `project_report_${safeName}.csv`, csv);
+        const csvData = buildCsv(data);
+
+        return sendCsv(
+            res,
+            csvData,
+            `project-report-${id}.csv`
+        );
+
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error("Download Project Report CSV Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
 
