@@ -313,6 +313,8 @@ getSupplierSummaryByProjectId: async (project_id) => {
     }));
 },
    
+
+getProjectReport: async (
   getProjectReport: async (
     project_id,
     {
@@ -326,11 +328,26 @@ getSupplierSummaryByProjectId: async (project_id) => {
     const params = [project_id];
     let filters = '';
 
+    if (
+        partner_id !== null &&
+        partner_id !== undefined &&
+        String(partner_id).trim() !== ''
+    ) {
+        partnerSql = ' AND sd.partnerid = ?';
     if (partner_id !== null && partner_id !== '') {
         filters += ' AND sd.partnerid = ?';
         params.push(partner_id);
     }
 
+    if (
+        status &&
+        String(status).trim() !== '' &&
+        String(status).toLowerCase() !== 'all'
+    ) {
+        statusSql = `
+            AND LOWER(TRIM(sd.Status)) = LOWER(TRIM(?))
+        `;
+        params.push(status);
     if (supplier_name) {
         filters += ' AND p.name LIKE ?';
         params.push(`%${supplier_name}%`);
@@ -352,15 +369,24 @@ getSupplierSummaryByProjectId: async (project_id) => {
     }
 
     const [rows] = await db.execute(
-        `SELECT
-            sm.id AS supplier_row_id,
+        `
+        SELECT
+            sd.id AS survey_id,
+
             sd.partnerid AS supplier_id,
+
             p.name AS supplier_name,
+
             sm.partner_code AS supplier_code,
+
             proj.Clients AS client_id,
+
             sd.UserId AS supplier_identifier,
+
             sd.Status AS status,
+
             sd.StartDate AS survey_start_date,
+
             sd.EndDate AS survey_end_date,
            CASE
     WHEN sd.StartDate IS NOT NULL
@@ -372,16 +398,51 @@ getSupplierSummaryByProjectId: async (project_id) => {
     ELSE NULL
 END AS loi_minutes,
             sd.InitalIP AS ip_address,
+
             sd.GeoLocation AS country,
+
             sm.IsTest AS is_test_link
+
+        FROM \`${TABLE}\` sd
+
+        LEFT JOIN partners p
          FROM \`${TABLE}\` sd
          LEFT JOIN supplier_mapping sm
             ON sm.partnerid <=> sd.partnerid
             AND sm.projectid = sd.projectid
          LEFT JOIN partners p
             ON p.id = sd.partnerid
+
+        LEFT JOIN (
+            SELECT
+                projectid,
+                projectUrlId,
+                partnerid,
+                MAX(partner_code) AS partner_code,
+                MAX(IsTest) AS IsTest
+            FROM supplier_mapping
+            WHERE deleted_at IS NULL
+            GROUP BY
+                projectid,
+                projectUrlId,
+                partnerid
+        ) sm
+            ON sm.projectid = sd.projectid
+            AND sm.projectUrlId <=> sd.project_url_id
+            AND sm.partnerid <=> sd.partnerid
+
+        LEFT JOIN project_Info proj
          LEFT JOIN project_Info proj
             ON proj.id = sd.projectid
+
+        WHERE sd.projectid = ?
+
+        ${partnerSql}
+
+        ${statusSql}
+
+        ORDER BY sd.id DESC
+        `,
          WHERE sd.projectid = ?
          ${filters}
          ORDER BY sd.id DESC`,
