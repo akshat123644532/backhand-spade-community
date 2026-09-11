@@ -245,6 +245,7 @@ export const downloadSupplierReportCsv = async (req, res) => {
 export const getPreScreenReport = async (req, res) => {
     try {
         const projectid = req.query.projectid;
+        const is_test = req.query.is_test;
 
         if (!projectid) {
             return res.status(400).json({
@@ -254,7 +255,8 @@ export const getPreScreenReport = async (req, res) => {
         }
 
         const data = await surveyPreScreenResponse.getPreScreenReport({
-            projectid
+            projectid,
+            is_test: is_test !== undefined ? is_test : null
         });
 
         return res.status(200).json({
@@ -270,6 +272,7 @@ export const getPreScreenReport = async (req, res) => {
 export const exportPreScreenReport = async (req, res) => {
     try {
         const projectid = req.query.projectid;
+        const is_test = req.query.is_test;
 
         if (!projectid) {
             return res.status(400).json({
@@ -279,11 +282,16 @@ export const exportPreScreenReport = async (req, res) => {
         }
 
         const data = await surveyPreScreenResponse.getPreScreenReport({
-            projectid
+            projectid,
+            is_test: is_test !== undefined ? is_test : null
         });
 
         const headers = [
             'S. No.',
+            'UID',
+            'Project Name',
+            'Survey Date',
+            'Answered At',
             'Partner ID',
             'Partner Name',
             'Client Name',
@@ -319,6 +327,10 @@ export const exportPreScreenReport = async (req, res) => {
         for (const row of data) {
             csvRows.push([
                 row.serial_no,
+                row.uid,
+                row.project_name,
+                row.survey_date,
+                row.answered_at,
                 row.partner_id,
                 row.partner_name,
                 row.client_name,

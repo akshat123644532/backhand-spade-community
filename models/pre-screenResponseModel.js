@@ -48,11 +48,24 @@ const surveyPreScreenResponse = {
         return result.affectedRows > 0;
     },
 
-    getPreScreenReport: async ({ projectid }) => {
+    getPreScreenReport: async ({ projectid, is_test = null }) => {
+        const params = [projectid];
+        let isTestSql = '';
+
+        if (is_test !== null && is_test !== undefined && String(is_test).trim() !== '') {
+            isTestSql = ` AND sm.IsTest = ?`;
+            params.push(Number(is_test) ? 1 : 0);
+        }
+
         const [rows] = await db.execute(
             `
             SELECT
                 ROW_NUMBER() OVER (ORDER BY sd.id DESC, spa.id ASC) AS serial_no,
+                sd.UserId AS uid,
+                sd.UserId AS user_id,
+                proj.Project_Name AS project_name,
+                sd.StartDate AS survey_date,
+                spa.created_at AS answered_at,
                 sd.partnerid AS partner_id,
                 p.name AS partner_name,
                 proj.Clients AS client_name,
@@ -74,12 +87,19 @@ const surveyPreScreenResponse = {
     
             LEFT JOIN project_Info proj
                 ON proj.id = sd.projectid
+
+            LEFT JOIN supplier_mapping sm
+                ON sm.partnerid <=> sd.partnerid
+               AND sm.projectid = sd.projectid
+               AND sm.projectUrlId = sd.project_url_id
+               AND sm.deleted_at IS NULL
     
             WHERE sd.projectid = ?
+            ${isTestSql}
     
             ORDER BY sd.id DESC, spa.id ASC
             `,
-            [projectid]
+            params
         );
     
         return rows;
