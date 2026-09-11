@@ -67,15 +67,11 @@ export const getProjectReport = async (req, res) => {
             });
         }
 
-<<<<<<< Updated upstream
-        const data = await buildReportRows(id, filters);
-=======
         const data = await buildReportRows(
             id,
             partner_id,
             status
         );
->>>>>>> Stashed changes
 
         return res.status(200).json({
             success: true,
