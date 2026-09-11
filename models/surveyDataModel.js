@@ -350,44 +350,79 @@ getSupplierSummaryByProjectId: async (project_id) => {
     }));
 },
    
-    getProjectReport: async (project_id, { partner_id = null } = {}) => {
-        const params = [project_id];
-        let partnerSql = '';
-        if (partner_id != null && partner_id !== '') {
-            partnerSql = ' AND sd.partnerid = ?';
-            params.push(partner_id);
-        }
+getProjectReport: async (
+    project_id,
+    { partner_id = null, status = 'all' } = {}
+) => {
+    const params = [project_id];
 
-        const [rows] = await db.execute(
-            `SELECT
-                sm.id AS supplier_row_id,
-                sd.partnerid AS supplier_id,
-                p.name AS supplier_name,
-                sm.partner_code AS supplier_code,
-                proj.Clients AS client_id,
-                sd.UserId AS supplier_identifier,
-                sd.Status AS status,
-                sd.StartDate AS survey_start_date,
-                sd.EndDate AS survey_end_date,
-                CASE
-                    WHEN sd.StartDate IS NOT NULL AND sd.EndDate IS NOT NULL
-                    THEN TIMESTAMPDIFF(MINUTE, sd.StartDate, sd.EndDate)
-                    ELSE NULL
-                END AS loi_minutes,
-                sd.InitalIP AS ip_address,
-                sd.GeoLocation AS country,
-                sm.IsTest AS is_test_link
-             FROM \`${TABLE}\` sd
-             LEFT JOIN supplier_mapping sm
-                ON sm.partnerid <=> sd.partnerid AND sm.projectid = sd.projectid
-             LEFT JOIN partners p ON p.id = sd.partnerid
-             LEFT JOIN project_Info proj ON proj.id = sd.projectid
-             WHERE sd.projectid = ? ${partnerSql}
-             ORDER BY sd.id DESC`,
-            params
-        );
-        return rows;
-    },
+    let partnerSql = '';
+    let statusSql = '';
+
+    if (partner_id != null && partner_id !== '') {
+        partnerSql = ' AND sd.partnerid = ?';
+        params.push(partner_id);
+    }
+
+    if (
+        status &&
+        String(status).trim() !== '' &&
+        String(status).toLowerCase() !== 'all'
+    ) {
+        statusSql = ' AND LOWER(TRIM(sd.Status)) = LOWER(TRIM(?))';
+        params.push(status);
+    }
+
+    const [rows] = await db.execute(
+        `SELECT
+            sm.id AS supplier_row_id,
+            sd.partnerid AS supplier_id,
+            p.name AS supplier_name,
+            sm.partner_code AS supplier_code,
+            proj.Clients AS client_id,
+            sd.UserId AS supplier_identifier,
+            sd.Status AS status,
+            sd.StartDate AS survey_start_date,
+            sd.EndDate AS survey_end_date,
+
+            CASE
+                WHEN sd.StartDate IS NOT NULL
+                     AND sd.EndDate IS NOT NULL
+                THEN TIMESTAMPDIFF(
+                    MINUTE,
+                    sd.StartDate,
+                    sd.EndDate
+                )
+                ELSE NULL
+            END AS loi_minutes,
+
+            sd.InitalIP AS ip_address,
+            sd.GeoLocation AS country,
+            sm.IsTest AS is_test_link
+
+        FROM \`${TABLE}\` sd
+
+        LEFT JOIN supplier_mapping sm
+            ON sm.partnerid <=> sd.partnerid
+            AND sm.projectid = sd.projectid
+
+        LEFT JOIN partners p
+            ON p.id = sd.partnerid
+
+        LEFT JOIN project_Info proj
+            ON proj.id = sd.projectid
+
+        WHERE sd.projectid = ?
+        ${partnerSql}
+        ${statusSql}
+
+        ORDER BY sd.id DESC`,
+        params
+    );
+
+    return rows;
+},
+    
 
     getSupplierReport: async ({
         project_id,

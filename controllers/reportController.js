@@ -33,20 +33,38 @@ const buildReportRows = async (project_id, partner_id) => {
 export const getProjectReport = async (req, res) => {
     try {
         const { id } = req.params;
-        const { partner_id } = req.query;
+
+        // Query params
+        const { partner_id, status = 'all' } = req.query;
 
         const project = await Project.getById(id);
-        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
 
-        const data = await buildReportRows(id, partner_id);
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: "Project not found!"
+            });
+        }
+
+        // Project ID + Partner ID + Status filter
+        const data = await buildReportRows(
+            id,
+            partner_id,
+            status
+        );
 
         return res.status(200).json({
             success: true,
             project_name: project.Project_Name,
             data
         });
+
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
 
