@@ -4,11 +4,6 @@ import { getLocationFromIp } from '../utils/linkSecurityHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import { sendError } from './surveyDataController.js';
-<<<<<<< Updated upstream
-// Shared: fetch + shape the report rows (used by both the JSON view and the CSV download)
-const buildReportRows = async (project_id, filters = {}) => {
-    const rows = await SurveyData.getProjectReport(project_id, filters);
-=======
 
 const buildReportRows = async (
     project_id,
@@ -19,7 +14,6 @@ const buildReportRows = async (
         partner_id: partner_id || null,
         status: status || 'all'
     });
->>>>>>> Stashed changes
 
     return rows.map(row => {
         const { country, city } = getLocationFromIp(row.ip_address);
