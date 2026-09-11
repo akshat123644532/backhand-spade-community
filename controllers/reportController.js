@@ -53,20 +53,19 @@ export const getProjectReport = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const {
-            partner_id,
-            status = 'all'
-        } = req.query;
+        // Query params
+        const { partner_id, status = 'all' } = req.query;
 
         const project = await Project.getById(id);
 
         if (!project) {
             return res.status(404).json({
                 success: false,
-                message: 'Project not found!'
+                message: "Project not found!"
             });
         }
 
+        // Project ID + Partner ID + Status filter
         const data = await buildReportRows(
             id,
             partner_id,
@@ -78,12 +77,11 @@ export const getProjectReport = async (req, res) => {
             project_name: project.Project_Name,
             data
         });
-    } catch (error) {
-        console.error("Get Project Report Error:", error);
 
+    } catch (error) {
         return res.status(500).json({
             success: false,
-            message: 'Server error!',
+            message: "Server error!",
             error: error.message
         });
     }

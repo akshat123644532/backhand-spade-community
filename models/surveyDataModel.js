@@ -1,12 +1,20 @@
 import { db } from '../config/db.js';
-import { getLocationFromIp } from '../utils/linkSecurityHelper.js';
+import { resolveGeoLocationLabel } from '../utils/linkSecurityHelper.js';
 const TABLE = 'survery_data';
 const STATUS_INITIATED = 'Initiated';
 
 let indexReady = false;
 
+export const isInitiatedStatus = (status) =>
+    String(status || '').trim().toLowerCase() === 'initiated';
+
+const isEmptyGeoLocation = (value) =>
+    value === null || value === undefined || String(value).trim() === '';
+
 const SurveyData = {
     STATUS_INITIATED,
+    isInitiatedStatus,
+    isEmptyGeoLocation,
 
     /** Composite index for duplicate / access checks */
     ensureIndex: async () => {
@@ -23,6 +31,30 @@ const SurveyData = {
             }
         }
         indexReady = true;
+    },
+
+    /**
+     * Serialize initiations for a partner/project/url scope (UserId + conditional UniqueIP races).
+     * Uses MySQL named locks — no schema change required.
+     */
+    withInitLock: async (lockKey, fn) => {
+        const name = String(lockKey || 'survey_init').slice(0, 64);
+        const [rows] = await db.query('SELECT GET_LOCK(?, 10) AS acquired', [name]);
+        if (!Number(rows?.[0]?.acquired)) {
+            const err = new Error('Survey initiation is busy. Please retry.');
+            err.statusCode = 503;
+            err.code = 'INIT_LOCK_TIMEOUT';
+            throw err;
+        }
+        try {
+            return await fn();
+        } finally {
+            try {
+                await db.query('SELECT RELEASE_LOCK(?)', [name]);
+            } catch {
+                // ignore release errors
+            }
+        }
     },
 
     /**
@@ -95,18 +127,54 @@ const SurveyData = {
         );
         return rows[0] || null;
     },
-createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
-    await SurveyData.ensureIndex();
-    const { country } = getLocationFromIp(InitalIP);
 
-    const [result] = await db.execute(
-        `INSERT INTO \`${TABLE}\`
-         (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
-         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
-        [partnerid, projectid, project_url_id, UserId, InitalIP, country, STATUS_INITIATED]
-    );
-    return result.insertId;
-},
+    createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
+        await SurveyData.ensureIndex();
+
+        // Resolve geo from IP — never fail initiation if lookup is unavailable
+        let geoLabel = null;
+        try {
+            geoLabel = await resolveGeoLocationLabel(InitalIP);
+        } catch {
+            geoLabel = null;
+        }
+
+        const [result] = await db.execute(
+            `INSERT INTO \`${TABLE}\`
+             (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
+             VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+            [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
+        );
+        return result.insertId;
+    },
+
+    /**
+     * If GeoLocation is missing on an existing row, resolve from IP and save.
+     * Returns the (possibly updated) row.
+     */
+    backfillGeoLocationIfEmpty: async ({ id, ip }) => {
+        const row = await SurveyData.getById(id);
+        if (!row) return null;
+        if (!isEmptyGeoLocation(row.GeoLocation)) return row;
+
+        let geoLabel = null;
+        try {
+            geoLabel = await resolveGeoLocationLabel(ip || row.InitalIP);
+        } catch {
+            geoLabel = null;
+        }
+        if (!geoLabel) return row;
+
+        await db.execute(
+            `UPDATE \`${TABLE}\`
+             SET GeoLocation = ?
+             WHERE id = ?
+               AND (GeoLocation IS NULL OR TRIM(GeoLocation) = '')`,
+            [geoLabel, id]
+        );
+
+        return (await SurveyData.getById(id)) || { ...row, GeoLocation: geoLabel };
+    },
 
     /**
      * Finalize survey activity: set Status, FinalIP, EndDate.
@@ -313,170 +381,79 @@ getSupplierSummaryByProjectId: async (project_id) => {
     }));
 },
    
-
 getProjectReport: async (
     project_id,
-    {
-        partner_id = null,
-        supplier_name = '',
-        is_test = null,
-        startdate = '',
-        end_date = '',
-        status = 'all'
-    } = {}
+    { partner_id = null, status = 'all' } = {}
 ) => {
     const params = [project_id];
-    let filters = '';
 
-    // Partner filter
-    if (
-        partner_id !== null &&
-        partner_id !== undefined &&
-        String(partner_id).trim() !== ''
-    ) {
-        filters += ' AND sd.partnerid = ?';
+    let partnerSql = '';
+    let statusSql = '';
+
+    if (partner_id != null && partner_id !== '') {
+        partnerSql = ' AND sd.partnerid = ?';
         params.push(partner_id);
     }
 
-    // Supplier name filter
-    if (
-        supplier_name &&
-        String(supplier_name).trim() !== ''
-    ) {
-        filters += ' AND p.name LIKE ?';
-        params.push(`%${supplier_name}%`);
-    }
-
-    // Test link filter
-    if (
-        is_test !== null &&
-        is_test !== undefined &&
-        String(is_test).trim() !== ''
-    ) {
-        filters += ' AND sm.IsTest = ?';
-        params.push(Number(is_test));
-    }
-
-    // Start date filter
-    if (
-        startdate &&
-        String(startdate).trim() !== ''
-    ) {
-        filters += ' AND DATE(sd.StartDate) >= ?';
-        params.push(startdate);
-    }
-
-    // End date filter
-    if (
-        end_date &&
-        String(end_date).trim() !== ''
-    ) {
-        filters += ' AND DATE(sd.EndDate) <= ?';
-        params.push(end_date);
-    }
-
-    // Status filter
-    // status=all -> all statuses
-    // status=Initiated -> only Initiated
-    // status=Completed -> only Completed
     if (
         status &&
         String(status).trim() !== '' &&
         String(status).toLowerCase() !== 'all'
     ) {
-        filters += `
-            AND LOWER(TRIM(sd.Status)) =
-                LOWER(TRIM(?))
-        `;
-
+        statusSql = ' AND LOWER(TRIM(sd.Status)) = LOWER(TRIM(?))';
         params.push(status);
     }
 
     const [rows] = await db.execute(
-        `
-        SELECT
-            sd.id AS survey_id,
-
+        `SELECT
+            sm.id AS supplier_row_id,
             sd.partnerid AS supplier_id,
-
             p.name AS supplier_name,
-
             sm.partner_code AS supplier_code,
-
             proj.Clients AS client_id,
-
             sd.UserId AS supplier_identifier,
-
             sd.Status AS status,
-
             sd.StartDate AS survey_start_date,
-
             sd.EndDate AS survey_end_date,
 
             CASE
                 WHEN sd.StartDate IS NOT NULL
+                     AND sd.EndDate IS NOT NULL
                 THEN TIMESTAMPDIFF(
                     MINUTE,
                     sd.StartDate,
-                    COALESCE(sd.EndDate, NOW())
+                    sd.EndDate
                 )
                 ELSE NULL
             END AS loi_minutes,
 
             sd.InitalIP AS ip_address,
-
             sd.GeoLocation AS country,
-
             sm.IsTest AS is_test_link
 
         FROM \`${TABLE}\` sd
 
+        LEFT JOIN supplier_mapping sm
+            ON sm.partnerid <=> sd.partnerid
+            AND sm.projectid = sd.projectid
+
         LEFT JOIN partners p
             ON p.id = sd.partnerid
-
-        /*
-         * One mapping row per
-         * project + project URL + partner
-         *
-         * This prevents duplicate report rows
-         * when supplier_mapping contains multiple rows.
-         */
-        LEFT JOIN (
-            SELECT
-                projectid,
-                projectUrlId,
-                partnerid,
-                MAX(partner_code) AS partner_code,
-                MAX(IsTest) AS IsTest
-            FROM supplier_mapping
-            WHERE deleted_at IS NULL
-            GROUP BY
-                projectid,
-                projectUrlId,
-                partnerid
-        ) sm
-            ON sm.projectid = sd.projectid
-            AND sm.projectUrlId <=> sd.project_url_id
-            AND sm.partnerid <=> sd.partnerid
 
         LEFT JOIN project_Info proj
             ON proj.id = sd.projectid
 
-        /*
-         * Only selected project
-         */
         WHERE sd.projectid = ?
+        ${partnerSql}
+        ${statusSql}
 
-        ${filters}
-
-        ORDER BY sd.id DESC
-        `,
+        ORDER BY sd.id DESC`,
         params
     );
 
     return rows;
 },
-
+    
 
     getSupplierReport: async ({
         project_id,
