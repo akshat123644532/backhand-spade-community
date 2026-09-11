@@ -96,7 +96,6 @@ export const signup = async (req, res) => {
                     questionnaire_link: questionnaireLink
                 });
 
-              
                 const htmlBody = linkifyPlainTextUrls(body).replace(/\n/g, '<br>');
 
                 const result = await sendEmail({

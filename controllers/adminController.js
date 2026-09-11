@@ -164,9 +164,6 @@ export const signupAdmin = async (req, res) => {
     }
 };
 
-// FIX: ab update ke baad fresh admin data (naya image_url sahit) fetch karke
-// serialize karke response me bhej rahe hain, taaki frontend turant naya photo
-// dikha sake bina manual reload / dobara fetch kiye.
 export const updateAdmin = async (req, res) => {
     const { id } = req.params;
     const { name, permission_type, status, permissions } = req.body;
@@ -233,20 +230,83 @@ export const deleteAdmin = async (req, res) => {
 
 export const forgotPassword = async (req, res) => {
     const { email } = req.body;
-    try {
-        if (!email) return res.status(400).json({ success: false, message: "Email is required!" });
-        const admin = await Admin.findByEmail(email);
-        if (!admin) return res.status(404).json({ success: false, message: "Email not registered!" });
 
-        // Comment - instead of hardcoding the otp, we should generate a random hashed otp, store it till session expiry
-        const otp = "123456";
+    try {
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required!"
+            });
+        }
+
+        const admin = await Admin.findByEmail(email);
+
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: "Email not registered!"
+            });
+        }
+
+       
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      
         const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+        // Save OTP in database
         await OTP.create(email, otp, otpExpiry);
+
+        // Email content
+        const emailText = `Dear ${admin.name},
+
+We received a request to reset the password for your Spade Community account.
+
+Your One-Time Password (OTP) is:
+
+${otp}
+
+Please enter this OTP to continue with the password reset process.
+
+This OTP is valid for 10 minutes only. For your security, please do not share this OTP with anyone.
+
+If you did not request a password reset, please ignore this email. Your account will remain secure.
+
+Thank You,
+Spade Community`;
+
+        const emailHtml = `
+            <p>Dear ${admin.name},</p>
+
+            <p>We received a request to reset the password for your Spade Community account.</p>
+
+            <p>Your One-Time Password (OTP) is:</p>
+
+            <h2>${otp}</h2>
+
+            <p>Please enter this OTP to continue with the password reset process.</p>
+
+            <p>
+                This OTP is valid for <strong>10 minutes only</strong>.
+                For your security, please do not share this OTP with anyone.
+            </p>
+
+            <p>
+                If you did not request a password reset, please ignore this email.
+                Your account will remain secure.
+            </p>
+
+            <p>
+                Thank You,<br>
+                Spade Community
+            </p>
+        `;
 
         await sendEmail({
             to: email,
-            subject: "Password Reset OTP - PaperWar",
-            text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes only.`
+            subject: "Your OTP for Password Reset - Spade Community",
+            html: emailHtml,
+            text: emailText
         });
 
         await logActivity({
@@ -257,9 +317,19 @@ export const forgotPassword = async (req, res) => {
             ip_address: req.ip
         });
 
-        return res.status(200).json({ success: true, message: "OTP has been sent to your email!" });
+        return res.status(200).json({
+            success: true,
+            message: "OTP has been sent to your email!"
+        });
+
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error("FORGOT PASSWORD ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
 
@@ -286,12 +356,23 @@ export const resetPassword = async (req, res) => {
         if (new Date() > new Date(otpRecord.expires_at)) return res.status(400).json({ success: false, message: "OTP has expired!" });
         if (otpRecord.is_verified !== 1) return res.status(400).json({ success: false, message: "OTP not verified!" });
 
+        // Get admin to fetch old password
+        const admin = await Admin.findByEmail(email);
+        if (!admin) return res.status(404).json({ success: false, message: "Admin not found!" });
+
         const plainPassword = decrypt(newPassword);
+        
+        // Check if new password is same as old password
+        const isSameAsOldPassword = await verifyPassword(plainPassword, admin.password);
+        if (isSameAsOldPassword) {
+            return res.status(400).json({ success: false, message: "New password cannot be the same as your old password!" });
+        }
+
         const hashedPassword = await encryptPasswordForStorage(plainPassword);
         await Admin.updatePassword(email, hashedPassword);
 
         await logActivity({
-            admin_id: null,
+            admin_id: admin.id,
             action: 'RESET_PASSWORD',
             module: 'Auth',
             description: `Password reset for ${email}`,

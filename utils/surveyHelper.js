@@ -1,6 +1,7 @@
 import { decodeSurveyToken } from './Encryptionhelper.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import SurveyData from '../models/surveyDataModel.js';
+import ProjectUrl from '../models/projectUrlModel.js';
 
 export const ALLOWED_PRESCREEN_STATUSES = [
     'NOT_STARTED',
@@ -172,7 +173,7 @@ export const getPreScreenResponseId = async ({
     const preScreenResponse =
         await surveyPreScreenResponse.getPreScreenResponseIdBySurveyDataIdUserId(
             surveyData.id,
-            surveyData.UserId
+            UserId || surveyData.UserId
         );
 
     if (!preScreenResponse) {

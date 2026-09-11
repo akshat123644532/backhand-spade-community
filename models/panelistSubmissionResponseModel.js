@@ -17,12 +17,12 @@ const PanelQuestionnaireResponse = {
     },
 
     // Saves answers + marks questionnaire complete + credits points in one transaction
-    submitQuestionnaire: async (panelist_id, answers, points) => {
+        submitQuestionnaire: async (panelist_id, answers) => {
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
             await PanelQuestionnaireResponse.saveResponses(panelist_id, answers, connection);
-            await Panelist.completeQuestionnaireWithPoints(panelist_id, points, connection);
+            await Panelist.completeQuestionnaireWithPoints(panelist_id, connection);
             await connection.commit();
         } catch (error) {
             await connection.rollback();
