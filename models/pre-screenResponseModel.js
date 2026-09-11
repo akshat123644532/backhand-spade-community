@@ -19,14 +19,20 @@ const surveyPreScreenResponse = {
 
     getPreScreenResponseBySurveyDataIdUserId: async (survey_data_id, UserId) => {
         const [result] = await db.execute(
-            `SELECT * FROM \`${TABLE}\` WHERE survey_data_id = ? AND user_id = ? LIMIT 1`,
+            `SELECT * FROM \`${TABLE}\`
+             WHERE survey_data_id = ?
+               AND LOWER(user_id) = LOWER(?)
+             LIMIT 1`,
             [survey_data_id, UserId]
         );
         return result[0] || null;
     },
     getPreScreenResponseIdBySurveyDataIdUserId: async (survey_data_id, UserId) => {
         const [result] = await db.execute(
-            `SELECT id FROM \`${TABLE}\` WHERE survey_data_id = ? AND user_id = ? LIMIT 1`,
+            `SELECT id FROM \`${TABLE}\`
+             WHERE survey_data_id = ?
+               AND LOWER(user_id) = LOWER(?)
+             LIMIT 1`,
             [survey_data_id, UserId]
         );
         return result[0] || null;

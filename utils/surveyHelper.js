@@ -151,40 +151,20 @@ export const getStatusRedirectUrl = (mapping, status, uid) => {
     return uid ? appendUidToLink(url, uid) : url;
 };
 
-export const resolveProjectUrlForSurvey = async (tokenData, pidRaw) => {
-    const projectid = Number(tokenData?.projectid);
-    const tokenUrlId = Number(tokenData?.projectUrlId);
+export const getPreScreenResponseId = async ({
+    projectId,
+    projectUrlId,
+    UserId,
+    partnerid = null
+}) => {
+    if (!UserId) return null;
 
-    let urlInfo =
-        Number.isFinite(tokenUrlId) && tokenUrlId > 0
-            ? await ProjectUrl.getById(tokenUrlId)
-            : null;
-
-    if (
-        urlInfo &&
-        Number.isFinite(projectid) &&
-        Number(urlInfo.project_id) !== projectid
-    ) {
-        urlInfo = null;
-    }
-
-    const pid = String(pidRaw ?? '').trim();
-    if (!urlInfo && pid) {
-        const byCode = await ProjectUrl.getByCode(pid);
-        if (byCode) {
-            urlInfo = byCode;
-        }
-    }
-
-    return {
-        urlInfo,
-        projectid: urlInfo ? Number(urlInfo.project_id) : projectid,
-        project_url_id: urlInfo ? Number(urlInfo.id) : tokenUrlId
-    };
-};
-
-export const getPreScreenResponseId = async (projectId, projectUrlId, UserId) => {
-    const surveyData = await SurveyData.getId(projectId, projectUrlId, UserId);
+    const surveyData = await SurveyData.findByUserId({
+        partnerid,
+        projectid: projectId,
+        project_url_id: projectUrlId,
+        UserId
+    });
 
     if (!surveyData) {
         return null;
