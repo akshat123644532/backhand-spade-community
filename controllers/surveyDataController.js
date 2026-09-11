@@ -14,11 +14,13 @@ const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null'
 
 export const sendError = (res, error) => {
     const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
+    const payload = {
         success: false,
         message: statusCode === 500 ? 'Server error!' : error.message,
         error: error.message
-    });
+    };
+    if (error.code) payload.code = error.code;
+    return res.status(statusCode).json(payload);
 };
 
 const SURVEY_STATUS_ALIASES = {
@@ -83,7 +85,7 @@ const resolveSupplierMapping = async (partnerid, projectid, project_url_id) => {
 
 export const addSurveyActivity = async (req, res) => {
     try {
-       const token = req.body?.token || req.query?.token;
+        const token = req.body?.token || req.query?.token;
         const rawUidParam = req.body?.uid ?? req.query?.uid;
         if (!rawUidParam || typeof rawUidParam !== 'string') {
             return res.status(400).json({
@@ -144,97 +146,139 @@ export const addSurveyActivity = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Survey is closed!' });
         }
 
-        // Exact combo: partner + project + url + UserId + IP
-        const initiatedExact = await SurveyData.findInitiated({
-            partnerid, projectid, project_url_id, UserId, InitalIP
-        });
-        if (initiatedExact) {
-            // Same combination + Initiated → do nothing
+        // Load project URL config (UniqueIP, etc.)
+        const urlInfo = await ProjectUrl.getById(project_url_id);
+        if (!urlInfo) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project URL not found!'
+            });
+        }
+        if (Number(urlInfo.project_id) !== projectid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Token projectid does not match project_url_id!'
+            });
+        }
+
+        const uniqueIpEnabled = Number(urlInfo.UniqueIP) === 1;
+        const lockKey = `sinit:${partnerid}:${projectid}:${project_url_id}`;
+
+        const resultPayload = await SurveyData.withInitLock(lockKey, async () => {
+            // 1) Existing UserId in scope partnerid + projectid + project_url_id
+            const existingByUser = await SurveyData.findByUserId({
+                partnerid, projectid, project_url_id, UserId
+            });
+
+            if (existingByUser) {
+                if (SurveyData.isInitiatedStatus(existingByUser.Status)) {
+                    // Same user + Initiated → resume (any IP); do not create another row
+                    const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
+                        project_id: projectid,
+                        project_url_id,
+                        partner_id: partnerid,
+                        uid: UserId
+                    });
+                    return {
+                        httpStatus: 200,
+                        body: {
+                            success: true,
+                            existing: true,
+                            message: 'Existing survey session resumed.',
+                            data: {
+                                ...existingByUser,
+                                multi_link_id: multiLinkRow?.id || null,
+                                Vender_UserName: multiLinkRow?.Vender_UserName || UserId
+                            }
+                        }
+                    };
+                }
+
+                // Non-Initiated (completed / terminate / etc.) → block duplicate UserId
+                console.warn(
+                    `[SurveyActivity] DUPLICATE_USER_ID partnerid=${partnerid} projectid=${projectid} ` +
+                    `project_url_id=${project_url_id} existingId=${existingByUser.id} status=${existingByUser.Status}`
+                );
+                return {
+                    httpStatus: 403,
+                    body: {
+                        success: false,
+                        code: 'DUPLICATE_USER_ID',
+                        message: 'The project has already been initiated with this UserId.',
+                        data: { id: existingByUser.id, Status: existingByUser.Status }
+                    }
+                };
+            }
+
+            // 2) UniqueIP = 1 → same partner/project/url + InitalIP cannot start again (any UserId)
+            if (uniqueIpEnabled) {
+                const existingByIp = await SurveyData.findByInitialIp({
+                    partnerid, projectid, project_url_id, InitalIP
+                });
+                if (existingByIp) {
+                    console.warn(
+                        `[SurveyActivity] DUPLICATE_IP partnerid=${partnerid} projectid=${projectid} ` +
+                        `project_url_id=${project_url_id} existingId=${existingByIp.id}`
+                    );
+                    return {
+                        httpStatus: 403,
+                        body: {
+                            success: false,
+                            code: 'DUPLICATE_IP',
+                            message: 'Survey already initiated from this IP address.',
+                            data: { id: existingByIp.id, Status: existingByIp.Status }
+                        }
+                    };
+                }
+            }
+
+            // 3) Create new survey_data (+ pre-screen) — GeoLocation derived server-side from IP
             const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
                 project_id: projectid,
                 project_url_id,
                 partner_id: partnerid,
                 uid: UserId
             });
-            return res.status(200).json({
-                success: true,
-                message: 'Survey activity already initiated!',
-                data: {
-                    ...initiatedExact,
-                    multi_link_id: multiLinkRow?.id || null,
-                    Vender_UserName: multiLinkRow?.Vender_UserName || UserId
+
+            const id = await SurveyData.createInitiated({
+                partnerid, projectid, project_url_id, UserId, InitalIP
+            });
+
+            const existingPreScreen =
+                await surveyPreScreenResponse.getPreScreenResponseIdBySurveyDataIdUserId(id, UserId);
+            if (!existingPreScreen) {
+                const preScreenAdded = await surveyPreScreenResponse.createInitiated({
+                    survey_data_id: id,
+                    UserId
+                });
+                if (!preScreenAdded) {
+                    return {
+                        httpStatus: 400,
+                        body: {
+                            success: false,
+                            message: 'Failed to add pre-screen response!'
+                        }
+                    };
                 }
-            });
-        }
-
-        const blocked = await SurveyData.findBlockedAccess({
-            partnerid, projectid, project_url_id, UserId, InitalIP
-        });
-        if (blocked) {
-            return res.status(403).json({
-                success: false,
-                message: 'Survey already COMPLETED',
-                code: 'ALREADY_FILLED',
-                data: { id: blocked.id, Status: blocked.Status }
-            });
-        }
-
-        // UserId + InitalIP must be unique within partnerid + projectid + project_url_id
-        const existingByUser = await SurveyData.findByUserId({
-            partnerid, projectid, project_url_id, UserId
-        });
-        if (existingByUser && String(existingByUser.InitalIP || '') !== String(InitalIP || '')) {
-            return res.status(403).json({
-                success: false,
-                message: 'User not allowed from the current ip.',
-                code: 'IP_NOT_ALLOWED'
-            });
-        }
-
-        const existingByIp = await SurveyData.findByInitialIp({
-            partnerid, projectid, project_url_id, InitalIP
-        });
-        if (existingByIp && String(existingByIp.UserId || '').toLowerCase() !== String(UserId).toLowerCase()) {
-            console.warn(
-                `[SurveyActivity] UID mismatch on same IP — not blocking. ` +
-                `IP=${InitalIP}, incomingUid=${UserId}, existingUid=${existingByIp.UserId}, ` +
-                `partnerid=${partnerid}, projectid=${projectid}, project_url_id=${project_url_id}`
-            );
-        }
-
-        
-        const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
-            project_id: projectid,
-            project_url_id,
-            partner_id: partnerid,
-            uid: UserId
-        });
-
-        const id = await SurveyData.createInitiated({
-            partnerid, projectid, project_url_id, UserId, InitalIP
-        });
-
-        const preScreenAdded = await surveyPreScreenResponse.createInitiated({
-            survey_data_id: id,
-            UserId,
-        });
-        if (!preScreenAdded) {
-            return res.status(400).json({
-                success: false,
-                message: 'Failed to add pre-screen response!'
-            });
-        }
-        const row = await SurveyData.getById(id);
-
-        return res.status(201).json({
-            success: true,
-            message: 'Survey activity initiated successfully!',
-            data: {
-                ...row,
-                multi_link_id: multiLinkRow?.id || null,
-                Vender_UserName: multiLinkRow?.Vender_UserName || UserId
             }
+
+            const row = await SurveyData.getById(id);
+            return {
+                httpStatus: 201,
+                body: {
+                    success: true,
+                    existing: false,
+                    message: 'Survey activity initiated successfully!',
+                    data: {
+                        ...row,
+                        multi_link_id: multiLinkRow?.id || null,
+                        Vender_UserName: multiLinkRow?.Vender_UserName || UserId
+                    }
+                }
+            };
         });
+
+        return res.status(resultPayload.httpStatus).json(resultPayload.body);
     } catch (error) {
         return sendError(res, error);
     }
