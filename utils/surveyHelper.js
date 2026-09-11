@@ -150,8 +150,20 @@ export const getStatusRedirectUrl = (mapping, status, uid) => {
     return uid ? appendUidToLink(url, uid) : url;
 };
 
-export const getPreScreenResponseId = async (projectId, projectUrlId) => {
-    const surveyData = await SurveyData.getId(projectId, projectUrlId);
+export const getPreScreenResponseId = async ({
+    projectId,
+    projectUrlId,
+    UserId,
+    partnerid = null
+}) => {
+    if (!UserId) return null;
+
+    const surveyData = await SurveyData.findByUserId({
+        partnerid,
+        projectid: projectId,
+        project_url_id: projectUrlId,
+        UserId
+    });
 
     if (!surveyData) {
         return null;

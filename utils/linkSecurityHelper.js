@@ -12,6 +12,23 @@ export const getCountryFromIp = (ip) => {
     return countries.getName(geo.country, 'en') || geo.country;
 };
 
+const isPrivateOrLocalIp = (ip) => {
+    const value = String(ip || '').trim().toLowerCase();
+    if (!value) return true;
+    if (value === '127.0.0.1' || value === '::1' || value === 'localhost') return true;
+    if (value.startsWith('10.')) return true;
+    if (value.startsWith('192.168.')) return true;
+    if (value.startsWith('169.254.')) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(value)) return true;
+    if (value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe80:')) return true;
+    return false;
+};
+
+const buildGeoLabel = ({ country, region, city }) => {
+    const parts = [country, region, city].filter(Boolean);
+    return parts.length ? parts.join(', ') : null;
+};
+
 /**
  * Local geoip-lite lookup (no network call). Approximate IP location only — not GPS.
  * Returns country/region/city/ll plus a readable `label` for VARCHAR GeoLocation columns.
@@ -25,7 +42,7 @@ export const getLocationFromIp = (ip) => {
         ll: null,
         label: null
     };
-    if (!ip) return empty;
+    if (!ip || isPrivateOrLocalIp(ip)) return empty;
 
     let geo;
     try {
@@ -41,12 +58,47 @@ export const getLocationFromIp = (ip) => {
     const region = geo.region ? String(geo.region).trim() || null : null;
     const city = geo.city ? String(geo.city).trim() || null : null;
     const ll = Array.isArray(geo.ll) && geo.ll.length >= 2 ? geo.ll : null;
-
-    // Prefer "Country, Region, City" — skip empty parts so text questions / reports stay readable
-    const labelParts = [country, region, city].filter(Boolean);
-    const label = labelParts.length ? labelParts.join(', ') : null;
+    const label = buildGeoLabel({ country, region, city });
 
     return { country, region, city, ll, label };
+};
+
+/**
+ * Resolve a readable GeoLocation label for survey_data.
+ * 1) local geoip-lite (fast)
+ * 2) short-timeout HTTP fallback for public IPs when local DB misses
+ * Never throws — returns null on failure.
+ */
+export const resolveGeoLocationLabel = async (ip, { timeoutMs = 2000 } = {}) => {
+    try {
+        const local = getLocationFromIp(ip);
+        if (local?.label || local?.country) {
+            return local.label || local.country;
+        }
+
+        if (!ip || isPrivateOrLocalIp(ip)) {
+            return null;
+        }
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const url = `http://ip-api.com/json/${encodeURIComponent(String(ip).trim())}?fields=status,country,regionName,city`;
+            const res = await fetch(url, { signal: controller.signal });
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data?.status !== 'success') return null;
+            return buildGeoLabel({
+                country: data.country || null,
+                region: data.regionName || null,
+                city: data.city || null
+            });
+        } finally {
+            clearTimeout(timer);
+        }
+    } catch {
+        return null;
+    }
 };
 
 const SIGNING_SECRET = process.env.LINK_SIGNING_SECRET || 'change-this-secret-in-env';

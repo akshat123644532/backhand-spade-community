@@ -83,6 +83,42 @@ const resolveSupplierMapping = async (partnerid, projectid, project_url_id) => {
     return mapping;
 };
 
+/** Resolve uid/UserId from body or query (supports encrypted uid). */
+const resolveRequestUserId = (req) => {
+    const rawUidParam = req.body?.uid ?? req.query?.uid ?? req.body?.UserId ?? req.query?.UserId;
+    if (!rawUidParam || typeof rawUidParam !== 'string') {
+        return { error: 'uid is required!' };
+    }
+
+    let uidRaw = decryptUid(rawUidParam);
+    if (uidRaw === null || uidRaw === undefined) {
+        uidRaw = rawUidParam;
+    }
+
+    const UserId = normalizeUid(uidRaw);
+    if (!UserId || PLACEHOLDER_UIDS.has(UserId.toLowerCase()) || PLACEHOLDER_UIDS.has(UserId)) {
+        return { error: 'uid is required! Replace [identifier] with the respondent id.' };
+    }
+    return { UserId };
+};
+
+/** Resolve partnerid the same way as survey activity initiation. */
+const resolvePartnerId = async (tokenData, projectid, project_url_id) => {
+    let partnerid =
+        tokenData.partnerid == null || tokenData.partnerid === ''
+            ? null
+            : Number(tokenData.partnerid);
+
+    if (partnerid == null || !Number.isFinite(partnerid)) {
+        partnerid = await ProjectMultipleUrl.getMappedPartnerId(projectid, project_url_id);
+    }
+    if (partnerid == null || !Number.isFinite(partnerid)) {
+        const mapping = await SupplierMapping.getByProjectAndUrl(projectid, project_url_id);
+        partnerid = mapping?.partnerid != null ? Number(mapping.partnerid) : null;
+    }
+    return partnerid;
+};
+
 export const addSurveyActivity = async (req, res) => {
     try {
         const token = req.body?.token || req.query?.token;
@@ -172,7 +208,12 @@ export const addSurveyActivity = async (req, res) => {
 
             if (existingByUser) {
                 if (SurveyData.isInitiatedStatus(existingByUser.Status)) {
-                    // Same user + Initiated → resume (any IP); do not create another row
+                    // Same user + Initiated → resume; backfill GeoLocation if previous attempt missed it
+                    const resumedRow = await SurveyData.backfillGeoLocationIfEmpty({
+                        id: existingByUser.id,
+                        ip: InitalIP || existingByUser.InitalIP
+                    });
+
                     const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
                         project_id: projectid,
                         project_url_id,
@@ -186,7 +227,7 @@ export const addSurveyActivity = async (req, res) => {
                             existing: true,
                             message: 'Existing survey session resumed.',
                             data: {
-                                ...existingByUser,
+                                ...(resumedRow || existingByUser),
                                 multi_link_id: multiLinkRow?.id || null,
                                 Vender_UserName: multiLinkRow?.Vender_UserName || UserId
                             }
@@ -286,21 +327,30 @@ export const addSurveyActivity = async (req, res) => {
 
 /**
  * POST|GET /api/survey/prescreen
- * Body/query: { token }
- * If project_url_Info.PreScreen = 1, return questions for PreScreenid group.
+ * Body/query: { token, uid }
+ * Looks up THIS user's survey + pre-screen status (not any user on the same project URL).
+ * If project_url_Info.PreScreen = 1, return questions for PreScreenid group when IN_PROGRESS.
  */
 export const getSurveyPreScreen = async (req, res) => {
     try {
         const token = req.body?.token || req.query?.token;
-        const tokenData = decodeToken(token);
+        if (!token) {
+            return res.status(400).json({ success: false, message: 'Token is required!' });
+        }
 
+        const { UserId, error: uidError } = resolveRequestUserId(req);
+        if (uidError) {
+            return res.status(400).json({ success: false, message: uidError });
+        }
+
+        const tokenData = decodeToken(token);
         const projectid = Number(tokenData.projectid);
         const project_url_id = Number(tokenData.projectUrlId);
-
+        if (!Number.isFinite(projectid) || !Number.isFinite(project_url_id)) {
+            return res.status(400).json({ success: false, message: 'Invalid token ids!' });
+        }
         const urlInfo = await ProjectUrl.getById(project_url_id);
-        // console.log('urlInfo', urlInfo);
-        // console.log('projectid', projectid);
-        // console.log('project_url_id', project_url_id);
+    
         if (!urlInfo) {
             return res.status(404).json({ success: false, message: 'Project URL not found!' });
         }
@@ -329,30 +379,69 @@ export const getSurveyPreScreen = async (req, res) => {
                 message: 'PreScreen is enabled but PreScreenid is missing!'
             });
         }
-        const surveyDataId = await SurveyData.getId(projectid,project_url_id);
 
-        if (!surveyDataId) {
-            return res.status(404).json({
+        const partnerid = await resolvePartnerId(tokenData, projectid, project_url_id);
+        if (partnerid == null || !Number.isFinite(partnerid)) {
+            return res.status(400).json({
                 success: false,
-                required: true,
-                message: 'Survey data not found!'
+                message: 'Partner to the link not mapped.'
             });
         }
 
-        const preScreenResponseStatus = await surveyPreScreenResponse.getPreScreenResponseBySurveyDataIdUserId(surveyDataId.id, surveyDataId.UserId);
-        if (preScreenResponseStatus.status === 'COMPLETED') {
+        // Scope by partner + project + url + THIS UserId (never another respondent)
+        const surveyData = await SurveyData.findByUserId({
+            partnerid,
+            projectid,
+            project_url_id,
+            UserId
+        });
+
+        if (!surveyData) {
+            return res.status(404).json({
+                success: false,
+                required: true,
+                message: 'Survey data not found for this uid! Call /api/survey/activity first.'
+            });
+        }
+
+        const preScreenResponseStatus =
+            await surveyPreScreenResponse.getPreScreenResponseBySurveyDataIdUserId(
+                surveyData.id,
+                UserId
+            );
+
+        const status = preScreenResponseStatus?.status || 'IN_PROGRESS';
+
+        if (status === 'COMPLETED') {
             return res.status(200).json({
                 success: true,
                 required: true,
-                message: 'PreScreen already completed!'
+                status: 'COMPLETED',
+                message: 'PreScreen already completed!',
+                data: {
+                    UserId,
+                    survey_data_id: surveyData.id,
+                    pre_screen_status: 'COMPLETED'
+                }
             });
-        } else if (preScreenResponseStatus.status === 'TERMINATED') {
+        }
+
+        if (status === 'TERMINATED') {
             return res.status(200).json({
                 success: true,
                 required: true,
-                message: 'PreScreen already terminated!'
+                status: 'TERMINATED',
+                message: 'PreScreen already terminated!',
+                data: {
+                    UserId,
+                    survey_data_id: surveyData.id,
+                    pre_screen_status: 'TERMINATED',
+                    TerminateURL: urlInfo.TerminateURL || null
+                }
             });
-        };
+        }
+
+        // IN_PROGRESS / Initiated → return questions for this user
         const group = await QuestionnaireGroup.getById(preScreenId);
         if (!group) {
             return res.status(404).json({
@@ -372,8 +461,12 @@ export const getSurveyPreScreen = async (req, res) => {
         return res.status(200).json({
             success: true,
             required: true,
+            status: 'IN_PROGRESS',
             message: 'PreScreen required',
             data: {
+                UserId,
+                survey_data_id: surveyData.id,
+                pre_screen_status: status,
                 PreScreen: 1,
                 PreScreenid: group.id,
                 PreScreenName: urlInfo.PreScreenName || group.surveyTitle,
@@ -568,7 +661,14 @@ export const savePreScreenResponse = async (req, res) => {
             });
         }
 
+        const { UserId, error: uidError } = resolveRequestUserId(req);
+        if (uidError) {
+            return res.status(400).json({ success: false, message: uidError });
+        }
+
         const tokenData = decodeToken(token);
+        const projectid = Number(tokenData.projectid);
+        const project_url_id = Number(tokenData.projectUrlId);
 
         const {
             question_id,
@@ -589,15 +689,19 @@ export const savePreScreenResponse = async (req, res) => {
             });
         }
 
-        const preScreenResponseId = await getPreScreenResponseId(
-            tokenData.projectid,
-            tokenData.projectUrlId
-        );
+        const partnerid = await resolvePartnerId(tokenData, projectid, project_url_id);
+
+        const preScreenResponseId = await getPreScreenResponseId({
+            projectId: projectid,
+            projectUrlId: project_url_id,
+            UserId,
+            partnerid
+        });
 
         if (!preScreenResponseId) {
             return res.status(404).json({
                 success: false,
-                message: 'PreScreen response not found!'
+                message: 'PreScreen response not found for this uid!'
             });
         }
 
@@ -630,8 +734,23 @@ export const savePreScreenResponse = async (req, res) => {
 export const updatePreScreenResponseStatus = async (req, res) => {
     try {
         const token = req.body?.token || req.query?.token;
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: 'Token is required!'
+            });
+        }
+
+        const { UserId, error: uidError } = resolveRequestUserId(req);
+        if (uidError) {
+            return res.status(400).json({ success: false, message: uidError });
+        }
+
         const tokenData = decodeToken(token);
-        const status = req.query?.status;
+        const projectid = Number(tokenData.projectid);
+        const project_url_id = Number(tokenData.projectUrlId);
+        const status = req.query?.status ?? req.body?.status;
+
         if (!status) {
             return res.status(400).json({
                 success: false,
@@ -645,15 +764,20 @@ export const updatePreScreenResponseStatus = async (req, res) => {
                 message: 'Invalid status type!'
             });
         }
-        const preScreenResponseId = await getPreScreenResponseId(
-            tokenData.projectid,
-            tokenData.projectUrlId
-        );
+
+        const partnerid = await resolvePartnerId(tokenData, projectid, project_url_id);
+
+        const preScreenResponseId = await getPreScreenResponseId({
+            projectId: projectid,
+            projectUrlId: project_url_id,
+            UserId,
+            partnerid
+        });
 
         if (!preScreenResponseId) {
             return res.status(404).json({
                 success: false,
-                message: 'PreScreen response not found!'
+                message: 'PreScreen response not found for this uid!'
             });
         }
         
@@ -670,7 +794,8 @@ export const updatePreScreenResponseStatus = async (req, res) => {
         
         return res.status(200).json({
             success: true,
-            message: 'PreScreen response status updated successfully!'
+            message: 'PreScreen response status updated successfully!',
+            data: { UserId, status }
         });
     } catch (error) {
         return sendError(res, error);

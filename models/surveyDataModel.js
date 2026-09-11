@@ -1,5 +1,5 @@
 import { db } from '../config/db.js';
-import { getLocationFromIp } from '../utils/linkSecurityHelper.js';
+import { resolveGeoLocationLabel } from '../utils/linkSecurityHelper.js';
 const TABLE = 'survery_data';
 const STATUS_INITIATED = 'Initiated';
 
@@ -8,9 +8,13 @@ let indexReady = false;
 export const isInitiatedStatus = (status) =>
     String(status || '').trim().toLowerCase() === 'initiated';
 
+const isEmptyGeoLocation = (value) =>
+    value === null || value === undefined || String(value).trim() === '';
+
 const SurveyData = {
     STATUS_INITIATED,
     isInitiatedStatus,
+    isEmptyGeoLocation,
 
     /** Composite index for duplicate / access checks */
     ensureIndex: async () => {
@@ -127,11 +131,10 @@ const SurveyData = {
     createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
         await SurveyData.ensureIndex();
 
-        // Local DB lookup — never fail initiation if geo is unavailable
+        // Resolve geo from IP — never fail initiation if lookup is unavailable
         let geoLabel = null;
         try {
-            const loc = getLocationFromIp(InitalIP);
-            geoLabel = loc?.label || loc?.country || null;
+            geoLabel = await resolveGeoLocationLabel(InitalIP);
         } catch {
             geoLabel = null;
         }
@@ -143,6 +146,34 @@ const SurveyData = {
             [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
         );
         return result.insertId;
+    },
+
+    /**
+     * If GeoLocation is missing on an existing row, resolve from IP and save.
+     * Returns the (possibly updated) row.
+     */
+    backfillGeoLocationIfEmpty: async ({ id, ip }) => {
+        const row = await SurveyData.getById(id);
+        if (!row) return null;
+        if (!isEmptyGeoLocation(row.GeoLocation)) return row;
+
+        let geoLabel = null;
+        try {
+            geoLabel = await resolveGeoLocationLabel(ip || row.InitalIP);
+        } catch {
+            geoLabel = null;
+        }
+        if (!geoLabel) return row;
+
+        await db.execute(
+            `UPDATE \`${TABLE}\`
+             SET GeoLocation = ?
+             WHERE id = ?
+               AND (GeoLocation IS NULL OR TRIM(GeoLocation) = '')`,
+            [geoLabel, id]
+        );
+
+        return (await SurveyData.getById(id)) || { ...row, GeoLocation: geoLabel };
     },
 
     /**
