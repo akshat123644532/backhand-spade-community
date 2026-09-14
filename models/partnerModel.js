@@ -10,10 +10,10 @@ const Partner = {
     },
 
     create: async (data) => {
-        const { name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, code, status, api_base_url, api_secret_key, api_body } = data;
+        const { name, email, contact_no, country, contact_person, website_url, panel_size, complete, terminate, over_quota, quality_term, survey_close, about_partner, code, status, api_base_url, api_secret_key, api_body, password } = data;
         const [result] = await db.execute(
-            `INSERT INTO partners (code, name, email, contact_no, country, contact_person, website_url, panel_size, complete_val, terminate_val, over_quota_val, quality_term_val, survey_close_val, about_partner, status, api_base_url, api_secret_key, api_body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [code, name, email, contact_no || null, country || null, contact_person || null, website_url || null, panel_size || null, complete || null, terminate || null, over_quota || null, quality_term || null, survey_close || null, about_partner || null, status || 'active', api_base_url || null, api_secret_key || null, api_body || null]
+            `INSERT INTO partners (code, name, email, contact_no, country, contact_person, website_url, panel_size, complete_val, terminate_val, over_quota_val, quality_term_val, survey_close_val, about_partner, status, api_base_url, api_secret_key, api_body, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [code, name, email, contact_no || null, country || null, contact_person || null, website_url || null, panel_size || null, complete || null, terminate || null, over_quota || null, quality_term || null, survey_close || null, about_partner || null, status || 'active', api_base_url || null, api_secret_key || null, api_body || null, password || null]
         );
         return result;
     },
@@ -65,6 +65,18 @@ const Partner = {
 
     findByEmail: async (email) => {
         const [rows] = await db.execute(`SELECT id FROM partners WHERE email = ? AND deleted_at IS NULL`, [email]);
+        return rows[0] || null;
+    },
+
+    /** Login lookup — includes password + status */
+    findByEmailForLogin: async (email) => {
+        const [rows] = await db.execute(
+            `SELECT id, code, name, email, password, status, contact_no, country, contact_person, website_url, panel_size
+             FROM partners
+             WHERE email = ? AND deleted_at IS NULL
+             LIMIT 1`,
+            [email]
+        );
         return rows[0] || null;
     },
 

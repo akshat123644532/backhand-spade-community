@@ -2,6 +2,7 @@ import express from 'express';
 import verifyToken from '../middleware/authMiddleware.js';
 import { checkCsvDownloadPermission } from '../middleware/checkCsvDownloadPermission.js';
 import {
+    loginPartner,
     addPartner,
     getAllPartners,
     getPartnerPanelSizes,
@@ -12,6 +13,7 @@ import {
 } from '../controllers/partnerController.js';
 const router = express.Router();
 
+router.post('/login', loginPartner);
 router.post('/add', verifyToken, addPartner);
 router.get('/list', verifyToken, getAllPartners);
 router.get('/panel-sizes', verifyToken, getPartnerPanelSizes);
