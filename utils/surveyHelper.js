@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { decodeSurveyToken } from './Encryptionhelper.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import SurveyData from '../models/surveyDataModel.js';
@@ -9,7 +10,19 @@ export const ALLOWED_PRESCREEN_STATUSES = [
     'COMPLETED',
     'TERMINATED'
 ];
-export const PLACEHOLDER_UIDS = new Set(['', '[identifier]', '%5Bidentifier%5D', 'null', 'undefined', 'xxxxxx']);
+
+/** Known non-X placeholders partners sometimes leave in links */
+export const PLACEHOLDER_UIDS = new Set([
+    '',
+    '[identifier]',
+    '%5Bidentifier%5D',
+    'null',
+    'undefined',
+    'xxxxxx'
+]);
+
+export const INVALID_LINK_UID_MESSAGE =
+    'This survey link is invalid or incomplete. Please use the link provided by your survey partner.';
 
 export const SURVEY_STATUS_ALIASES = {
     completed: 'completed',
@@ -74,10 +87,65 @@ export const normalizeUid = (uid) => {
     return value.trim();
 };
 
+/** True when uid is present but is a placeholder (e.g. X, XXXXXX, [identifier]). */
+export const isPlaceholderUid = (uid) => {
+    const value = normalizeUid(uid);
+    if (!value) return false;
+    if (/^x+$/i.test(value)) return true;
+    const lower = value.toLowerCase();
+    return PLACEHOLDER_UIDS.has(lower) || PLACEHOLDER_UIDS.has(value);
+};
+
 export const isValidUid = (uid) => {
     const value = normalizeUid(uid);
     if (!value) return false;
-    return !PLACEHOLDER_UIDS.has(value.toLowerCase()) && !PLACEHOLDER_UIDS.has(value);
+    return !isPlaceholderUid(value);
+};
+
+/** Alphanumeric respondent id when uid query/body is omitted. */
+export const generateSurveyUid = (length = 16) => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const bytes = crypto.randomBytes(length);
+    let out = '';
+    for (let i = 0; i < length; i++) {
+        out += alphabet[bytes[i] % alphabet.length];
+    }
+    return out;
+};
+
+/**
+ * Resolve respondent uid:
+ * - missing/empty → generate (when allowGenerate)
+ * - placeholder (X / XXXXXX / [identifier] / …) → error
+ * - real value → use as-is
+ *
+ * @returns {{ uid: string, generated: boolean } | { error: string }}
+ */
+export const resolveSurveyUid = (rawUid, { allowGenerate = true } = {}) => {
+    const hasParam =
+        rawUid !== undefined &&
+        rawUid !== null &&
+        String(rawUid).trim() !== '';
+
+    if (!hasParam) {
+        if (!allowGenerate) {
+            return { error: 'uid is required!' };
+        }
+        return { uid: generateSurveyUid(), generated: true };
+    }
+
+    const value = normalizeUid(rawUid);
+    if (isPlaceholderUid(value)) {
+        return { error: INVALID_LINK_UID_MESSAGE };
+    }
+    if (!value) {
+        if (!allowGenerate) {
+            return { error: 'uid is required!' };
+        }
+        return { uid: generateSurveyUid(), generated: true };
+    }
+
+    return { uid: value, generated: false };
 };
 
 /**

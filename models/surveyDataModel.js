@@ -128,6 +128,41 @@ const SurveyData = {
         return rows[0] || null;
     },
 
+    /**
+     * Resolve UserId from an existing Initiated survey_data row when client omits uid.
+     * Prefer same IP match; otherwise latest Initiated for the project URL scope.
+     */
+    findLatestInitiatedUserId: async ({ partnerid, projectid, project_url_id, InitalIP = null }) => {
+        if (InitalIP) {
+            const [byIp] = await db.execute(
+                `SELECT id, UserId, InitalIP, Status
+                 FROM \`${TABLE}\`
+                 WHERE partnerid <=> ?
+                   AND projectid = ?
+                   AND project_url_id = ?
+                   AND InitalIP = ?
+                   AND Status = ?
+                 ORDER BY id DESC
+                 LIMIT 1`,
+                [partnerid, projectid, project_url_id, InitalIP, STATUS_INITIATED]
+            );
+            if (byIp[0]?.UserId) return byIp[0];
+        }
+
+        const [rows] = await db.execute(
+            `SELECT id, UserId, InitalIP, Status
+             FROM \`${TABLE}\`
+             WHERE partnerid <=> ?
+               AND projectid = ?
+               AND project_url_id = ?
+               AND Status = ?
+             ORDER BY id DESC
+             LIMIT 1`,
+            [partnerid, projectid, project_url_id, STATUS_INITIATED]
+        );
+        return rows[0] || null;
+    },
+
     createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
         await SurveyData.ensureIndex();
 
