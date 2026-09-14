@@ -3,6 +3,7 @@ import Partner from '../models/partnerModel.js';
 import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import { getCountryFromIp } from '../utils/linkSecurityHelper.js';
+import { resolveSurveyUid, appendUidToLink } from '../utils/surveyHelper.js';
 export const addSupplierMapping = async (req, res) => {
     try {
         const {
@@ -259,6 +260,12 @@ export const handleSupplierRedirect = async (req, res) => {
             return res.redirect(mapping.TerminateURL || '/inactive');
         }
 
+        // uid=X / uid=XXXXXX → reject; missing uid → generate; real uid → use
+        const resolvedUid = resolveSurveyUid(uid, { allowGenerate: true });
+        if (resolvedUid.error) {
+            return res.status(400).send(resolvedUid.error);
+        }
+
         // 🔒 Geo-location security check
         if (Number(mapping.GeoLocation) === 1 && mapping.country) {
             const respondentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
@@ -291,10 +298,7 @@ export const handleSupplierRedirect = async (req, res) => {
             return res.status(400).send('No survey link configured!');
         }
 
-        const finalUrl = targetLink.includes('?')
-            ? `${targetLink}&uid=${encodeURIComponent(uid || '')}`
-            : `${targetLink}?uid=${encodeURIComponent(uid || '')}`;
-
+        const finalUrl = appendUidToLink(targetLink, resolvedUid.uid);
         return res.redirect(finalUrl);
     } catch (error) {
         return res.status(500).send('Server error!');
