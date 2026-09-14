@@ -53,6 +53,25 @@ const Partner = {
         return rows[0] || null;
     },
 
+    getByIdWithPassword: async (id) => {
+        const [rows] = await db.execute(
+            `SELECT id, code, name, email, password, status
+             FROM partners
+             WHERE id = ? AND deleted_at IS NULL
+             LIMIT 1`,
+            [id]
+        );
+        return rows[0] || null;
+    },
+
+    updatePassword: async (id, hashedPassword) => {
+        const [result] = await db.execute(
+            `UPDATE partners SET password = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL`,
+            [hashedPassword, id]
+        );
+        return result;
+    },
+
     getAllPanelSizes: async () => {
         const [rows] = await db.execute(
             `SELECT id, code, name, COALESCE(panel_size, 0) AS panel_size

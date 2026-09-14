@@ -29,6 +29,12 @@ const withDecryptedApiSecret = (partner) => {
     }
 };
 
+const omitPassword = (partner) => {
+    if (!partner) return partner;
+    const { password, ...rest } = partner;
+    return rest;
+};
+
 export const loginPartner = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -124,6 +130,109 @@ export const addPartner = async (req, res) => {
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'Partner', description: `Partner "${name}" added with code ${code}`, ip_address: req.ip });
 
         return res.status(201).json({ success: true, message: "Partner added successfully!", data: { code, name, email } });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+/** GET /api/partner/me — profile from JWT (role must be partner) */
+export const getSelfPartner = async (req, res) => {
+    try {
+        const { id, email, role } = req.user || {};
+        if (role !== 'partner' || !id) {
+            return res.status(403).json({ success: false, message: "Access denied for this role!" });
+        }
+
+        const partner = await Partner.getById(id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: "Partner not found!" });
+        }
+
+        if (email && String(partner.email).toLowerCase() !== String(email).toLowerCase()) {
+            return res.status(403).json({ success: false, message: "Token email does not match partner account!" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Partner fetched successfully!",
+            data: omitPassword(withDecryptedApiSecret(partner))
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+/** PUT /api/partner/change-password — current + new + confirm (client-encrypted) */
+export const changePartnerPassword = async (req, res) => {
+    try {
+        const { id, email, role } = req.user || {};
+        if (role !== 'partner' || !id) {
+            return res.status(403).json({ success: false, message: "Access denied for this role!" });
+        }
+
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "currentPassword, newPassword and confirmPassword are required!"
+            });
+        }
+
+        const plainCurrentPassword = decrypt(currentPassword);
+        const plainNewPassword = decrypt(newPassword);
+        const plainConfirmPassword = decrypt(confirmPassword);
+
+        if (plainNewPassword !== plainConfirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password and confirm password do not match!"
+            });
+        }
+
+        if (!plainNewPassword || String(plainNewPassword).trim().length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be at least 6 characters!"
+            });
+        }
+
+        const partner = await Partner.getByIdWithPassword(id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: "Partner not found!" });
+        }
+
+        if (email && String(partner.email).toLowerCase() !== String(email).toLowerCase()) {
+            return res.status(403).json({ success: false, message: "Token email does not match partner account!" });
+        }
+
+        if (!partner.password) {
+            return res.status(400).json({ success: false, message: "Password is not set for this partner!" });
+        }
+
+        const isMatch = await verifyPassword(plainCurrentPassword, partner.password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: "Current password is incorrect!" });
+        }
+
+        if (plainCurrentPassword === plainNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password cannot be the same as your current password!"
+            });
+        }
+
+        const hashedPassword = await encryptPasswordForStorage(plainNewPassword);
+        await Partner.updatePassword(id, hashedPassword);
+
+        await logActivity({
+            admin_id: id,
+            action: 'CHANGE_PASSWORD',
+            module: 'Partner',
+            description: `Partner "${partner.name || partner.email}" changed their password`,
+            ip_address: req.ip
+        });
+
+        return res.status(200).json({ success: true, message: "Password updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
