@@ -1,19 +1,91 @@
 import RewardRedeem from '../models/rewardRedeemModel.js';
 import Panelist from '../models/Panelistmodel.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
+import RewardSetting from '../models/rewardSettingModel.js';
 
 export const addRedeemRequest = async (req, res) => {
     try {
         const { user_id, reward_points, requested_by, remark, comment } = req.body;
 
         if (!user_id || !reward_points) {
-            return res.status(400).json({ success: false, message: "user_id and reward_points are required!" });
+            return res.status(400).json({
+                success: false,
+                message: "user_id and reward_points are required!"
+            });
         }
 
-        const id = await RewardRedeem.create({ user_id, reward_points, requested_by, remark, comment });
-        return res.status(201).json({ success: true, message: "Redeem request added successfully!", data: { id } });
+        const settings = await RewardSetting.get();
+
+        if (!settings) {
+            return res.status(500).json({
+                success: false,
+                message: "Reward settings not configured!"
+            });
+        }
+
+        // Fetch panelist to check current balance
+        const panelist = await Panelist.findById(user_id);
+        if (!panelist) {
+            return res.status(404).json({
+                success: false,
+                message: "Panelist not found!"
+            });
+        }
+
+        // NEW: minimum_payout ko minimum redeemable points threshold ki tarah use kar rahe hain
+        if (Number(panelist.balance_point) < Number(settings.minimum_payout)) {
+            return res.status(400).json({
+                success: false,
+                message: `You need at least ${settings.minimum_payout} points in your balance to redeem!`,
+                data: {
+                    current_balance: Number(panelist.balance_point),
+                    minimum_payout: Number(settings.minimum_payout)
+                }
+            });
+        }
+
+        if (Number(reward_points) > Number(settings.max_redeem_points)) {
+            return res.status(400).json({
+                success: false,
+                message: `You can redeem maximum ${settings.max_redeem_points} points at a time!`,
+                data: {
+                    requested_points: Number(reward_points),
+                    max_redeem_points: Number(settings.max_redeem_points)
+                }
+            });
+        }
+
+        // NEW: user apne balance se zyada redeem request na kar sake
+        if (Number(reward_points) > Number(panelist.balance_point)) {
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient balance points to redeem!",
+                data: {
+                    balance_point: panelist.balance_point,
+                    requested_points: reward_points
+                }
+            });
+        }
+
+        const id = await RewardRedeem.create({
+            user_id,
+            reward_points,
+            requested_by,
+            remark,
+            comment
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Redeem request added successfully!",
+            data: { id }
+        });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
 
