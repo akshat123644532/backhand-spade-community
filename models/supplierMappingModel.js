@@ -295,6 +295,85 @@ const SupplierMapping = {
         return rows;
     },
 
+    /**
+     * All mappings for a partner, with project_Info fields.
+     * Optional filters: status, search (project name/code/client), pagination.
+     */
+    getAllByPartnerIdWithProject: async ({
+        partnerid,
+        page = 1,
+        limit = 10,
+        search = '',
+        status = ''
+    } = {}) => {
+        const p = parseInt(page, 10) || 1;
+        const l = parseInt(limit, 10) || 10;
+        const offset = (p - 1) * l;
+
+        let where = `WHERE sm.partnerid = ? AND sm.deleted_at IS NULL
+                       AND (proj.isdeleted = 0 OR proj.isdeleted IS NULL)`;
+        const params = [partnerid];
+
+        if (status) {
+            where += ` AND sm.status = ?`;
+            params.push(status);
+        }
+        if (search) {
+            where += ` AND (
+                proj.Project_Name LIKE ?
+                OR proj.Project_code LIKE ?
+                OR proj.Clients LIKE ?
+                OR sm.partner_name LIKE ?
+                OR sm.partner_code LIKE ?
+            )`;
+            const q = `%${search}%`;
+            params.push(q, q, q, q, q);
+        }
+
+        const [rows] = await db.query(
+            `SELECT
+                sm.*,
+                proj.Project_Name AS project_name,
+                proj.Project_code AS project_code,
+                proj.Clients AS client,
+                proj.Project_Manager AS project_manager,
+                proj.Sales_Manager AS sales_manager,
+                proj.RFQ AS sales_project,
+                proj.Status AS project_status,
+                proj.Notes AS project_notes,
+                pu.project_url_code,
+                pu.Project_Link_Type,
+                pu.country AS project_url_country,
+                pu.Status AS project_url_status,
+                pu.SampleSize AS project_url_sample_size
+             FROM supplier_mapping sm
+             LEFT JOIN project_Info proj ON proj.id = sm.projectid
+             LEFT JOIN project_url_Info pu
+                ON pu.id = sm.projectUrlId AND pu.deleted_at IS NULL
+             ${where}
+             ORDER BY sm.created_at DESC, sm.id DESC
+             LIMIT ? OFFSET ?`,
+            [...params, Number(l), Number(offset)]
+        );
+
+        const [countResult] = await db.query(
+            `SELECT COUNT(*) AS total
+             FROM supplier_mapping sm
+             LEFT JOIN project_Info proj ON proj.id = sm.projectid
+             ${where}`,
+            params
+        );
+        const total = countResult[0]?.total || 0;
+
+        return {
+            data: rows,
+            total,
+            page: p,
+            limit: l,
+            totalPages: Math.ceil(total / l)
+        };
+    },
+
    getByDynamicHash: async (token) => {
     let tokenData;
     try {
