@@ -1,4 +1,6 @@
 import { db } from '../config/db.js';
+import { checkIpFraud } from '../services/Scamalyticsservice.js';
+import IpDetection from './Ipdetectionmodel.js';
 import { resolveGeoLocationLabel } from '../utils/linkSecurityHelper.js';
 const TABLE = 'survery_data';
 const STATUS_INITIATED = 'Initiated';
@@ -129,29 +131,36 @@ const SurveyData = {
     },
 
     createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
-        await SurveyData.ensureIndex();
+    await SurveyData.ensureIndex();
+ 
+    // Resolve geo from IP — never fail initiation if lookup is unavailable
+    let geoLabel = null;
+    try {
+        geoLabel = await resolveGeoLocationLabel(InitalIP);
+    } catch {
+        geoLabel = null;
+    }
+ 
+    const [result] = await db.execute(
+        `INSERT INTO \`${TABLE}\`
+         (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+        [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
+    );
+ 
+    const surveyDataId = result.insertId;
 
-        // Resolve geo from IP — never fail initiation if lookup is unavailable
-        let geoLabel = null;
-        try {
-            geoLabel = await resolveGeoLocationLabel(InitalIP);
-        } catch {
-            geoLabel = null;
-        }
+    checkIpFraud(InitalIP)
+        .then((fraudResult) => IpDetection.insert(surveyDataId, fraudResult))
+        .catch((err) => {
+            // last-resort guard — should rarely hit since checkIpFraud never throws
+            console.error('[ip_detection] failed to store fraud result:', err.message);
+        });
+ 
+    return surveyDataId;
+},
 
-        const [result] = await db.execute(
-            `INSERT INTO \`${TABLE}\`
-             (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
-             VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
-            [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
-        );
-        return result.insertId;
-    },
-
-    /**
-     * If GeoLocation is missing on an existing row, resolve from IP and save.
-     * Returns the (possibly updated) row.
-     */
+   
     backfillGeoLocationIfEmpty: async ({ id, ip }) => {
         const row = await SurveyData.getById(id);
         if (!row) return null;
@@ -176,10 +185,7 @@ const SurveyData = {
         return (await SurveyData.getById(id)) || { ...row, GeoLocation: geoLabel };
     },
 
-    /**
-     * Finalize survey activity: set Status, FinalIP, EndDate.
-     * Only updates when current Status is Initiated or active.
-     */
+    
     finalizeStatus: async ({ partnerid, projectid, project_url_id, UserId, Status, FinalIP }) => {
         const [existing] = await db.execute(
             `SELECT id, Status
