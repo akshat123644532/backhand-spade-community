@@ -32,8 +32,14 @@ const verifyToken = async (req, res, next) => {
 
         next();
     } catch (error) {
-        res.status(401).json({ success: false, message: "Unauthorized: Invalid or Expired Token!" });
-    }
+    console.error("JWT ERROR:", error.name, error.message);
+
+    return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Invalid or Expired Token!",
+        error: error.message
+    });
+}
 };
 
 export default verifyToken;

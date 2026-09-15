@@ -23,6 +23,7 @@ export const getSettings = async (req, res) => {
                 amazon_enabled: !!settings.amazon_enabled,
                 flipkart_enabled: !!settings.flipkart_enabled,
                 paypal_enabled: !!settings.paypal_enabled,
+                max_redeem_points: settings.max_redeem_points,
                 created_at: settings.created_at,
                 updated_at: settings.updated_at
             }
@@ -40,51 +41,60 @@ export const getSettings = async (req, res) => {
 // Update reward settings
 export const updateSettings = async (req, res) => {
     try {
-        const {
-            registration_reward_points,
-            minimum_payout,
-            amazon_enabled,
-            flipkart_enabled,
-            paypal_enabled
-        } = req.body;
+      const {
+    registration_reward_points,
+    minimum_payout,
+    max_redeem_points,
+    amazon_enabled,
+    flipkart_enabled,
+    paypal_enabled
+} = req.body;
 
-        // Validate required fields
-        if (
-            registration_reward_points === undefined ||
-            minimum_payout === undefined ||
-            amazon_enabled === undefined ||
-            flipkart_enabled === undefined ||
-            paypal_enabled === undefined
-        ) {
-            return res.status(400).json({
-                success: false,
-                message: "All fields are required!"
-            });
-        }
+      if (
+    registration_reward_points === undefined ||
+    minimum_payout === undefined ||
+    max_redeem_points === undefined ||
+    amazon_enabled === undefined ||
+    flipkart_enabled === undefined ||
+    paypal_enabled === undefined
+) {
+    return res.status(400).json({
+        success: false,
+        message: "All fields are required!"
+    });
+}
 
-        // Validate data types
-        if (isNaN(registration_reward_points) || isNaN(minimum_payout)) {
-            return res.status(400).json({
-                success: false,
-                message: "Points and payout must be numeric values!"
-            });
-        }
+if (
+    isNaN(registration_reward_points) ||
+    isNaN(minimum_payout) ||
+    isNaN(max_redeem_points)
+) {
+    return res.status(400).json({
+        success: false,
+        message: "Points and payout must be numeric values!"
+    });
+}
 
-        // Validate values
-        if (registration_reward_points < 0 || minimum_payout < 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Values cannot be negative!"
-            });
-        }
+if (
+    registration_reward_points < 0 ||
+    minimum_payout < 0 ||
+    max_redeem_points < 0
+) {
+    return res.status(400).json({
+        success: false,
+        message: "Values cannot be negative!"
+    });
+}
 
         // Update in database
         const updatedData = await RewardSetting.update({
             registration_reward_points: parseInt(registration_reward_points),
             minimum_payout: parseFloat(minimum_payout),
+            max_redeem_points: parseInt(max_redeem_points),
             amazon_enabled: amazon_enabled === true || amazon_enabled === 'true',
             flipkart_enabled: flipkart_enabled === true || flipkart_enabled === 'true',
             paypal_enabled: paypal_enabled === true || paypal_enabled === 'true'
+            
         });
 
         // Log activity
@@ -106,6 +116,7 @@ export const updateSettings = async (req, res) => {
                 amazon_enabled: !!updatedData.amazon_enabled,
                 flipkart_enabled: !!updatedData.flipkart_enabled,
                 paypal_enabled: !!updatedData.paypal_enabled,
+                max_redeem_points: updatedData.max_redeem_points,
                 created_at: updatedData.created_at,
                 updated_at: updatedData.updated_at
             }
