@@ -1,7 +1,14 @@
+import jwt from 'jsonwebtoken';
 import Partner from '../models/partnerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
-import { decrypt, encrypt } from '../utils/cryptoHelper.js';
+import { decrypt, encrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
+}
+
 const prepareApiSecretKeyForStorage = (apiSecretKey) => {
     if (apiSecretKey === undefined || apiSecretKey === null || apiSecretKey === '') {
         return apiSecretKey;
@@ -22,14 +29,69 @@ const withDecryptedApiSecret = (partner) => {
     }
 };
 
+const omitPassword = (partner) => {
+    if (!partner) return partner;
+    const { password, ...rest } = partner;
+    return rest;
+};
+
+export const loginPartner = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Email and password are required!" });
+        }
+
+        const partner = await Partner.findByEmailForLogin(email);
+        if (!partner) {
+            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+        }
+
+        if (partner.status !== 'active') {
+            return res.status(403).json({ success: false, message: "Your account is inactive. Please contact admin." });
+        }
+
+        if (!partner.password) {
+            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+        }
+
+        const plainPassword = decrypt(password);
+        const isMatch = await verifyPassword(plainPassword, partner.password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+        }
+
+        const token = jwt.sign(
+            { id: partner.id, email: partner.email, role: 'partner' },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful!",
+            token,
+            data: {
+                code: partner.code,
+                name: partner.name,
+                email: partner.email,
+                status: partner.status
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const addPartner = async (req, res) => {
     try {
         const {
             name, email, contact_no, country, contact_person, website_url, panel_size,
             complete, terminate, over_quota, quality_term, survey_close, about_partner,
-            status, api_base_url, api_body, api_secret_key
+            status, api_base_url, api_body, api_secret_key, password
         } = req.body;
         if (!name || !email) return res.status(400).json({ success: false, message: "Name and email are required!" });
+        if (!password) return res.status(400).json({ success: false, message: "Password is required!" });
         if (panel_size === undefined || panel_size === null || panel_size === '') {
             return res.status(400).json({ success: false, message: "Panel size is required!" });
         }
@@ -44,6 +106,16 @@ export const addPartner = async (req, res) => {
         const codeExists = await Partner.findByCode(code);
         if (codeExists) return res.status(400).json({ success: false, message: "Code conflict, please try again!" });
 
+        // Client sends encrypted password → decrypt → bcrypt hash for DB (same as PM/SM/admin)
+        const plainPassword = decrypt(password);
+        if (!plainPassword || String(plainPassword).trim().length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters!"
+            });
+        }
+        const hashedPassword = await encryptPasswordForStorage(plainPassword);
+
         const encryptedApiSecretKey = api_secret_key
             ? prepareApiSecretKeyForStorage(api_secret_key)
             : api_secret_key;
@@ -51,12 +123,116 @@ export const addPartner = async (req, res) => {
         await Partner.create({
             name, email, contact_no, country, contact_person, website_url, panel_size,
             complete, terminate, over_quota, quality_term, survey_close, about_partner,
-            code, status, api_base_url, api_body, api_secret_key: encryptedApiSecretKey
+            code, status, api_base_url, api_body, api_secret_key: encryptedApiSecretKey,
+            password: hashedPassword
         });
 
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'Partner', description: `Partner "${name}" added with code ${code}`, ip_address: req.ip });
 
         return res.status(201).json({ success: true, message: "Partner added successfully!", data: { code, name, email } });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+/** GET /api/partner/me — profile from JWT (role must be partner) */
+export const getSelfPartner = async (req, res) => {
+    try {
+        const { id, email, role } = req.user || {};
+        if (role !== 'partner' || !id) {
+            return res.status(403).json({ success: false, message: "Access denied for this role!" });
+        }
+
+        const partner = await Partner.getById(id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: "Partner not found!" });
+        }
+
+        if (email && String(partner.email).toLowerCase() !== String(email).toLowerCase()) {
+            return res.status(403).json({ success: false, message: "Token email does not match partner account!" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Partner fetched successfully!",
+            data: omitPassword(withDecryptedApiSecret(partner))
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+/** PUT /api/partner/change-password — current + new + confirm (client-encrypted) */
+export const changePartnerPassword = async (req, res) => {
+    try {
+        const { id, email, role } = req.user || {};
+        if (role !== 'partner' || !id) {
+            return res.status(403).json({ success: false, message: "Access denied for this role!" });
+        }
+
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "currentPassword, newPassword and confirmPassword are required!"
+            });
+        }
+
+        const plainCurrentPassword = decrypt(currentPassword);
+        const plainNewPassword = decrypt(newPassword);
+        const plainConfirmPassword = decrypt(confirmPassword);
+
+        if (plainNewPassword !== plainConfirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password and confirm password do not match!"
+            });
+        }
+
+        if (!plainNewPassword || String(plainNewPassword).trim().length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be at least 6 characters!"
+            });
+        }
+
+        const partner = await Partner.getByIdWithPassword(id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: "Partner not found!" });
+        }
+
+        if (email && String(partner.email).toLowerCase() !== String(email).toLowerCase()) {
+            return res.status(403).json({ success: false, message: "Token email does not match partner account!" });
+        }
+
+        if (!partner.password) {
+            return res.status(400).json({ success: false, message: "Password is not set for this partner!" });
+        }
+
+        const isMatch = await verifyPassword(plainCurrentPassword, partner.password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: "Current password is incorrect!" });
+        }
+
+        if (plainCurrentPassword === plainNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password cannot be the same as your current password!"
+            });
+        }
+
+        const hashedPassword = await encryptPasswordForStorage(plainNewPassword);
+        await Partner.updatePassword(id, hashedPassword);
+
+        await logActivity({
+            admin_id: id,
+            action: 'CHANGE_PASSWORD',
+            module: 'Partner',
+            description: `Partner "${partner.name || partner.email}" changed their password`,
+            ip_address: req.ip
+        });
+
+        return res.status(200).json({ success: true, message: "Password updated successfully!" });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
