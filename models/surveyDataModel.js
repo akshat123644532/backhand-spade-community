@@ -183,14 +183,19 @@ const SurveyData = {
         [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
     );
  
-    const surveyDataId = result.insertId;
+   const surveyDataId = result.insertId;
 
-    checkIpFraud(InitalIP)
-        .then((fraudResult) => IpDetection.insert(surveyDataId, fraudResult))
-        .catch((err) => {
-            // last-resort guard — should rarely hit since checkIpFraud never throws
-            console.error('[ip_detection] failed to store fraud result:', err.message);
-        });
+console.log('🔍 DEBUG: createInitiated called, IP =', InitalIP, 'surveyDataId =', surveyDataId);
+
+checkIpFraud(InitalIP)
+    .then((fraudResult) => {
+        console.log('🔍 DEBUG: fraud API result =', fraudResult.status, fraudResult.scamalytics_risk);
+        return IpDetection.insert(surveyDataId, fraudResult);
+    })
+    .then((id) => console.log('🔍 DEBUG: ip_detection row inserted, id =', id))
+    .catch((err) => {
+        console.error('[ip_detection] failed:', err);
+    });
  
     return surveyDataId;
 },
