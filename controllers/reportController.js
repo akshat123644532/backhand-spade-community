@@ -280,6 +280,8 @@ export const getPreScreenReport = async (req, res) => {
     }
 };
 
+
+
 export const exportPreScreenReport = async (req, res) => {
     try {
         const projectid = req.query.projectid;
@@ -309,7 +311,15 @@ export const exportPreScreenReport = async (req, res) => {
             'IP Address',
             'Question',
             'Answer',
-            'Status'
+            'Status',
+            // 👇 NEW
+            'IP Country Code',
+            'IP Country Name',
+            'IP State Name',
+            'IP Time Zone',
+            'Is VPN',
+            'Fraud Score',
+            'Fraud Risk'
         ];
 
         const escapeCsvValue = (value) => {
@@ -348,7 +358,15 @@ export const exportPreScreenReport = async (req, res) => {
                 row.ip_address,
                 row.question,
                 row.answer,
-                row.status
+                row.status,
+                // 👇 NEW
+                row.ip_country_code,
+                row.ip_country_name,
+                row.ip_state_name,
+                row.ip_time_zone,
+                row.is_vpn === null || row.is_vpn === undefined ? '' : (row.is_vpn ? 'Yes' : 'No'),
+                row.fraud_score,
+                row.fraud_risk
             ].map(escapeCsvValue).join(','));
         }
 
