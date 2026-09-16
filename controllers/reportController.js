@@ -5,6 +5,8 @@ import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import { sendError } from './surveyDataController.js';
 
+
+
 const buildReportRows = async (
     project_id,
     partner_id,
@@ -43,7 +45,16 @@ const buildReportRows = async (
 
             city,
 
-            is_test_link: !!row.is_test_link
+            is_test_link: !!row.is_test_link,
+
+           
+            ip_country_code: row.ip_country_code || null,
+            ip_country_name: row.ip_country_name || null,
+            ip_state_name: row.ip_state_name || null,
+            ip_time_zone: row.ip_time_zone || null,
+            is_vpn: row.is_vpn === null || row.is_vpn === undefined ? null : !!row.is_vpn,
+            fraud_score: row.fraud_score ?? null,
+            fraud_risk: row.fraud_risk || null
         };
     });
 };

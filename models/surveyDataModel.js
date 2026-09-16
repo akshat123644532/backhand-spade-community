@@ -432,15 +432,15 @@ getProjectReport: async (
     { partner_id = null, status = 'all' } = {}
 ) => {
     const params = [project_id];
-
+ 
     let partnerSql = '';
     let statusSql = '';
-
+ 
     if (partner_id != null && partner_id !== '') {
         partnerSql = ' AND sd.partnerid = ?';
         params.push(partner_id);
     }
-
+ 
     if (
         status &&
         String(status).trim() !== '' &&
@@ -449,7 +449,7 @@ getProjectReport: async (
         statusSql = ' AND LOWER(TRIM(sd.Status)) = LOWER(TRIM(?))';
         params.push(status);
     }
-
+ 
     const [rows] = await db.execute(
         `SELECT
             sm.id AS supplier_row_id,
@@ -461,7 +461,7 @@ getProjectReport: async (
             sd.Status AS status,
             sd.StartDate AS survey_start_date,
             sd.EndDate AS survey_end_date,
-
+ 
             CASE
                 WHEN sd.StartDate IS NOT NULL
                      AND sd.EndDate IS NOT NULL
@@ -472,31 +472,51 @@ getProjectReport: async (
                 )
                 ELSE NULL
             END AS loi_minutes,
-
+ 
             sd.InitalIP AS ip_address,
             sd.GeoLocation AS country,
-            sm.IsTest AS is_test_link
-
+            sm.IsTest AS is_test_link,
+ 
+            -- 👇 NEW: fraud-detection columns, pulled from the latest ip_detection row for this survey
+            idt.ip_country_code AS ip_country_code,
+            idt.ip_country_name AS ip_country_name,
+            idt.ip_state_name AS ip_state_name,
+            idt.ip_time_zone AS ip_time_zone,
+            idt.is_vpn AS is_vpn,
+            idt.scamalytics_score AS fraud_score,
+            idt.scamalytics_risk AS fraud_risk
+ 
         FROM \`${TABLE}\` sd
-
+ 
         LEFT JOIN supplier_mapping sm
             ON sm.partnerid <=> sd.partnerid
             AND sm.projectid = sd.projectid
-
+ 
         LEFT JOIN partners p
             ON p.id = sd.partnerid
-
+ 
         LEFT JOIN project_Info proj
             ON proj.id = sd.projectid
-
+ 
+        -- 👇 NEW: latest ip_detection row per survey_data row (in case of retries/multiple calls)
+        LEFT JOIN (
+            SELECT t1.*
+            FROM ip_detection t1
+            INNER JOIN (
+                SELECT survey_data_id, MAX(id) AS max_id
+                FROM ip_detection
+                GROUP BY survey_data_id
+            ) t2 ON t1.survey_data_id = t2.survey_data_id AND t1.id = t2.max_id
+        ) idt ON idt.survey_data_id = sd.id
+ 
         WHERE sd.projectid = ?
         ${partnerSql}
         ${statusSql}
-
+ 
         ORDER BY sd.id DESC`,
         params
     );
-
+ 
     return rows;
 },
     
