@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaireResponse from '../models/panelistSubmissionResponseModel.js';
 import EmailTemplate from '../models/Emailtemplatemodel.js';
-import RewardSetting from '../models/rewardSettingModel.js'; // ✅ ADD THIS IMPORT
+import RewardSetting from '../models/rewardSettingModel.js'; 
 import { sendEmail } from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';

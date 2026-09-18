@@ -10,7 +10,7 @@ if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
 }
 
-const SALES_MANAGER_LOGIN_URL = 'https://spade-community-ui.vercel.app/sales/sales-manager';
+const SALES_MANAGER_LOGIN_URL = '${process.env.ADMIN_PANEL_URL}/auth';
 const SALES_MANAGER_WELCOME_TEMPLATE_KEY = 'sales_manager_welcome';
 
 export const loginSalesManager = async (req, res) => {
