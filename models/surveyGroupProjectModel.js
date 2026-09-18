@@ -1,5 +1,7 @@
 import { db } from '../config/db.js';
 
+const DB_NAME = process.env.DB_NAME || process.env.DB_PROD;
+
 const SurveyGroupProject = {
 
     create: async (data) => {
@@ -74,7 +76,7 @@ const SurveyGroupProject = {
              GROUP_CONCAT(DISTINCT s.project_name SEPARATOR ', ') AS survey_names
              FROM survey_group_projects sgp
              LEFT JOIN survey_group_project_clients sgpc ON sgp.id = sgpc.survey_group_project_id
-             LEFT JOIN PaperWardb.clients c ON sgpc.client_id = c.id
+             LEFT JOIN ${DB_NAME}.clients c ON sgpc.client_id = c.id
              LEFT JOIN survey_group_project_surveys sgps ON sgp.id = sgps.survey_group_project_id
              LEFT JOIN surveys s ON sgps.survey_id = s.survey_id
              ${where}
@@ -99,7 +101,7 @@ const SurveyGroupProject = {
 
         const [clients] = await db.execute(
             `SELECT c.id, c.name, c.email FROM survey_group_project_clients sgpc
-             JOIN PaperWardb.clients c ON sgpc.client_id = c.id
+             JOIN ${DB_NAME}.clients c ON sgpc.client_id = c.id
              WHERE sgpc.survey_group_project_id = ?`,
             [id]
         );
