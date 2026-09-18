@@ -10,7 +10,8 @@ if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
 }
 
-const SALES_MANAGER_LOGIN_URL = `${process.env.ADMIN_PANEL_URL}/auth`;
+//chage
+
 const SALES_MANAGER_WELCOME_TEMPLATE_KEY = 'sales_manager_welcome';
 
 export const loginSalesManager = async (req, res) => {
@@ -88,11 +89,12 @@ export const addSalesManager = async (req, res) => {
                 emailWarning = `Email template "${SALES_MANAGER_WELCOME_TEMPLATE_KEY}" not found. Welcome email was skipped.`;
                 console.error('SALES MANAGER WELCOME EMAIL SKIPPED:', emailWarning);
             } else {
+                const login_url = `${process.env.ADMIN_PANEL_URL}/auth`;
                 const { subject, body } = EmailTemplate.render(template, {
                     name,
                     email,
                     password: plainPassword,
-                    login_url: SALES_MANAGER_LOGIN_URL
+                    login_url
                 });
 
                 const result = await sendEmail({ to: email, subject, html: body });
