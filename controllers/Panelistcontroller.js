@@ -10,6 +10,7 @@ import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+import { sendTransactionalEmail } from '../services/emailServices.js';
 const resolvePanelistImageUrl = (imageUrl, req) => {
     if (!imageUrl) return null;
     if (imageUrl.startsWith('/uploads/')) {
@@ -98,14 +99,14 @@ export const signup = async (req, res) => {
 
                 const htmlBody = linkifyPlainTextUrls(body).replace(/\n/g, '<br>');
 
-                const result = await sendEmail({
-                    to: email,
+                const result = await sendTransactionalEmail({
+                    toEmail: email,
+                    toName: name,
                     subject,
-                    text: body,
-                    html: htmlBody
+                    htmlBody: htmlBody
                 });
-                if (result?.skipped) {
-                    emailWarning = 'SMTP is not configured. Signup email was skipped.';
+                if (!result) {
+                    emailWarning = result.error || 'Signup email could not be sent.';
                 } else {
                     console.log(`EMAIL SENT TO: ${email} ✅`);
                 }
@@ -372,7 +373,7 @@ export const resendInviteEmail = async (req, res) => {
 // =====================================================
 export const exportPanelistsCsv = async (req, res) => {
     try {
-        console.log("🔥 EXPORT API HIT");
+        // console.log("🔥 EXPORT API HIT");
 
         const search = (req.query.search || '').trim();
         const status = req.query.status || '';
@@ -413,10 +414,6 @@ export const exportPanelistsCsv = async (req, res) => {
                 key: 'status'
             }
         ]);
-
-        console.log(
-            `Panelists CSV Export: ${rows.length} records exported`
-        );
 
         return sendCsv(
             res,

@@ -896,12 +896,12 @@ export const getActiveSurveyLink = async (req, res) => {
             const respondentCountry = getCountryFromIp(respondentIp);
 
             // 🔍 TEMP DEBUG — issue confirm hone ke baad ye console.log hata dena
-            console.log('[GeoLocation Check]', {
-                respondentIp,
-                respondentCountry,
-                expectedCountry: urlInfo.country,
-                normalizedMatch: normalizeStr(respondentCountry) === normalizeStr(urlInfo.country)
-            });
+            // console.log('[GeoLocation Check]', {
+            //     respondentIp,
+            //     respondentCountry,
+            //     expectedCountry: urlInfo.country,
+            //     normalizedMatch: normalizeStr(respondentCountry) === normalizeStr(urlInfo.country)
+            // });
 
             // ✅ FIX: normalizeStr use kiya — case/whitespace mismatch se bachne ke liye
             if (!respondentCountry || normalizeStr(respondentCountry) !== normalizeStr(urlInfo.country)) {

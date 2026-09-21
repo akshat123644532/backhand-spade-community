@@ -22,9 +22,4 @@ pool.getConnection((err, connection) => {
         connection.release();
     }
 });
-
-console.log('SCAMALYTICS_USERNAME:', process.env.SCAMALYTICS_USERNAME);
-console.log('SCAMALYTICS_API_KEY:', process.env.SCAMALYTICS_API_KEY);
-console.log('SCAMALYTICS_BASE_URL:', process.env.SCAMALYTICS_BASE_URL);
-console.log('SCAMALYTICS_TEST_MODE:', process.env.SCAMALYTICS_TEST_MODE);   
 export const db = pool.promise();

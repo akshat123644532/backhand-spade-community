@@ -87,10 +87,10 @@ const mailer = {
     sendMail: async (options) => sendEmail(options),
 };
 
-console.log(
-    isSmtpConfigured()
-        ? `Email provider: SMTP (${smtpConfig.host}:${smtpConfig.port})`
-        : 'Email provider: SMTP (not configured)'
-);
+// console.log(
+//     isSmtpConfigured()
+//         ? `Email provider: SMTP (${smtpConfig.host}:${smtpConfig.port})`
+//         : 'Email provider: SMTP (not configured)'
+// );
 
 export default mailer;
