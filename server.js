@@ -34,6 +34,7 @@ import projectRoutes from './routes/projectRoutes.js';
 // import {encrypt} from './utils/cryptoHelper.js';
 import findUserRoutes from './routes/findUserRoutes.js';
 import systemSettingRoutes from './routes/systemSettingRoutes.js';
+import apiIntegrationRoutes from './routes/apiIntegrationRoutes.js';
 import supplierMappingRoutes from './routes/supplierMappingRoutes.js';
 import supplierRedirectRoutes from './routes/supplierRedirectRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
@@ -43,7 +44,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
-import apiKeyRoutes from './routes/apiKeyRoutes.js';
+
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -71,7 +72,6 @@ app.get('/health', (req, res) => {
     res.status(200).json({ success: true, message: "Server is running!" });
 });
 app.use('/api/admin', adminRoutes);
-app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/partner', partnerRoutes);
 app.use('/api/projectmanager', projectManagerRoutes);
@@ -99,6 +99,7 @@ app.use('/api/panelist-portal', panelistPortalRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/find-user', findUserRoutes);
 app.use('/api/system-settings', systemSettingRoutes);
+app.use('/api/api-integrations', apiIntegrationRoutes);
 app.use('/api/supplier-mapping', supplierMappingRoutes);
 app.use('/api/survey', surveyDataRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);

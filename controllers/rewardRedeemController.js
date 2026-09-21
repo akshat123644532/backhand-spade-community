@@ -157,8 +157,31 @@ export const updateRedeemStatus = async (req, res) => {
             });
         }
 
-        await RewardRedeem.updateStatus(id, { status, action_by, remark, comment });
-        return res.status(200).json({ success: true, message: `Redeem request ${status} successfully!` });
+        // Preserve redemption method in `remark`; store admin note in `comment`.
+        const statusLabels = new Set(['verified', 'rejected', 'approved']);
+        const incomingRemark = String(remark ?? '').trim();
+        const preservedRemark =
+            incomingRemark && !statusLabels.has(incomingRemark.toLowerCase())
+                ? incomingRemark
+                : (request.remark || incomingRemark || null);
+        const nextComment =
+            comment !== undefined && comment !== null
+                ? String(comment).trim()
+                : (request.comment || null);
+
+        await RewardRedeem.updateStatus(id, {
+            status,
+            action_by,
+            remark: preservedRemark,
+            comment: nextComment
+        });
+
+        const updated = await RewardRedeem.getById(id);
+        return res.status(200).json({
+            success: true,
+            message: `Redeem request ${status} successfully!`,
+            data: updated
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

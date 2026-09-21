@@ -23,6 +23,7 @@ export const getSettings = async (req, res) => {
                 amazon_enabled: !!settings.amazon_enabled,
                 flipkart_enabled: !!settings.flipkart_enabled,
                 paypal_enabled: !!settings.paypal_enabled,
+                tremendous_enabled: !!settings.tremendous_enabled,
                 max_redeem_points: settings.max_redeem_points,
                 created_at: settings.created_at,
                 updated_at: settings.updated_at
@@ -47,7 +48,8 @@ export const updateSettings = async (req, res) => {
     max_redeem_points,
     amazon_enabled,
     flipkart_enabled,
-    paypal_enabled
+    paypal_enabled,
+    tremendous_enabled
 } = req.body;
 
       if (
@@ -93,7 +95,8 @@ if (
             max_redeem_points: parseInt(max_redeem_points),
             amazon_enabled: amazon_enabled === true || amazon_enabled === 'true',
             flipkart_enabled: flipkart_enabled === true || flipkart_enabled === 'true',
-            paypal_enabled: paypal_enabled === true || paypal_enabled === 'true'
+            paypal_enabled: paypal_enabled === true || paypal_enabled === 'true',
+            tremendous_enabled: tremendous_enabled === true || tremendous_enabled === 'true'
             
         });
 
@@ -116,6 +119,7 @@ if (
                 amazon_enabled: !!updatedData.amazon_enabled,
                 flipkart_enabled: !!updatedData.flipkart_enabled,
                 paypal_enabled: !!updatedData.paypal_enabled,
+                tremendous_enabled: !!updatedData.tremendous_enabled,
                 max_redeem_points: updatedData.max_redeem_points,
                 created_at: updatedData.created_at,
                 updated_at: updatedData.updated_at
