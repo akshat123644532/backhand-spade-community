@@ -7,6 +7,9 @@ import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
 import { checkIpFraud } from '../utils/scamalyticsHelper.js';
 import { getDeviceInfo } from '../utils/deviceInfoHelper.js';
 export const login = async (req, res) => {
+
+    console.log('🔥 PANELIST LOGIN CONTROLLER RUNNING');
+
     try {
         const { email, password } = req.body;
 
@@ -78,6 +81,8 @@ export const login = async (req, res) => {
         }
 
         const deviceInfo = getDeviceInfo(userAgent);
+
+
 
         try {
             await PanelistLoginDetails.create({

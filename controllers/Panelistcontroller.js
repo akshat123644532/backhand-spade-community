@@ -10,6 +10,9 @@ import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
+import { checkIpFraud } from '../utils/scamalyticsHelper.js';
+import { getDeviceInfo } from '../utils/deviceInfoHelper.js';
 const resolvePanelistImageUrl = (imageUrl, req) => {
     if (!imageUrl) return null;
     if (imageUrl.startsWith('/uploads/')) {
@@ -163,33 +166,121 @@ export const login = async (req, res) => {
         const { email, password } = req.body;
 
         if (!email || !password) {
-            return res.status(400).json({ success: false, message: "Email and password are required!" });
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required!"
+            });
         }
 
         const panelist = await Panelist.findByEmail(email);
+
         if (!panelist) {
-            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+            return res.status(401).json({
+                success: false,
+                message: "Invalid email or password!"
+            });
         }
 
         if (!panelist.is_verified) {
-            return res.status(403).json({ success: false, message: "Please verify your email before logging in!" });
+            return res.status(403).json({
+                success: false,
+                message: "Please verify your email before logging in!"
+            });
         }
 
         if (panelist.questionnaire !== 'yes') {
             return res.status(403).json({
                 success: false,
                 message: "Please complete your panel questionnaire to finish registration before logging in!",
-                data: { questionnaire_url: `/community-users?Userid=${panelist.questionnaire_url}` }
+                data: {
+                    questionnaire_url: `/community-users?Userid=${panelist.questionnaire_url}`
+                }
             });
         }
 
         const isMatch = await bcrypt.compare(password, panelist.password);
+
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+            return res.status(401).json({
+                success: false,
+                message: "Invalid email or password!"
+            });
+        }
+
+        const userAgent = req.headers['user-agent'] || '';
+
+        const forwarded = req.headers['x-forwarded-for'];
+
+        const ip = forwarded
+            ? forwarded.split(',')[0].trim()
+            : req.socket?.remoteAddress || req.ip || null;
+
+        let fraudData = null;
+
+        try {
+            fraudData = await checkIpFraud(ip);
+        } catch (error) {
+            console.error('Scamalytics error:', error.message);
+        }
+
+        const deviceInfo = getDeviceInfo(userAgent);
+
+        
+
+        try {
+            await PanelistLoginDetails.create({
+                panelist_id: panelist.id,
+
+                ip_address: fraudData?.ip || ip,
+
+                user_agent: userAgent,
+
+                browser: deviceInfo?.browser || null,
+                browser_version: deviceInfo?.browser_version || null,
+
+                os: deviceInfo?.os || null,
+                os_version: deviceInfo?.os_version || null,
+
+                device_type: deviceInfo?.device_type || null,
+                device_name: deviceInfo?.device_name || null,
+
+                fraud_score: fraudData?.scamalytics_score ?? null,
+                fraud_risk: fraudData?.scamalytics_risk ?? null,
+
+                vpn: fraudData?.is_vpn ?? 0,
+                tor: 0,
+                proxy: fraudData?.is_resproxy ?? 0,
+                datacenter: fraudData?.is_datacenter ?? 0,
+
+                country: fraudData?.ip_country_name ?? null,
+                country_code: fraudData?.ip_country_code ?? null,
+                state: fraudData?.ip_state_name ?? null,
+                city: fraudData?.ip_city ?? null,
+
+                postal_code: null,
+                latitude: null,
+                longitude: null,
+                asn: null,
+
+                isp_name: fraudData?.scamalytics_isp ?? null,
+                organization_name: fraudData?.scamalytics_org ?? null
+            });
+
+            console.log('Panelist login details saved successfully');
+        } catch (loginDetailsError) {
+            console.error(
+                'Panelist login details save failed:',
+                loginDetailsError
+            );
         }
 
         const token = jwt.sign(
-            { id: panelist.id, email: panelist.email, name: panelist.name, role: 'panelist' },
+            {
+                id: panelist.id,
+                email: panelist.email,
+                name: panelist.name,
+                role: 'panelist'
+            },
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );
@@ -211,28 +302,33 @@ export const login = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error('Panelist login error:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
-
 export const getAllPanelists = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        // ✅ FIX: trim search so leading/trailing spaces don't break full-name matches
-        const search = (req.query.search || '').trim();
-        const status = req.query.status || '';
-        const is_verified = req.query.is_verified !== undefined ? req.query.is_verified : '';
-        const questionnaire = req.query.questionnaire || '';
+        const panelists = await Panelist.getAll();
 
-        const result = await Panelist.getAll({ page, limit, search, status, is_verified, questionnaire });
-        result.data = result.data.map((panelist) => serializePanelistImage(panelist, req));
-        return res.status(200).json({ success: true, ...result });
+        return res.status(200).json({
+            success: true,
+            data: panelists.map((panelist) => serializePanelistImage(panelist, req))
+        });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error('GET ALL PANELISTS ERROR:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
-
 // ─────────────────────────────────────────────────────────
 // ✅ FIXED — now returns filled questionnaire (question + answer) too
 // ─────────────────────────────────────────────────────────
