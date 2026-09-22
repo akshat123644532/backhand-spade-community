@@ -1,19 +1,47 @@
-const USERNAME = process.env.SCAMALYTICS_USERNAME;
-const API_KEY = process.env.SCAMALYTICS_API_KEY;
+import ApiIntegration from '../models/apiIntegrationModel.js';
+
 const BASE_URL = process.env.SCAMALYTICS_BASE_URL || 'https://api11.scamalytics.com/v3';
 const TEST_MODE = String(process.env.SCAMALYTICS_TEST_MODE || 'false') === 'true';
 
+async function resolveCredentials() {
+    try {
+        const fromDb = await ApiIntegration.getSecretsByName('Scamalytics');
+        if (fromDb?.api_user_id && fromDb?.api_key) {
+            return {
+                username: fromDb.api_user_id,
+                apiKey: fromDb.api_key,
+            };
+        }
+    } catch (error) {
+        console.warn('Scamalytics DB credential lookup failed, falling back to env:', error.message);
+    }
+
+    return {
+        username: process.env.SCAMALYTICS_USERNAME,
+        apiKey: process.env.SCAMALYTICS_API_KEY,
+    };
+}
+
 /**
- * @param {string} ip 
- * @returns {Promise<object>} 
+ * @param {string} ip
+ * @returns {Promise<object>}
  */
 export const checkIpFraud = async (ip) => {
     if (!ip) {
         return { ip: null, status: 'error', error_message: 'No IP provided' };
     }
 
-    const url = new URL(`${BASE_URL}/${USERNAME}`);
-    url.searchParams.set('key', API_KEY);
+    const { username, apiKey } = await resolveCredentials();
+    if (!username || !apiKey) {
+        return {
+            ip,
+            status: 'error',
+            error_message: 'Scamalytics credentials are not configured',
+        };
+    }
+
+    const url = new URL(`${BASE_URL}/${username}`);
+    url.searchParams.set('key', apiKey);
     url.searchParams.set('ip', ip);
     if (TEST_MODE) url.searchParams.set('test', '1');
 
