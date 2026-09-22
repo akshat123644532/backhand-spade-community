@@ -11,8 +11,10 @@ import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
+import PanelistSignupDetails from '../models/panelistSignupDetailsModel.js';
 import { checkIpFraud } from '../utils/scamalyticsHelper.js';
 import { getDeviceInfo } from '../utils/deviceInfoHelper.js';
+
 const resolvePanelistImageUrl = (imageUrl, req) => {
     if (!imageUrl) return null;
     if (imageUrl.startsWith('/uploads/')) {
@@ -45,17 +47,29 @@ export const signup = async (req, res) => {
         const { name, email, password, phone, recaptchaToken } = req.body;
 
         if (!name || !email || !password) {
-            return res.status(400).json({ success: false, message: "Name, email and password are required!" });
+            return res.status(400).json({
+                success: false,
+                message: "Name, email and password are required!"
+            });
         }
 
         const existingPanelist = await Panelist.findByEmail(email);
+
         if (existingPanelist) {
-            return res.status(409).json({ success: false, message: "Email already registered!" });
+            return res.status(409).json({
+                success: false,
+                message: "Email already registered!"
+            });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+
         const activation_token = crypto.randomBytes(32).toString('hex');
-        const activation_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        const activation_token_expires = new Date(
+            Date.now() + 24 * 60 * 60 * 1000
+        );
+
         const photoPath = buildPanelistPhotoPath(req);
 
         const panelistId = await Panelist.create({
@@ -69,15 +83,77 @@ export const signup = async (req, res) => {
             questionnaire_url: null
         });
 
+        const userAgent = req.headers['user-agent'] || '';
+
+        const forwarded = req.headers['x-forwarded-for'];
+
+        const ip = forwarded
+            ? forwarded.split(',')[0].trim()
+            : req.socket?.remoteAddress || req.ip || null;
+
+        let fraudData = null;
+
+        try {
+            fraudData = await checkIpFraud(ip);
+        } catch (error) {
+            console.error('Scamalytics signup error:', error.message);
+        }
+
+        const deviceInfo = getDeviceInfo(userAgent);
+
+
+        try {
+            await PanelistSignupDetails.create({
+                panelist_id: panelistId,
+                ip_address: fraudData?.ip || ip,
+                user_agent: userAgent,
+                browser: deviceInfo?.browser || null,
+                browser_version: deviceInfo?.browser_version || null,
+                os: deviceInfo?.os || null,
+                os_version: deviceInfo?.os_version || null,
+                device_type: deviceInfo?.device_type || null,
+                device_name: deviceInfo?.device_name || null,
+                fraud_score: fraudData?.scamalytics_score ?? null,
+                fraud_risk: fraudData?.scamalytics_risk ?? null,
+                vpn: fraudData?.is_vpn ?? 0,
+                tor: 0,
+                proxy: fraudData?.is_resproxy ?? 0,
+                datacenter: fraudData?.is_datacenter ?? 0,
+                country: fraudData?.ip_country_name ?? null,
+                country_code: fraudData?.ip_country_code ?? null,
+                state: fraudData?.ip_state_name ?? null,
+                city: fraudData?.ip_city ?? null,
+                postal_code: null,
+                latitude: null,
+                longitude: null,
+                asn: null,
+                isp_name: fraudData?.scamalytics_isp ?? null,
+                organization_name: fraudData?.scamalytics_org ?? null
+            });
+
+            console.log('Panelist signup details saved successfully');
+        } catch (signupDetailsError) {
+            console.error(
+                'Panelist signup details save failed:',
+                signupDetailsError
+            );
+        }
+
         const encryptedUserId = encryptId(panelistId);
-        await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
+
+        await Panelist.setQuestionnaireUrl(
+            panelistId,
+            encryptedUserId
+        );
 
         const settings = await RewardSetting.get();
-        const rewardPoints = settings?.registration_reward_points || 200; 
+
+        const rewardPoints =
+            settings?.registration_reward_points || 200;
 
         await addRewardPoints({
             user_id: panelistId,
-            points: rewardPoints, // 
+            points: rewardPoints,
             transaction_type: 'credit',
             transaction_by: 'Admin',
             remark: 'Registration Reward',
@@ -85,21 +161,32 @@ export const signup = async (req, res) => {
             comment: 'Welcome bonus on signup'
         });
 
-        const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com').replace(/\/$/, '');
-        const questionnaireLink = `${baseUrl}/community-users?Userid=${encryptedUserId}`;
+        const baseUrl = (
+            process.env.CLIENT_BASE_URL ||
+            'https://spadecommunity.com'
+        ).replace(/\/$/, '');
+
+        const questionnaireLink =
+            `${baseUrl}/community-users?Userid=${encryptedUserId}`;
 
         let emailWarning = null;
-        try {
-            const template = await EmailTemplate.getByKey('Panelist Questionnaire');
-            if (!template) {
-                emailWarning = 'Panelist Questionnaire email template not found or inactive.';
-            } else {
-                const { subject, body } = EmailTemplate.render(template, {
-                    name,
-                    questionnaire_link: questionnaireLink
-                });
 
-                const htmlBody = linkifyPlainTextUrls(body).replace(/\n/g, '<br>');
+        try {
+            const template =
+                await EmailTemplate.getByKey('Panelist Questionnaire');
+
+            if (!template) {
+                emailWarning =
+                    'Panelist Questionnaire email template not found or inactive.';
+            } else {
+                const { subject, body } =
+                    EmailTemplate.render(template, {
+                        name,
+                        questionnaire_link: questionnaireLink
+                    });
+
+                const htmlBody =
+                    linkifyPlainTextUrls(body).replace(/\n/g, '<br>');
 
                 const result = await sendEmail({
                     to: email,
@@ -107,15 +194,23 @@ export const signup = async (req, res) => {
                     text: body,
                     html: htmlBody
                 });
+
                 if (result?.skipped) {
-                    emailWarning = 'SMTP is not configured. Signup email was skipped.';
+                    emailWarning =
+                        'SMTP is not configured. Signup email was skipped.';
                 } else {
                     console.log(`EMAIL SENT TO: ${email} ✅`);
                 }
             }
         } catch (mailError) {
-            emailWarning = mailError?.message || 'Signup email could not be sent.';
-            console.error('SIGNUP EMAIL SEND FAILED:', emailWarning);
+            emailWarning =
+                mailError?.message ||
+                'Signup email could not be sent.';
+
+            console.error(
+                'SIGNUP EMAIL SEND FAILED:',
+                emailWarning
+            );
         }
 
         return res.status(201).json({
@@ -123,13 +218,23 @@ export const signup = async (req, res) => {
             message: emailWarning
                 ? 'Signup successful, but we could not send the questionnaire email.'
                 : 'Signup successful! Please check your email.',
-            ...(emailWarning && { email_warning: emailWarning }),
-            data: { questionnaire_url: `/community-users?Userid=${encryptedUserId}` }
+            ...(emailWarning && {
+                email_warning: emailWarning
+            }),
+            data: {
+                questionnaire_url:
+                    `/community-users?Userid=${encryptedUserId}`
+            }
         });
 
     } catch (error) {
         console.error("SIGNUP ERROR:", error);
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
     }
 };
 
