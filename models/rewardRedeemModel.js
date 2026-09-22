@@ -69,14 +69,17 @@ const RewardRedeem = {
         return rows[0] || null;
     },
 
-    updateStatus: async (id, data) => {
-        const { status, action_by, remark, comment } = data;
-        const [result] = await db.execute(
-            `UPDATE reward_redeem_requests SET status = ?, action_by = ?, action_date = NOW(), remark = ?, comment = ?, updated_at = NOW() WHERE id = ?`,
-            [status, action_by || null, remark || null, comment || null, id]
-        );
-        return result;
-    }
+  updateStatus: async (id, data) => {
+    const { status, action_by, admin_remark, admin_comment } = data;
+    const [result] = await db.execute(
+        `UPDATE reward_redeem_requests
+         SET status = ?, action_by = ?, action_date = NOW(),
+             admin_remark = ?, admin_comment = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [status, action_by || null, admin_remark || null, admin_comment || null, id]
+    );
+    return result;
+}
 };
 
 export default RewardRedeem;
