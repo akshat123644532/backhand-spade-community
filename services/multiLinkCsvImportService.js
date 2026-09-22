@@ -100,7 +100,7 @@ export const processMultiLinkCsvJob = async (jobId) => {
     if (runningJobs.has(jobId)) return;
     runningJobs.add(jobId);
 
-    console.log(`[MultiLinkCSV] Process started | jobId=${jobId}`);
+    // console.log(`[MultiLinkCSV] Process started | jobId=${jobId}`);
 
     try {
         const job = await MultiLinkCsvJob.getByIdWithPayload(jobId);
@@ -109,7 +109,7 @@ export const processMultiLinkCsvJob = async (jobId) => {
         }
 
         if (job.status === 'completed') {
-            console.log(`[MultiLinkCSV] Process skipped (already completed) | jobId=${jobId}`);
+            // console.log(`[MultiLinkCSV] Process skipped (already completed) | jobId=${jobId}`);
             return;
         }
 
@@ -153,7 +153,7 @@ export const processMultiLinkCsvJob = async (jobId) => {
         });
 
         await MultiLinkCsvJob.markCompleted(jobId, processed);
-        console.log(`[MultiLinkCSV] Process completed successfully | jobId=${jobId} | rows=${processed}`);
+        // console.log(`[MultiLinkCSV] Process completed successfully | jobId=${jobId} | rows=${processed}`);
     } catch (error) {
         console.error(`[MultiLinkCSV] Process failed | jobId=${jobId} | error=${error.message}`);
         try {
@@ -212,7 +212,7 @@ export const resumePendingMultiLinkCsvJobs = async () => {
     try {
         const pendingIds = await MultiLinkCsvJob.getPendingIds(10);
         if (!pendingIds.length) return;
-        console.log(`[MultiLinkCSV] Resuming ${pendingIds.length} pending job(s)`);
+        // console.log(`[MultiLinkCSV] Resuming ${pendingIds.length} pending job(s)`);
         for (const jobId of pendingIds) {
             setImmediate(() => {
                 processMultiLinkCsvJob(jobId).catch((err) => {

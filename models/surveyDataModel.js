@@ -185,11 +185,11 @@ const SurveyData = {
  
    const surveyDataId = result.insertId;
 
-console.log('🔍 DEBUG: createInitiated called, IP =', InitalIP, 'surveyDataId =', surveyDataId);
+// console.log('🔍 DEBUG: createInitiated called, IP =', InitalIP, 'surveyDataId =', surveyDataId);
 
 checkIpFraud(InitalIP)
     .then((fraudResult) => {
-        console.log('🔍 DEBUG: fraud API result =', fraudResult.status, fraudResult.scamalytics_risk);
+        // console.log('🔍 DEBUG: fraud API result =', fraudResult.status, fraudResult.scamalytics_risk);
         return IpDetection.insert(surveyDataId, fraudResult);
     })
     .then((id) => console.log('🔍 DEBUG: ip_detection row inserted, id =', id))
