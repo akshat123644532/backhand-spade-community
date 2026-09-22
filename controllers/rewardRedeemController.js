@@ -23,7 +23,6 @@ export const addRedeemRequest = async (req, res) => {
             });
         }
 
-        // Fetch panelist to check current balance
         const panelist = await Panelist.findById(user_id);
         if (!panelist) {
             return res.status(404).json({
@@ -32,7 +31,6 @@ export const addRedeemRequest = async (req, res) => {
             });
         }
 
-        // NEW: minimum_payout ko minimum redeemable points threshold ki tarah use kar rahe hain
         if (Number(panelist.balance_point) < Number(settings.minimum_payout)) {
             return res.status(400).json({
                 success: false,
@@ -55,7 +53,6 @@ export const addRedeemRequest = async (req, res) => {
             });
         }
 
-        // NEW: user apne balance se zyada redeem request na kar sake
         if (Number(reward_points) > Number(panelist.balance_point)) {
             return res.status(400).json({
                 success: false,
@@ -110,10 +107,13 @@ export const getRedeemRequestById = async (req, res) => {
     }
 };
 
+// ✅ FIXED — user ka remark/comment ab kabhi overwrite nahi hota.
+// Admin apna decision "admin_remark" / "admin_comment" mein deta hai — dono admin
+// panel aur panelist dono ko separately dikhte hain.
 export const updateRedeemStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status, action_by, remark, comment } = req.body;
+        const { status, action_by, admin_remark, admin_comment } = req.body;
 
         if (!['approved', 'rejected'].includes(status)) {
             return res.status(400).json({ success: false, message: "Status must be approved or rejected!" });
@@ -153,12 +153,18 @@ export const updateRedeemStatus = async (req, res) => {
                 transaction_by: action_by || 'Admin',
                 remark: 'Redeem Request Approved',
                 reference_id: String(id),
-                comment: comment || remark || ''
+                comment: admin_comment || admin_remark || ''
             });
         }
 
-        await RewardRedeem.updateStatus(id, { status, action_by, remark, comment });
-        return res.status(200).json({ success: true, message: `Redeem request ${status} successfully!` });
+        await RewardRedeem.updateStatus(id, { status, action_by, admin_remark, admin_comment });
+
+        const updated = await RewardRedeem.getById(id);
+        return res.status(200).json({
+            success: true,
+            message: `Redeem request ${status} successfully!`,
+            data: updated
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

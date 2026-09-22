@@ -3,45 +3,136 @@ import jwt from 'jsonwebtoken';
 import PanelistPortal from '../models/panelistPortalModel.js';
 import { submitRedeemRequest as submitRedeemRequestService } from '../services/panelistRedeemService.js';
 import { sendEmail } from '../config/mailer.js';
-
+import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
+import { checkIpFraud } from '../utils/scamalyticsHelper.js';
+import { getDeviceInfo } from '../utils/deviceInfoHelper.js';
 export const login = async (req, res) => {
+
+    console.log('🔥 PANELIST LOGIN CONTROLLER RUNNING');
+
     try {
         const { email, password } = req.body;
 
         if (!email || !password) {
-            return res.status(400).json({ success: false, message: "Email and password are required!" });
+            return res.status(400).json({
+                success: false,
+                message: 'Email and password are required.'
+            });
         }
 
         const panelist = await PanelistPortal.getByEmail(email);
+
         if (!panelist) {
-            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password.'
+            });
         }
 
         if (panelist.status !== 'active') {
-            return res.status(403).json({ success: false, message: "Your account is not active!" });
+            return res.status(403).json({
+                success: false,
+                message: 'Your account is inactive.'
+            });
         }
 
         if (panelist.questionnaire !== 'yes') {
             return res.status(403).json({
                 success: false,
-                message: "Please complete your questionnaire to activate login access!"
+                message: 'Questionnaire access is not enabled for this account.'
             });
         }
 
         const isMatch = await bcrypt.compare(password, panelist.password);
+
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password.'
+            });
         }
 
         const token = jwt.sign(
-            { id: panelist.id, email: panelist.email },
+            {
+                id: panelist.id,
+                email: panelist.email
+            },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            {
+                expiresIn: '7d'
+            }
         );
+
+        const userAgent = req.headers['user-agent'] || '';
+
+        const forwarded = req.headers['x-forwarded-for'];
+
+        const ip =
+            forwarded
+                ? forwarded.split(',')[0].trim()
+                : req.socket?.remoteAddress || req.ip || null;
+
+        let fraudData = null;
+
+        try {
+            fraudData = await checkIpFraud(ip);
+        } catch (error) {
+            fraudData = null;
+        }
+
+        const deviceInfo = getDeviceInfo(userAgent);
+
+
+
+        try {
+            await PanelistLoginDetails.create({
+                panelist_id: panelist.id,
+
+                ip_address: fraudData?.ip || ip,
+
+                user_agent: userAgent,
+
+                browser: deviceInfo.browser,
+                browser_version: deviceInfo.browser_version,
+
+                os: deviceInfo.os,
+                os_version: deviceInfo.os_version,
+
+                device_type: deviceInfo.device_type,
+                device_name: deviceInfo.device_name,
+
+                fraud_score: fraudData?.scamalytics_score,
+                fraud_risk: fraudData?.scamalytics_risk,
+
+                vpn: fraudData?.is_vpn,
+                tor: false,
+                proxy: fraudData?.is_resproxy,
+                datacenter: fraudData?.is_datacenter,
+
+                country: fraudData?.ip_country_name,
+                country_code: fraudData?.ip_country_code,
+                state: fraudData?.ip_state_name,
+                city: fraudData?.ip_city,
+
+                postal_code: null,
+                latitude: null,
+                longitude: null,
+
+                asn: null,
+
+                isp_name: fraudData?.scamalytics_isp,
+                organization_name: fraudData?.scamalytics_org
+            });
+        } catch (loginDetailsError) {
+            console.error(
+                'Panelist login details save failed:',
+                loginDetailsError.message
+            );
+        }
 
         return res.status(200).json({
             success: true,
-            message: "Login successful!",
+            message: 'Login successful!',
             data: {
                 token,
                 panelist: {
@@ -52,10 +143,14 @@ export const login = async (req, res) => {
             }
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error('Panelist login error:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error.'
+        });
     }
 };
-
 export const getDashboard = async (req, res) => {
     try {
         const id = req.panelist.id;
