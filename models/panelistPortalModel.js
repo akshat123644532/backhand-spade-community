@@ -62,16 +62,19 @@ const PanelistPortal = {
     },
 
     getRedeemRequests: async (id, { page = 1, limit = 10 } = {}) => {
-        const p = parseInt(page) || 1;
-        const l = parseInt(limit) || 10;
-        const offset = (p - 1) * l;
-        const [rows] = await db.query(
-            `SELECT id, reward_points, status, action_by, action_date, remark, comment, created_at
-             FROM reward_redeem_requests
-             WHERE user_id = ?
-             ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-            [id, Number(l), Number(offset)]
-        );
+    const p = parseInt(page) || 1;
+    const l = parseInt(limit) || 10;
+    const offset = (p - 1) * l;
+    const [rows] = await db.query(
+        `SELECT id, reward_points, status, remark, comment,
+                admin_remark, admin_comment,
+                action_by, action_date, created_at
+         FROM reward_redeem_requests
+         WHERE user_id = ?
+         ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+        [id, Number(l), Number(offset)]
+    );
+   
         const [countResult] = await db.query(
             `SELECT COUNT(*) as total FROM reward_redeem_requests WHERE user_id = ?`, [id]
         );
