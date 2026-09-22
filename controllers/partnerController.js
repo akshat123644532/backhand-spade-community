@@ -153,7 +153,7 @@ export const addPartner = async (req, res) => {
                     toEmail: email,
                     toName: name,
                     subject,
-                    htmlBody: body.replace(/\n/g, '<br>'),
+                    htmlBody: body,
                 });
                 // console.log('DEBUG result:', result);
                 if (!result) {

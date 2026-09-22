@@ -59,6 +59,7 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 app.use(cors());
+app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 app.set("trust proxy", 2);
 // console.log(encrypt("123456"));
