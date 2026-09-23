@@ -186,14 +186,14 @@ export const signup = async (req, res) => {
                         questionnaire_link: questionnaireLink
                     });
 
-                const htmlBody =
-                    linkifyPlainTextUrls(body).replace(/\n/g, '<br>');
+                // const htmlBody =
+                //     linkifyPlainTextUrls(body);
 
                 const result = await sendTransactionalEmail({
                     toEmail: email,
                     toName: name,
                     subject,
-                    htmlBody: htmlBody
+                    htmlBody: body
                 });
                 if (!result) {
                     emailWarning = result.error || 'Signup email could not be sent.';
