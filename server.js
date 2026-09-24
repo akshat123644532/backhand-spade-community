@@ -47,7 +47,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
-
+import contactUsRoutes from './routes/contactUsRoutes.js';
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -101,6 +101,7 @@ app.use('/api/questionnaire', panelistSubmissionRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/panelist-portal', panelistPortalRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/contact-us', contactUsRoutes);
 app.use('/api/find-user', findUserRoutes);
 app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/api-integrations', apiIntegrationRoutes);

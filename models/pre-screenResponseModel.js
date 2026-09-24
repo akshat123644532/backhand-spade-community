@@ -6,14 +6,25 @@ const STATUS_INITIATED = 'IN_PROGRESS';
 const surveyPreScreenResponse = {
     STATUS_INITIATED,
 
-    createInitiated: async ({ survey_data_id, UserId, }) => {
-
+    createInitiated: async ({
+        survey_data_id,
+        user_id
+    }) => {
+    
         const [result] = await db.execute(
             `INSERT INTO \`${TABLE}\`
-             (user_id, survey_data_id, status, created_at, updated_at)
-             VALUES (?, ?, ?, NOW(), NOW())`,
-            [UserId, survey_data_id, STATUS_INITIATED]
+            (
+                user_id,
+                survey_data_id,
+                status
+            )
+            VALUES (?, ?, 'NOT_STARTED')`,
+            [
+                user_id,
+                survey_data_id
+            ]
         );
+    
         return result.insertId;
     },
 
@@ -27,14 +38,23 @@ const surveyPreScreenResponse = {
         );
         return result[0] || null;
     },
-    getPreScreenResponseIdBySurveyDataIdUserId: async (survey_data_id, UserId) => {
+    getPreScreenResponseIdBySurveyDataIdUserId: async (
+        survey_data_id,
+        user_id
+    ) => {
+    
         const [result] = await db.execute(
-            `SELECT id FROM \`${TABLE}\`
+            `SELECT id
+             FROM \`${TABLE}\`
              WHERE survey_data_id = ?
                AND LOWER(user_id) = LOWER(?)
              LIMIT 1`,
-            [survey_data_id, UserId]
+            [
+                survey_data_id,
+                user_id
+            ]
         );
+    
         return result[0] || null;
     },
     updateStatus: async ({ id, status }) => {
