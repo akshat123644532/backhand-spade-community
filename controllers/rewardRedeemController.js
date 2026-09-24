@@ -2,7 +2,7 @@ import RewardRedeem from '../models/rewardRedeemModel.js';
 import Panelist from '../models/Panelistmodel.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
 import RewardSetting from '../models/rewardSettingModel.js';
-import EmailTemplate from '../models/emailTemplateModel.js';
+import EmailTemplate from '../models/Emailtemplatemodel.js';
 import { sendTransactionalEmail } from '../services/emailServices.js';
 export const addRedeemRequest = async (req, res) => {
     try {
