@@ -367,6 +367,7 @@ export const updatePartner = async (req, res) => {
 export const deletePartner = async (req, res) => {
     try {
         const { id } = req.params;
+        if (id === '11') return res.status(400).json({ success: false, message: "You cannot delete the default partner!" });
         const partner = await Partner.getById(id);
         if (!partner) return res.status(404).json({ success: false, message: "Partner not found!" });
 
