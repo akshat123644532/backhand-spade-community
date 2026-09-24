@@ -421,7 +421,7 @@ export const getAllPanelists = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            data: panelists.map((panelist) => serializePanelistImage(panelist, req))
+            data: panelists.data.map((panelist) => serializePanelistImage(panelist, req))
         });
     } catch (error) {
         console.error('GET ALL PANELISTS ERROR:', error);
