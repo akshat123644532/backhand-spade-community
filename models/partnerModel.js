@@ -114,7 +114,7 @@ const Partner = {
     },
 
     delete: async (id) => {
-        const [result] = await db.execute(`UPDATE partners SET deleted_at = NOW() WHERE id = ?`, [id]);
+        const [result] = await db.execute(`UPDATE partners SET deleted_at = NOW() WHERE id = ? AND id != 11`, [id]);
         return result;
     }
 };
