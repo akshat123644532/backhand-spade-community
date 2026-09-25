@@ -177,58 +177,73 @@ const SurveyData = {
         return rows[0] || null;
     },
 
-    createInitiated: async ({
-        partnerid,
-        projectid,
-        project_url_id,
-        UserId,
-        InitalIP
-    }) => {
-    
-        // Resolve GeoLocation from IP.
-        // Geo lookup failure should NOT stop survey initiation.
-        let geoLabel = null;
-    
-        try {
-            geoLabel =
-                await resolveGeoLocationLabel(
-                    InitalIP
-                );
-        } catch (error) {
-            console.warn(
-                '[SurveyData] GeoLocation lookup failed:',
-                error.message
+  createInitiated: async ({
+    partnerid,
+    projectid,
+    project_url_id,
+    UserId,
+    InitalIP
+}) => {
+
+    // Resolve GeoLocation from IP.
+    // Geo lookup failure should NOT stop survey initiation.
+    let geoLabel = null;
+
+    try {
+        geoLabel =
+            await resolveGeoLocationLabel(
+                InitalIP
             );
-    
-            geoLabel = null;
-        }
-    
-        const [result] = await db.execute(
-            `INSERT INTO \`${TABLE}\`
-            (
-                partnerid,
-                projectid,
-                project_url_id,
-                UserId,
-                InitalIP,
-                GeoLocation,
-                StartDate,
-                Status
-            )
-            VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
-            [
-                partnerid,
-                projectid,
-                project_url_id,
-                UserId,
-                InitalIP,
-                geoLabel,
-                STATUS_INITIATED
-            ]
+    } catch (error) {
+        console.warn(
+            '[SurveyData] GeoLocation lookup failed:',
+            error.message
         );
-    
-        return result.insertId;
-    },
+
+        geoLabel = null;
+    }
+
+    const [result] = await db.execute(
+        `INSERT INTO \`${TABLE}\`
+        (
+            partnerid,
+            projectid,
+            project_url_id,
+            UserId,
+            InitalIP,
+            GeoLocation,
+            StartDate,
+            Status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+        [
+            partnerid,
+            projectid,
+            project_url_id,
+            UserId,
+            InitalIP,
+            geoLabel,
+            STATUS_INITIATED
+        ]
+    );
+
+    const insertId = result.insertId;
+
+    // 👇 NEW: run fraud/IP detection and store it against this survey_data row.
+    // Failure here should NOT stop survey initiation, so it's wrapped in try/catch.
+    try {
+        const fraudResult = await checkIpFraud(InitalIP);
+        await IpDetection.insert(insertId, fraudResult);
+    } catch (error) {
+        console.warn(
+            '[SurveyData] Scamalytics/IP detection failed:',
+            error.message
+        );
+    }
+
+    return insertId;
+},
+   
 
    
     backfillGeoLocationIfEmpty: async ({ id, ip }) => {
