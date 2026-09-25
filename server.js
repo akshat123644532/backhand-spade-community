@@ -111,7 +111,7 @@ app.use('/dosurvey', supplierRedirectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/project-reports', reportRoutes);
-
+app.use('/api/api-keys', apiKeyRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
