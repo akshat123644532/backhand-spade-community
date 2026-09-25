@@ -44,7 +44,7 @@ const Admin = {
     },
 
     delete: async (id) => {
-        const [result] = await db.execute(`DELETE FROM admins WHERE id = ?`, [id]);
+        const [result] = await db.execute(`DELETE FROM admins WHERE id = ? AND id!=${process.env.SUPER_ADMIN_ID}`, [id]);
         return result;
     },
 
