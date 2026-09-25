@@ -3,7 +3,8 @@ import Partner from '../models/partnerModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { decrypt, encrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
-
+import { sendTransactionalEmail } from '../services/emailServices.js';
+import EmailTemplate from '../models/Emailtemplatemodel.js';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
@@ -128,8 +129,53 @@ export const addPartner = async (req, res) => {
         });
 
         await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'Partner', description: `Partner "${name}" added with code ${code}`, ip_address: req.ip });
+       
+        let emailWarning = null;
+        try {
+            const template = await EmailTemplate.getByKey('partner-welcome-email');
+            if (!template) {
+                emailWarning = 'Project Manager Login email template not found or inactive.';
+            } else {
+                const login_url = `${process.env.BASE_URL}/auth`;
+                const { subject, body } = EmailTemplate.render(template, {
+                    user_name: name,
+                    login_url,
+                    user_email: email,
+                    password: plainPassword,
+                });
+                // console.log('DEBUG result:', result);
+                // console.log('DEBUG email:', email);
+                // console.log('DEBUG name:', name);
+                // console.log('DEBUG subject:', subject);
+                // console.log('DEBUG body:', body);
+                // 🔽 Swapped: SMTP → ZeptoMail
+                const result = await sendTransactionalEmail({
+                    toEmail: email,
+                    toName: name,
+                    subject,
+                    htmlBody: body,
+                });
+                // console.log('DEBUG result:', result);
+                if (!result) {
+                    emailWarning = result.error || 'Welcome email could not be sent.';
+                    // console.error('PROJECT MANAGER WELCOME EMAIL FAILED:', emailWarning);
+                } else {
+                    console.log(`PARTNER WELCOME EMAIL SENT TO: ${email} ✅`);
+                }
+            }
+        } catch (mailError) {
+            emailWarning = mailError?.message || 'Welcome email could not be sent.';
+            console.error('PARTNER WELCOME EMAIL FAILED:', emailWarning);
+        }
 
-        return res.status(201).json({ success: true, message: "Partner added successfully!", data: { code, name, email } });
+        return res.status(201).json({
+            success: true,
+            message: emailWarning
+                ? 'Partner added successfully, but welcome email could not be sent.'
+                : 'Partner added successfully!',
+            ...(emailWarning && { email_warning: emailWarning }),
+            data: { code, name, email },
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -321,6 +367,7 @@ export const updatePartner = async (req, res) => {
 export const deletePartner = async (req, res) => {
     try {
         const { id } = req.params;
+        if (id === '11') return res.status(400).json({ success: false, message: "You cannot delete the default partner!" });
         const partner = await Partner.getById(id);
         if (!partner) return res.status(404).json({ success: false, message: "Partner not found!" });
 

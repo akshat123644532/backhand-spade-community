@@ -39,25 +39,25 @@ const SurveyData = {
      * Serialize initiations for a partner/project/url scope (UserId + conditional UniqueIP races).
      * Uses MySQL named locks — no schema change required.
      */
-    withInitLock: async (lockKey, fn) => {
-        const name = String(lockKey || 'survey_init').slice(0, 64);
-        const [rows] = await db.query('SELECT GET_LOCK(?, 10) AS acquired', [name]);
-        if (!Number(rows?.[0]?.acquired)) {
-            const err = new Error('Survey initiation is busy. Please retry.');
-            err.statusCode = 503;
-            err.code = 'INIT_LOCK_TIMEOUT';
-            throw err;
-        }
-        try {
-            return await fn();
-        } finally {
-            try {
-                await db.query('SELECT RELEASE_LOCK(?)', [name]);
-            } catch {
-                // ignore release errors
-            }
-        }
-    },
+    // withInitLock: async (lockKey, fn) => {
+    //     const name = String(lockKey || 'survey_init').slice(0, 64);
+    //     const [rows] = await db.query('SELECT GET_LOCK(?, 10) AS acquired', [name]);
+    //     if (!Number(rows?.[0]?.acquired)) {
+    //         const err = new Error('Survey initiation is busy. Please retry.');
+    //         err.statusCode = 503;
+    //         err.code = 'INIT_LOCK_TIMEOUT';
+    //         throw err;
+    //     }
+    //     try {
+    //         return await fn();
+    //     } finally {
+    //         try {
+    //             await db.query('SELECT RELEASE_LOCK(?)', [name]);
+    //         } catch {
+    //             // ignore release errors
+    //         }
+    //     }
+    // },
 
     /**
      * Find a completed/in-progress (non-Initiated) row for the same access combo.
@@ -99,7 +99,13 @@ const SurveyData = {
     },
 
     /** Any row for this partner/project/url + UserId (any IP). */
-    findByUserId: async ({ partnerid, projectid, project_url_id, UserId }) => {
+    findByUserId: async ({
+        partnerid,
+        projectid,
+        project_url_id,
+        UserId
+    }) => {
+    
         const [rows] = await db.execute(
             `SELECT *
              FROM \`${TABLE}\`
@@ -109,8 +115,14 @@ const SurveyData = {
                AND LOWER(UserId) = LOWER(?)
              ORDER BY id DESC
              LIMIT 1`,
-            [partnerid, projectid, project_url_id, UserId]
+            [
+                partnerid,
+                projectid,
+                project_url_id,
+                UserId
+            ]
         );
+    
         return rows[0] || null;
     },
 
@@ -165,40 +177,58 @@ const SurveyData = {
         return rows[0] || null;
     },
 
-    createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
-    await SurveyData.ensureIndex();
- 
-    // Resolve geo from IP — never fail initiation if lookup is unavailable
-    let geoLabel = null;
-    try {
-        geoLabel = await resolveGeoLocationLabel(InitalIP);
-    } catch {
-        geoLabel = null;
-    }
- 
-    const [result] = await db.execute(
-        `INSERT INTO \`${TABLE}\`
-         (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
-         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
-        [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
-    );
- 
-   const surveyDataId = result.insertId;
-
-console.log('🔍 DEBUG: createInitiated called, IP =', InitalIP, 'surveyDataId =', surveyDataId);
-
-checkIpFraud(InitalIP)
-    .then((fraudResult) => {
-        console.log('🔍 DEBUG: fraud API result =', fraudResult.status, fraudResult.scamalytics_risk);
-        return IpDetection.insert(surveyDataId, fraudResult);
-    })
-    .then((id) => console.log('🔍 DEBUG: ip_detection row inserted, id =', id))
-    .catch((err) => {
-        console.error('[ip_detection] failed:', err);
-    });
- 
-    return surveyDataId;
-},
+    createInitiated: async ({
+        partnerid,
+        projectid,
+        project_url_id,
+        UserId,
+        InitalIP
+    }) => {
+    
+        // Resolve GeoLocation from IP.
+        // Geo lookup failure should NOT stop survey initiation.
+        let geoLabel = null;
+    
+        try {
+            geoLabel =
+                await resolveGeoLocationLabel(
+                    InitalIP
+                );
+        } catch (error) {
+            console.warn(
+                '[SurveyData] GeoLocation lookup failed:',
+                error.message
+            );
+    
+            geoLabel = null;
+        }
+    
+        const [result] = await db.execute(
+            `INSERT INTO \`${TABLE}\`
+            (
+                partnerid,
+                projectid,
+                project_url_id,
+                UserId,
+                InitalIP,
+                GeoLocation,
+                StartDate,
+                Status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+            [
+                partnerid,
+                projectid,
+                project_url_id,
+                UserId,
+                InitalIP,
+                geoLabel,
+                STATUS_INITIATED
+            ]
+        );
+    
+        return result.insertId;
+    },
 
    
     backfillGeoLocationIfEmpty: async ({ id, ip }) => {

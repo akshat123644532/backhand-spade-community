@@ -10,7 +10,7 @@ const insertCountries = async () => {
         const filePath = path.join(__dirname, 'country1.json');
         const countries = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-        console.log(`Total countries found: ${countries.length}`);
+        // console.log(`Total countries found: ${countries.length}`);
 
         // Table create karo agar exist nahi karta
         await db.execute(`
@@ -23,7 +23,7 @@ const insertCountries = async () => {
                 calling_code VARCHAR(20) DEFAULT NULL
             )
         `);
-        console.log('Table ready!');
+        // console.log('Table ready!');
 
         // Ek ek karke insert karo
         let success = 0;
@@ -48,9 +48,9 @@ const insertCountries = async () => {
             }
         }
 
-        console.log(`✅ Inserted: ${success}`);
-        console.log(`⏭️  Skipped: ${skipped}`);
-        console.log('Done!');
+        // console.log(`✅ Inserted: ${success}`);
+        // console.log(`⏭️  Skipped: ${skipped}`);
+        // console.log('Done!');
         process.exit(0);
 
     } catch (error) {

@@ -1,3 +1,6 @@
+if (process.env.NODE_ENV !== 'production') {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -44,7 +47,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
-import apiKeyRoutes from './routes/apiKeyRoutes.js';
+import contactUsRoutes from './routes/contactUsRoutes.js';
 
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
@@ -56,6 +59,7 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 app.use(cors());
+app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 app.set("trust proxy", 2);
 // console.log(encrypt("123456"));
@@ -97,6 +101,7 @@ app.use('/api/questionnaire', panelistSubmissionRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/panelist-portal', panelistPortalRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/contact-us', contactUsRoutes);
 app.use('/api/find-user', findUserRoutes);
 app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/api-integrations', apiIntegrationRoutes);

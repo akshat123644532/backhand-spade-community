@@ -183,10 +183,25 @@ const resolvePartnerId = async (tokenData, projectid, project_url_id) => {
 
 export const addSurveyActivity = async (req, res) => {
     try {
-        const token = req.body?.token || req.query?.token;
-        const rawUidParam = req.body?.uid ?? req.query?.uid;
+        // =========================================================
+        // 1. Get token and UID
+        // =========================================================
 
-        const resolvedUid = resolveIncomingUserId(rawUidParam, { allowGenerate: true });
+        const token =
+            req.body?.token ||
+            req.query?.token;
+
+        const rawUidParam =
+            req.body?.uid ??
+            req.query?.uid;
+
+        const resolvedUid = resolveIncomingUserId(
+            rawUidParam,
+            {
+                allowGenerate: true
+            }
+        );
+
         if (resolvedUid.error) {
             return res.status(400).json({
                 success: false,
@@ -194,192 +209,529 @@ export const addSurveyActivity = async (req, res) => {
                 message: resolvedUid.error
             });
         }
+
         const UserId = resolvedUid.uid;
+
+        // =========================================================
+        // 2. Decode token
+        // =========================================================
 
         const tokenData = decodeToken(token);
 
         let partnerid =
-            tokenData.partnerid == null || tokenData.partnerid === ''
+            tokenData.partnerid == null ||
+            tokenData.partnerid === ''
                 ? null
                 : Number(tokenData.partnerid);
-        const projectid = Number(tokenData.projectid);
-        const project_url_id = Number(tokenData.projectUrlId);
-        const InitalIP = getClientIp(req);
+
+        const projectid =
+            Number(tokenData.projectid);
+
+        const project_url_id =
+            Number(tokenData.projectUrlId);
+
+        const InitalIP =
+            getClientIp(req);
+
+        // =========================================================
+        // 3. Validate token IDs
+        // =========================================================
 
         if (
-            (partnerid != null && !Number.isFinite(partnerid)) ||
+            (partnerid != null &&
+                !Number.isFinite(partnerid)) ||
             !Number.isFinite(projectid) ||
             !Number.isFinite(project_url_id)
         ) {
-            return res.status(400).json({ success: false, message: 'Invalid token ids!' });
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid token ids!'
+            });
         }
 
-        // Resolve partner from multi-link mapping when token has none
-        if (partnerid == null || !Number.isFinite(partnerid)) {
-            partnerid = await ProjectMultipleUrl.getMappedPartnerId(projectid, project_url_id);
-            if (partnerid == null || !Number.isFinite(partnerid)) {
+        // =========================================================
+        // 4. Resolve partner from multi-link mapping
+        // =========================================================
+
+        if (
+            partnerid == null ||
+            !Number.isFinite(partnerid)
+        ) {
+            partnerid =
+                await ProjectMultipleUrl.getMappedPartnerId(
+                    projectid,
+                    project_url_id
+                );
+
+            if (
+                partnerid == null ||
+                !Number.isFinite(partnerid)
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Partner to the link not mapped.'
+                    message:
+                        'Partner to the link not mapped.'
                 });
             }
         }
 
-        // Optional window check from token dates
+        // =========================================================
+        // 5. Check survey date window
+        // =========================================================
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        if (tokenData.startDate && new Date(tokenData.startDate) > today) {
-            return res.status(403).json({ success: false, message: 'Survey has not started yet!' });
-        }
-        if (tokenData.endDate && new Date(tokenData.endDate) < today) {
-            return res.status(403).json({ success: false, message: 'Survey is closed!' });
+
+        if (
+            tokenData.startDate &&
+            new Date(tokenData.startDate) > today
+        ) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'Survey has not started yet!'
+            });
         }
 
-        // Load project URL config (UniqueIP, etc.)
-        const urlInfo = await ProjectUrl.getById(project_url_id);
+        if (
+            tokenData.endDate &&
+            new Date(tokenData.endDate) < today
+        ) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'Survey is closed!'
+            });
+        }
+
+        // =========================================================
+        // 6. Load project URL configuration
+        // =========================================================
+
+        const urlInfo =
+            await ProjectUrl.getById(project_url_id);
+
         if (!urlInfo) {
             return res.status(404).json({
                 success: false,
-                message: 'Project URL not found!'
+                message:
+                    'Project URL not found!'
             });
         }
-        if (Number(urlInfo.project_id) !== projectid) {
+
+        if (
+            Number(urlInfo.project_id) !==
+            projectid
+        ) {
             return res.status(400).json({
                 success: false,
-                message: 'Token projectid does not match project_url_id!'
+                message:
+                    'Token projectid does not match project_url_id!'
             });
         }
 
-        const uniqueIpEnabled = Number(urlInfo.UniqueIP) === 1;
-        const lockKey = `sinit:${partnerid}:${projectid}:${project_url_id}`;
+        const uniqueIpEnabled =
+            Number(urlInfo.UniqueIP) === 1;
 
-        const resultPayload = await SurveyData.withInitLock(lockKey, async () => {
-            // 1) Existing UserId in scope partnerid + projectid + project_url_id
-            const existingByUser = await SurveyData.findByUserId({
-                partnerid, projectid, project_url_id, UserId
-            });
+        // =========================================================
+        // IMPORTANT
+        //
+        // NO GET_LOCK()
+        // NO withInitLock()
+        //
+        // Different users can initiate simultaneously.
+        // The database UNIQUE constraint protects against
+        // duplicate creation for the same user.
+        // =========================================================
 
-            if (existingByUser) {
-                if (SurveyData.isInitiatedStatus(existingByUser.Status)) {
-                    // Same user + Initiated → resume; backfill GeoLocation if previous attempt missed it
-                    const resumedRow = await SurveyData.backfillGeoLocationIfEmpty({
-                        id: existingByUser.id,
-                        ip: InitalIP || existingByUser.InitalIP
-                    });
 
-                    const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
-                        project_id: projectid,
-                        project_url_id,
-                        partner_id: partnerid,
-                        uid: UserId
-                    });
-                    return {
-                        httpStatus: 200,
-                        body: {
-                            success: true,
-                            existing: true,
-                            message: 'Existing survey session resumed.',
-                            data: {
-                                ...(resumedRow || existingByUser),
-                                UserId,
-                                uid: UserId,
-                                uid_generated: !!resolvedUid.generated,
-                                multi_link_id: multiLinkRow?.id || null,
-                                Vender_UserName: multiLinkRow?.Vender_UserName || UserId
-                            }
-                        }
-                    };
-                }
+        // =========================================================
+        // 7. Check whether this UserId already exists
+        // =========================================================
 
-                // Non-Initiated (completed / terminate / etc.) → block duplicate UserId
-                console.warn(
-                    `[SurveyActivity] DUPLICATE_USER_ID partnerid=${partnerid} projectid=${projectid} ` +
-                    `project_url_id=${project_url_id} existingId=${existingByUser.id} status=${existingByUser.Status}`
-                );
-                return {
-                    httpStatus: 403,
-                    body: {
-                        success: false,
-                        code: 'DUPLICATE_USER_ID',
-                        message: 'The project has already been initiated with this UserId.',
-                        data: { id: existingByUser.id, Status: existingByUser.Status }
-                    }
-                };
-            }
-
-            // 2) UniqueIP = 1 → same partner/project/url + InitalIP cannot start again (any UserId)
-            if (uniqueIpEnabled) {
-                const existingByIp = await SurveyData.findByInitialIp({
-                    partnerid, projectid, project_url_id, InitalIP
-                });
-                if (existingByIp) {
-                    console.warn(
-                        `[SurveyActivity] DUPLICATE_IP partnerid=${partnerid} projectid=${projectid} ` +
-                        `project_url_id=${project_url_id} existingId=${existingByIp.id}`
-                    );
-                    return {
-                        httpStatus: 403,
-                        body: {
-                            success: false,
-                            code: 'DUPLICATE_IP',
-                            message: 'Survey already initiated from this IP address.',
-                            data: { id: existingByIp.id, Status: existingByIp.Status }
-                        }
-                    };
-                }
-            }
-
-            // 3) Create new survey_data (+ pre-screen) — GeoLocation derived server-side from IP
-            const multiLinkRow = await ProjectMultipleUrl.bindUidOnSurveyStart({
-                project_id: projectid,
+        const existingByUser =
+            await SurveyData.findByUserId({
+                partnerid,
+                projectid,
                 project_url_id,
-                partner_id: partnerid,
-                uid: UserId
+                UserId
             });
 
-            const id = await SurveyData.createInitiated({
-                partnerid, projectid, project_url_id, UserId, InitalIP
-            });
+        if (existingByUser) {
 
-            const existingPreScreen =
-                await surveyPreScreenResponse.getPreScreenResponseIdBySurveyDataIdUserId(id, UserId);
-            if (!existingPreScreen) {
-                const preScreenAdded = await surveyPreScreenResponse.createInitiated({
-                    survey_data_id: id,
-                    UserId
+            // -----------------------------------------------------
+            // Existing initiated survey → resume
+            // -----------------------------------------------------
+
+            if (
+                SurveyData.isInitiatedStatus(
+                    existingByUser.Status
+                )
+            ) {
+
+                const resumedRow =
+                    await SurveyData
+                        .backfillGeoLocationIfEmpty({
+                            id: existingByUser.id,
+                            ip:
+                                InitalIP ||
+                                existingByUser.InitalIP
+                        });
+
+                const multiLinkRow =
+                    await ProjectMultipleUrl
+                        .bindUidOnSurveyStart({
+                            project_id: projectid,
+                            project_url_id,
+                            partner_id: partnerid,
+                            uid: UserId
+                        });
+
+                return res.status(200).json({
+                    success: true,
+                    existing: true,
+                    message:
+                        'Existing survey session resumed.',
+                    data: {
+                        ...(resumedRow ||
+                            existingByUser),
+
+                        UserId,
+
+                        uid: UserId,
+
+                        uid_generated:
+                            !!resolvedUid.generated,
+
+                        multi_link_id:
+                            multiLinkRow?.id ||
+                            null,
+
+                        Vender_UserName:
+                            multiLinkRow
+                                ?.Vender_UserName ||
+                            UserId
+                    }
                 });
-                if (!preScreenAdded) {
-                    return {
-                        httpStatus: 400,
-                        body: {
-                            success: false,
-                            message: 'Failed to add pre-screen response!'
-                        }
-                    };
-                }
             }
 
-            const row = await SurveyData.getById(id);
-            return {
-                httpStatus: 201,
-                body: {
-                    success: true,
-                    existing: false,
-                    message: 'Survey activity initiated successfully!',
-                    data: {
-                        ...row,
-                        UserId,
-                        uid: UserId,
-                        uid_generated: !!resolvedUid.generated,
-                        multi_link_id: multiLinkRow?.id || null,
-                        Vender_UserName: multiLinkRow?.Vender_UserName || UserId
-                    }
+            // -----------------------------------------------------
+            // Existing completed / terminated / etc.
+            // -----------------------------------------------------
+
+            console.warn(
+                `[SurveyActivity] DUPLICATE_USER_ID ` +
+                `partnerid=${partnerid} ` +
+                `projectid=${projectid} ` +
+                `project_url_id=${project_url_id} ` +
+                `existingId=${existingByUser.id} ` +
+                `status=${existingByUser.Status}`
+            );
+
+            return res.status(403).json({
+                success: false,
+                code: 'DUPLICATE_USER_ID',
+                message:
+                    'The project has already been initiated with this UserId.',
+                data: {
+                    id: existingByUser.id,
+                    Status: existingByUser.Status
                 }
-            };
+            });
+        }
+
+
+        // =========================================================
+        // 8. Unique IP check
+        // =========================================================
+
+        if (uniqueIpEnabled) {
+
+            const existingByIp =
+                await SurveyData.findByInitialIp({
+                    partnerid,
+                    projectid,
+                    project_url_id,
+                    InitalIP
+                });
+
+            if (existingByIp) {
+
+                console.warn(
+                    `[SurveyActivity] DUPLICATE_IP ` +
+                    `partnerid=${partnerid} ` +
+                    `projectid=${projectid} ` +
+                    `project_url_id=${project_url_id} ` +
+                    `existingId=${existingByIp.id}`
+                );
+
+                return res.status(403).json({
+                    success: false,
+                    code: 'DUPLICATE_IP',
+                    message:
+                        'Survey already initiated from this IP address.',
+                    data: {
+                        id: existingByIp.id,
+                        Status:
+                            existingByIp.Status
+                    }
+                });
+            }
+        }
+
+
+        // =========================================================
+        // 9. Create survey_data
+        //
+        // IMPORTANT:
+        // No GET_LOCK here.
+        //
+        // If two requests for the same user arrive simultaneously,
+        // the UNIQUE KEY on survey_data decides which INSERT wins.
+        // =========================================================
+
+        let id;
+
+        try {
+
+            id =
+                await SurveyData.createInitiated({
+                    partnerid,
+                    projectid,
+                    project_url_id,
+                    UserId,
+                    InitalIP
+                });
+
+        } catch (error) {
+
+            // =====================================================
+            // Concurrent duplicate
+            // =====================================================
+
+            if (error.code === 'ER_DUP_ENTRY') {
+
+                console.warn(
+                    `[SurveyActivity] CONCURRENT_DUPLICATE ` +
+                    `partnerid=${partnerid} ` +
+                    `projectid=${projectid} ` +
+                    `project_url_id=${project_url_id} ` +
+                    `UserId=${UserId}`
+                );
+
+                // Fetch the record created by the other request
+                const existing =
+                    await SurveyData.findByUserId({
+                        partnerid,
+                        projectid,
+                        project_url_id,
+                        UserId
+                    });
+
+                if (!existing) {
+                    throw error;
+                }
+
+                // -------------------------------------------------
+                // Existing initiated session → resume
+                // -------------------------------------------------
+
+                if (
+                    SurveyData.isInitiatedStatus(
+                        existing.Status
+                    )
+                ) {
+
+                    const resumedRow =
+                        await SurveyData
+                            .backfillGeoLocationIfEmpty({
+                                id: existing.id,
+                                ip:
+                                    InitalIP ||
+                                    existing.InitalIP
+                            });
+
+                    const multiLinkRow =
+                        await ProjectMultipleUrl
+                            .bindUidOnSurveyStart({
+                                project_id:
+                                    projectid,
+                                project_url_id,
+                                partner_id:
+                                    partnerid,
+                                uid: UserId
+                            });
+
+                    return res.status(200).json({
+                        success: true,
+                        existing: true,
+                        message:
+                            'Existing survey session resumed.',
+                        data: {
+                            ...(resumedRow ||
+                                existing),
+
+                            UserId,
+
+                            uid: UserId,
+
+                            uid_generated:
+                                !!resolvedUid.generated,
+
+                            multi_link_id:
+                                multiLinkRow?.id ||
+                                null,
+
+                            Vender_UserName:
+                                multiLinkRow
+                                    ?.Vender_UserName ||
+                                UserId
+                        }
+                    });
+                }
+
+                // -------------------------------------------------
+                // Existing completed / terminated
+                // -------------------------------------------------
+
+                return res.status(403).json({
+                    success: false,
+                    code:
+                        'DUPLICATE_USER_ID',
+                    message:
+                        'The project has already been initiated with this UserId.',
+                    data: {
+                        id: existing.id,
+                        Status:
+                            existing.Status
+                    }
+                });
+            }
+
+            // Any other DB error
+            throw error;
+        }
+
+
+        // =========================================================
+        // 10. Bind UID to multi-link
+        //
+        // Do this AFTER successful survey_data creation.
+        // =========================================================
+
+        const multiLinkRow =
+            await ProjectMultipleUrl
+                .bindUidOnSurveyStart({
+                    project_id: projectid,
+                    project_url_id,
+                    partner_id: partnerid,
+                    uid: UserId
+                });
+
+
+        // =========================================================
+        // 11. Create pre-screen response
+        // =========================================================
+
+        const existingPreScreen =
+            await surveyPreScreenResponse
+                .getPreScreenResponseIdBySurveyDataIdUserId(
+                    id,
+                    UserId
+                );
+
+        if (!existingPreScreen) {
+
+            try {
+
+                const preScreenAdded =
+                    await surveyPreScreenResponse
+                        .createInitiated({
+                            survey_data_id: id,
+                            user_id: UserId
+                        });
+
+                if (!preScreenAdded) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            'Failed to add pre-screen response!'
+                    });
+                }
+
+            } catch (error) {
+
+                // =================================================
+                // Another concurrent request may have already
+                // created the pre-screen row.
+                //
+                // UNIQUE KEY:
+                // user_id + survey_data_id
+                // =================================================
+
+                if (
+                    error.code ===
+                    'ER_DUP_ENTRY'
+                ) {
+
+                    console.warn(
+                        `[SurveyActivity] CONCURRENT_PRE_SCREEN_DUPLICATE ` +
+                        `surveyDataId=${id} ` +
+                        `UserId=${UserId}`
+                    );
+
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+
+        // =========================================================
+        // 12. Get final survey record
+        // =========================================================
+
+        const row =
+            await SurveyData.getById(id);
+
+
+        // =========================================================
+        // 13. Success
+        // =========================================================
+
+        return res.status(201).json({
+            success: true,
+            existing: false,
+            message:
+                'Survey activity initiated successfully!',
+            data: {
+                ...row,
+
+                UserId,
+
+                uid: UserId,
+
+                uid_generated:
+                    !!resolvedUid.generated,
+
+                multi_link_id:
+                    multiLinkRow?.id ||
+                    null,
+
+                Vender_UserName:
+                    multiLinkRow
+                        ?.Vender_UserName ||
+                    UserId
+            }
         });
 
-        return res.status(resultPayload.httpStatus).json(resultPayload.body);
     } catch (error) {
+
+        console.error(
+            '[SurveyActivity] Error:',
+            error
+        );
+
         return sendError(res, error);
     }
 };
@@ -513,7 +865,8 @@ export const getSurveyPreScreen = async (req, res) => {
         }
 
         // IN_PROGRESS / Initiated → return questions for this user
-        const group = await QuestionnaireGroup.getById(preScreenId);
+        const group = await QuestionnaireGroup.getById(preScreenId,preScreenResponseStatus.id);
+        
         if (!group) {
             return res.status(404).json({
                 success: false,

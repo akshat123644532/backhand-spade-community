@@ -3,6 +3,7 @@ import ProjectManager from '../models/projectManagerModel.js';
 import EmailTemplate from '../models/Emailtemplatemodel.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { sendEmail } from '../config/mailer.js';
+import { sendTransactionalEmail } from '../services/emailServices.js';
 import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -62,14 +63,17 @@ export const loginProjectManager = async (req, res) => {
 export const addProjectManager = async (req, res) => {
     try {
         const { name, email, password, confirm_password } = req.body;
-        if (!name || !email || !password || !confirm_password) return res.status(400).json({ success: false, message: "All fields are required!" });
+        if (!name || !email || !password || !confirm_password)
+            return res.status(400).json({ success: false, message: "All fields are required!" });
 
         const plainPassword = decrypt(password);
         const plainConfirmPassword = decrypt(confirm_password);
-        if (plainPassword !== plainConfirmPassword) return res.status(400).json({ success: false, message: "Passwords do not match!" });
+        if (plainPassword !== plainConfirmPassword)
+            return res.status(400).json({ success: false, message: "Passwords do not match!" });
 
         const emailExists = await ProjectManager.findByEmail(email);
-        if (emailExists) return res.status(400).json({ success: false, message: "Email already registered!" });
+        if (emailExists)
+            return res.status(400).json({ success: false, message: "Email already registered!" });
 
         const code = await ProjectManager.generateCode();
         const hashedPassword = await encryptPasswordForStorage(plainPassword);
@@ -77,7 +81,13 @@ export const addProjectManager = async (req, res) => {
 
         await ProjectManager.create({ code, name, email, password: hashedPassword, profile_image });
 
-        await logActivity({ admin_id: req.user?.id, action: 'ADD', module: 'ProjectManager', description: `Project Manager "${name}" added`, ip_address: req.ip });
+        await logActivity({
+            admin_id: req.user?.id,
+            action: 'ADD',
+            module: 'ProjectManager',
+            description: `Project Manager "${name}" added`,
+            ip_address: req.ip,
+        });
 
         let emailWarning = null;
         try {
@@ -90,17 +100,24 @@ export const addProjectManager = async (req, res) => {
                     user_name: name,
                     login_url,
                     user_email: email,
-                    password: plainPassword
+                    password: plainPassword,
                 });
-
-                const result = await sendEmail({
-                    to: email,
+                // console.log('DEBUG result:', result);
+                // console.log('DEBUG email:', email);
+                // console.log('DEBUG name:', name);
+                // console.log('DEBUG subject:', subject);
+                // console.log('DEBUG body:', body);
+                // 🔽 Swapped: SMTP → ZeptoMail
+                const result = await sendTransactionalEmail({
+                    toEmail: email,
+                    toName: name,
                     subject,
-                    text: body,
-                    html: body.replace(/\n/g, '<br>')
+                    htmlBody: body,
                 });
-                if (result?.skipped) {
-                    emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+                // console.log('DEBUG result:', result);
+                if (!result) {
+                    emailWarning = result.error || 'Welcome email could not be sent.';
+                    // console.error('PROJECT MANAGER WELCOME EMAIL FAILED:', emailWarning);
                 } else {
                     console.log(`PROJECT MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
                 }
@@ -116,7 +133,7 @@ export const addProjectManager = async (req, res) => {
                 ? 'Project Manager added successfully, but welcome email could not be sent.'
                 : 'Project Manager added successfully!',
             ...(emailWarning && { email_warning: emailWarning }),
-            data: { code, name, email }
+            data: { code, name, email },
         });
 
     } catch (error) {

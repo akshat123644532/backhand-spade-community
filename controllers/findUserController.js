@@ -200,11 +200,11 @@ export const inviteUsers = async (req, res) => {
                 : singleVenderUrl;
 
             const panelistUid = buildUidForPanelist(panelist);
-            console.log('DEBUG rawLink:', rawLink);
-            console.log('DEBUG panelistUid:', panelistUid);
+            // console.log('DEBUG rawLink:', rawLink);
+            // console.log('DEBUG panelistUid:', panelistUid);
 
             const survey_link = applyEncryptedUidToLink(rawLink, panelistUid);
-            console.log('DEBUG survey_link:', survey_link);
+            // console\.log('DEBUG survey_link:', survey_link);
 
             const rendered = EmailTemplate.render(template, {
                 user_name: panelist.name,

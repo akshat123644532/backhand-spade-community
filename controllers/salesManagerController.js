@@ -5,6 +5,7 @@ import { logActivity } from '../utils/activityLogger.js';
 import { sendEmail } from '../config/mailer.js';
 import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+import { sendTransactionalEmail } from '../services/emailServices.js';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
@@ -95,10 +96,15 @@ export const addSalesManager = async (req, res) => {
                     login_url
                 });
 
-                const result = await sendEmail({ to: email, subject, html: body });
+                const result = await sendTransactionalEmail({
+                    toEmail: email,
+                    toName: name,
+                    subject,
+                    htmlBody: body,
+                });
 
-                if (result?.skipped) {
-                    emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+                if (!result) {
+                    emailWarning = result.error || 'Welcome email could not be sent.';
                 } else {
                     console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
                 }
