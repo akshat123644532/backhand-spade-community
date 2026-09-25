@@ -24,7 +24,12 @@ export const validateUpdateQuestionnaireGroup = [
     body('language').optional().isLength({ max: 50 }).withMessage('Language too long'),
     body('status').optional().isIn(['active', 'inactive']).withMessage('Status must be active or inactive'),
     body('questionIds').optional().isArray().withMessage('questionIds must be an array'),
-    body('questionIds.*').optional().isInt({ min: 1 }).withMessage('Each question ID must be a valid integer'),
+    body('questionIds.*.questionId')
+    .isInt()
+    .withMessage('Each question ID must be a valid integer'),
+    body('questionIds.*.sortOrder')
+    .isInt({ min: 1 })
+    .withMessage('Each sort order must be a valid positive integer'),
     validate
 ];
 

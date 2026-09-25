@@ -508,6 +508,175 @@ const Panelist = {
         return Number(
             rows[0]?.total || 0
         );
+    },
+
+    getSignupDetailsById: async (id) => {
+        const [rows] = await db.query(
+            `SELECT
+                p.id,
+                p.name,
+                p.email,
+                p.phone,
+                p.balance_point,
+                p.status,
+                p.created_at,
+                psd.id AS signup_detail_id,
+                psd.panelist_id,
+                psd.ip_address,
+                psd.user_agent,
+                psd.browser,
+                psd.browser_version,
+                psd.os,
+                psd.os_version,
+                psd.device_type,
+                psd.device_name,
+                psd.fraud_score,
+                psd.fraud_risk,
+                psd.vpn,
+                psd.tor,
+                psd.proxy,
+                psd.datacenter,
+                psd.country,
+                psd.country_code,
+                psd.state,
+                psd.city,
+                psd.postal_code,
+                psd.latitude,
+                psd.longitude,
+                psd.asn,
+                psd.isp_name,
+                psd.organization_name,
+                psd.created_at AS signup_created_at
+
+            FROM panelists p
+            LEFT JOIN panelist_signup_details psd
+                ON psd.panelist_id = p.id
+            WHERE p.id = ?
+            AND p.deleted_at IS NULL
+            ORDER BY psd.created_at DESC`,
+            [id]
+        );
+        return rows[0] || null;
+    },
+     getLoginDetailsById: async (id, page = 1, limit = 20) => {
+        const offset = (page - 1) * limit;
+    
+        const [panelistRows] = await db.execute(
+            `
+            SELECT
+                p.id,
+                p.name,
+                p.email,
+                p.phone,
+                p.balance_point,
+                p.status,
+                p.created_at,
+    
+                pld.id AS login_detail_id,
+                pld.panelist_id,
+                pld.ip_address,
+                pld.user_agent,
+                pld.browser,
+                pld.browser_version,
+                pld.os,
+                pld.os_version,
+                pld.device_type,
+                pld.device_name,
+                pld.fraud_score,
+                pld.fraud_risk,
+                pld.vpn,
+                pld.tor,
+                pld.proxy,
+                pld.datacenter,
+                pld.country,
+                pld.country_code,
+                pld.state,
+                pld.city,
+                pld.postal_code,
+                pld.latitude,
+                pld.longitude,
+                pld.asn,
+                pld.isp_name,
+                pld.organization_name,
+                pld.created_at AS login_created_at
+    
+            FROM panelists p
+            LEFT JOIN panelist_login_details pld
+                ON pld.panelist_id = p.id
+    
+            WHERE p.id = ?
+              AND p.deleted_at IS NULL
+    
+            ORDER BY pld.created_at DESC
+    
+            LIMIT ? OFFSET ?
+            `,
+            [id, limit, offset]
+        );
+    
+        if (!panelistRows.length) {
+            return null;
+        }
+    
+        const [countRows] = await db.execute(
+            `
+            SELECT COUNT(*) AS total
+            FROM panelist_login_details
+            WHERE panelist_id = ?
+            `,
+            [id]
+        );
+    
+        const total = countRows[0].total;
+    
+        const panelist = {
+            id: panelistRows[0].id,
+            name: panelistRows[0].name,
+            email: panelistRows[0].email,
+            phone: panelistRows[0].phone,
+            balance_point: panelistRows[0].balance_point,
+            status: panelistRows[0].status,
+            created_at: panelistRows[0].created_at,
+    
+            login_details: panelistRows.map(row => ({
+                id: row.login_detail_id,
+                panelist_id: row.panelist_id,
+                ip_address: row.ip_address,
+                user_agent: row.user_agent,
+                browser: row.browser,
+                browser_version: row.browser_version,
+                os: row.os,
+                os_version: row.os_version,
+                device_type: row.device_type,
+                device_name: row.device_name,
+                fraud_score: row.fraud_score,
+                fraud_risk: row.fraud_risk,
+                vpn: row.vpn,
+                tor: row.tor,
+                proxy: row.proxy,
+                datacenter: row.datacenter,
+                country: row.country,
+                country_code: row.country_code,
+                state: row.state,
+                city: row.city,
+                postal_code: row.postal_code,
+                latitude: row.latitude,
+                longitude: row.longitude,
+                asn: row.asn,
+                isp_name: row.isp_name,
+                organization_name: row.organization_name,
+                created_at: row.login_created_at
+            })),
+    
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
+    
+        return panelist;
     }
 };
 

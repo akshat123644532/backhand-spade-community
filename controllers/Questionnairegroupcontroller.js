@@ -95,7 +95,7 @@ export const getGroupQuestions = async (req, res) => {
 export const updateQuestionnaireGroup = async (req, res) => {
     try {
         const { id } = req.params;
-        const { surveyTitle, language, status, questionIds } = req.body;
+        const { surveyTitle, language, status, questions } = req.body;
 
         const group = await QuestionnaireGroup.getById(id);
         if (!group) return res.status(404).json({ success: false, message: "Questionnaire group not found!" });
@@ -111,12 +111,25 @@ export const updateQuestionnaireGroup = async (req, res) => {
         }
 
         const updateData = {};
-        if (surveyTitle) updateData.surveyTitle = surveyTitle;
-        if (language) updateData.language = language;
-        if (status) updateData.status = status;
-        if (questionIds) updateData.questionIds = questionIds;
+        if (surveyTitle !== undefined) {
+            updateData.surveyTitle = surveyTitle;
+        }
 
-        if (Object.keys(updateData).length > 0) await QuestionnaireGroup.update(id, updateData);
+        if (language !== undefined) {
+            updateData.language = language;
+        }
+
+        if (status !== undefined) {
+            updateData.status = status;
+        }
+
+        if (questions !== undefined) {
+            updateData.questions = questions;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+            await QuestionnaireGroup.update(id, updateData);
+        }
 
         return res.status(200).json({ success: true, message: "Questionnaire group updated successfully!" });
     } catch (error) {
