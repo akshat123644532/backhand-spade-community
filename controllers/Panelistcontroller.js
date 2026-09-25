@@ -695,3 +695,56 @@ export const sendBulkInviteEmails = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
+export const getSignupDetails = async (req, res) => {
+    try {
+        const { id } = req.params || req.query;
+        if (!id) return res.status(400).json({ success: false, message: "ID is required!" });
+        const panelistDetails = await Panelist.getSignupDetailsById(id);
+        if (!panelistDetails) return res.status(404).json({ success: false, message: "Panelist or Detailsnot found!" });
+        return res.status(200).json({ success: true, data: panelistDetails });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+export const getLoginDetails = async (req, res) => {
+    try {
+        const { id } = req.params || req.query;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "ID is required!"
+            });
+        }
+
+        const page = Math.max(parseInt(req.query.page) || 1, 1);
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+        const loginDetails = await Panelist.getLoginDetailsById(
+            id,
+            page,
+            limit
+        );
+
+        if (!loginDetails) {
+            return res.status(404).json({
+                success: false,
+                message: "Panelist or Details not found!"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: loginDetails
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server error!",
+            error: error.message
+        });
+    }
+};
