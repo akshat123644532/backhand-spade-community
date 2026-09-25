@@ -114,7 +114,8 @@ const QuestionnaireGroup = {
         const [qLinkRows] = await db.execute(
             `SELECT question_library_id, sort_order
              FROM questionnaire_group_questions
-             WHERE questionnaire_group_id = ?`,
+             WHERE questionnaire_group_id = ?
+             ORDER BY sort_order ASC`,
             [id]
         );
     
@@ -144,7 +145,8 @@ const QuestionnaireGroup = {
             questions = qRows.map(q => ({
                 ...q,
                 sortOrder: questionIds.find(qId => qId.questionId === q.id)?.sortOrder
-            }));
+            }))
+            .sort((a, b) => a.sortOrder - b.sortOrder);
         }
     
         // Get questions already answered for this pre-screen response
