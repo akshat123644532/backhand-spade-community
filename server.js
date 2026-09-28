@@ -49,6 +49,7 @@ import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportServ
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
 import contactUsRoutes from './routes/contactUsRoutes.js';
 import apiKeyRoutes from './routes/apiKeyRoutes.js';
+import languageRoutes from './routes/languageRoutes.js';
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
 }
@@ -112,7 +113,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/project-reports', reportRoutes);
 
-
+app.use('/api/languages', languageRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
