@@ -6,7 +6,7 @@ import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
-import Panelist from '../models/panelistModel.js';
+import Panelist from '../models/Panelistmodel.js';
 import { runWithConcurrency } from '../utils/concurrency.js';
 import ZohoCampaignService from './zohoCampaign.service.js';
 import { generateCampaignContentToken } from '../utils/zohoCampaignContent.util.js';
