@@ -86,7 +86,24 @@ const EmailTemplate = {
         }
 
         return { subject, body };
-    }
+    },
+
+    renderCampaign: (template, data = {}) => {
+        let subject = template.subject;
+        let body = template.body;
+    
+        for (const key of Object.keys(data)) {
+            const pattern = new RegExp(`\\{${key}\\}`, 'g');
+    
+            subject = subject.replace(pattern, data[key]);
+            body = body.replace(pattern, data[key]);
+        }
+    
+        return {
+            subject,
+            body
+        };
+    },
 };
 
 export default EmailTemplate;
