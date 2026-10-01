@@ -15,7 +15,7 @@ export const validateAddSalesProject = [
     body('country').optional().isLength({ max: 100 }).withMessage('Country too long'),
     body('email_subject').optional().isLength({ max: 255 }).withMessage('Email subject too long'),
     body('status').optional().isIn(['wip', 'lost', 'won']).withMessage('Status must be wip, lost or won'),
-    body('comment').optional().isLength({ max: 1000 }).withMessage('Comment too long'),
+    body('comment').optional().isLength({ max: 50000 }).withMessage('Comment too long'),
     body('sales_manager_id').optional().isInt({ min: 1 }).withMessage('Invalid sales manager ID'),
     validate
 ];
@@ -27,7 +27,7 @@ export const validateUpdateSalesProject = [
     body('country').optional().isLength({ max: 100 }).withMessage('Country too long'),
     body('email_subject').optional().isLength({ max: 255 }).withMessage('Email subject too long'),
     body('status').optional().isIn(['wip', 'lost', 'won']).withMessage('Status must be wip, lost or won'),
-    body('comment').optional().isLength({ max: 1000 }).withMessage('Comment too long'),
+    body('comment').optional().isLength({ max: 50000 }).withMessage('Comment too long'),
     body('sales_manager_id').optional().isInt({ min: 1 }).withMessage('Invalid sales manager ID'),
     validate
 ];
