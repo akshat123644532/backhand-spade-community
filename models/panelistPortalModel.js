@@ -153,7 +153,6 @@ const PanelistPortal = {
                 ecr.specific_survey_link,
                 ecr.status AS invite_status,
                 ecr.sent_at,
-                ecr.clicked_at,
                 pui.id AS project_url_id,
                 pui.project_id,
                 pui.project_url_code,
