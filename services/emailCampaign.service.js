@@ -32,7 +32,139 @@ const ZOHO_CONTACT_CONCURRENCY = Number(
     process.env.ZOHO_CONTACT_CONCURRENCY || 10
     );
 
+const campaignText = (value) => {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text === '' ? null : text;
+};
+
+/**
+ * Campaign-level values shared by every recipient.
+ * ProjectUrl.getByProjectId() returns SELECT * rows, so LOI is the
+ * `LOI(Minute)` column and country is `country`.
+ */
+const resolveCampaignLevelValues = (project, projectUrl) => {
+    const topicOfStudy = campaignText(project?.Project_Name);
+    const country = campaignText(projectUrl?.country);
+    const lengthOfSurvey = campaignText(projectUrl?.['LOI(Minute)']);
+
+    if (!topicOfStudy) {
+        throw new Error(
+            'Project name is required to send the survey campaign.'
+        );
+    }
+
+    if (!country) {
+        throw new Error(
+            'Project URL country is required to send the survey campaign.'
+        );
+    }
+
+    if (!lengthOfSurvey) {
+        throw new Error(
+            'Project URL length of survey (LOI) is required to send the survey campaign.'
+        );
+    }
+
+    return {
+        topicOfStudy,
+        country,
+        lengthOfSurvey
+    };
+};
+
+const applyCampaignLevelPlaceholders = (html, values) => {
+    return String(html || '')
+        .replace(/\{\{TOPIC_OF_STUDY\}\}/g, values.topicOfStudy)
+        .replace(/\{\{COUNTRY\}\}/g, values.country)
+        .replace(/\{\{LENGTH_OF_SURVEY\}\}/g, values.lengthOfSurvey);
+};
+
+const projectUrlFromSurveyLink = async (surveyLink) => {
+    let pid = null;
+
+    try {
+        pid = new URL(surveyLink).searchParams.get('pid');
+    } catch {
+        const match = String(surveyLink || '').match(/[?&]pid=([^&#]+)/);
+        pid = match ? decodeURIComponent(match[1]) : null;
+    }
+
+    if (!pid) {
+        throw new Error(
+            'Campaign survey link is missing the project URL code.'
+        );
+    }
+
+    const projectUrl = await ProjectUrl.getByCode(pid);
+
+    if (!projectUrl) {
+        throw new Error(
+            'Project URL not found for this campaign.'
+        );
+    }
+
+    return projectUrl;
+};
+
 const EmailCampaignService = {
+
+    getRenderedCampaignHtml: async (campaignId) => {
+        const template = await EmailTemplate.getByKey(
+            'panelist-survey-campaign'
+        );
+
+        if (!template) {
+            throw new Error(
+                'Panelist Survey Campaign template not found.'
+            );
+        }
+
+        if (!template.body?.trim()) {
+            throw new Error(
+                'Campaign email template body is empty.'
+            );
+        }
+
+        if (
+            !template.body.includes('$[UD:SPECIFIC_SURVEY_LINK]$')
+        ) {
+            throw new Error(
+                'Campaign template is missing SPECIFIC_SURVEY_LINK.'
+            );
+        }
+
+        const recipients =
+            await EmailCampaignRecipient.getByCampaignId(campaignId);
+
+        const surveyLink = recipients.find(
+            (recipient) => recipient.specific_survey_link
+        )?.specific_survey_link;
+
+        if (!surveyLink) {
+            throw new Error(
+                'Campaign survey link was not found.'
+            );
+        }
+
+        const projectUrl =
+            await projectUrlFromSurveyLink(surveyLink);
+
+        const project = await Project.getById(
+            projectUrl.project_id
+        );
+
+        if (!project) {
+            throw new Error(
+                'Project not found for this campaign.'
+            );
+        }
+
+        return applyCampaignLevelPlaceholders(
+            template.body,
+            resolveCampaignLevelValues(project, projectUrl)
+        );
+    },
 
     createCampaign: async ({
         projectId,
@@ -177,6 +309,9 @@ const EmailCampaignService = {
 
             selectedUrl = urls[0];
         }
+
+        const campaignLevelValues =
+            resolveCampaignLevelValues(project, selectedUrl);
 
 
         /*
@@ -422,11 +557,17 @@ const EmailCampaignService = {
          *     SPECIFIC_SURVEY_LINK
          */
 
-        const {
-            subject,
-            body
-        } = EmailTemplate.renderCampaign(
-            template
+        const renderedTemplate =
+            EmailTemplate.renderCampaign(template);
+
+        /*
+         * Campaign-level placeholders are the same for every recipient.
+         * Recipient merge tags stay in the HTML for Zoho:
+         * $[UD:FNAME]$ and $[UD:SPECIFIC_SURVEY_LINK]$
+         */
+        const subject = applyCampaignLevelPlaceholders(
+            renderedTemplate.subject,
+            campaignLevelValues
         );
 
 

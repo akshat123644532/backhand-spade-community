@@ -8,6 +8,7 @@ import {
     updateProfile,
     changePassword,
     getRewardHistory,
+    getPanelistSurveys,
     getRedeemRequests,
     submitRedeemRequest,
     forgotPassword,
@@ -25,6 +26,7 @@ router.post('/verify-otp',          verifyOTP);
 router.post('/reset-password',      resetPassword);
 
 router.get('/dashboard',            verifyPanelistToken, getDashboard);
+router.get('/surveys',              verifyPanelistToken, getPanelistSurveys);
 router.get('/profile',              verifyPanelistToken, getProfile);
 router.put('/profile',              verifyPanelistToken, upload.single('photo'), updateProfile);
 router.put('/change-password',      verifyPanelistToken, changePassword);

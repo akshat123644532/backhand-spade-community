@@ -9,8 +9,8 @@ export const addSalesProject = async (req, res) => {
         if (!client_name || !email) return res.status(400).json({ success: false, message: "Client name and email are required!" });
         if (status && !VALID_STATUS.includes(status)) return res.status(400).json({ success: false, message: "Status must be wip, lost or won!" });
 
-        const emailExists = await SalesProject.findByEmail(email);
-        if (emailExists) return res.status(400).json({ success: false, message: "Project with this email already exists!" });
+        // const emailExists = await SalesProject.findByEmail(email);
+        // if (emailExists) return res.status(400).json({ success: false, message: "Project with this email already exists!" });
 
         const project_id = await SalesProject.generateProjectId();
         await SalesProject.create({ project_id, client_name, email, country, email_subject, status: status || 'wip', comment, sales_manager_id: sales_manager_id || null, created_by: req.user?.id || null });

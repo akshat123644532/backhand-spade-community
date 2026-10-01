@@ -1,5 +1,4 @@
 import EmailCampaign from '../models/emailCampaign.model.js';
-import EmailTemplate from '../models/Emailtemplatemodel.js';
 
 import {
     verifyCampaignContentToken
@@ -75,72 +74,16 @@ export const getCampaignContent = async (
 
         /*
          * -----------------------------------------------------
-         * Get the dedicated campaign template
+         * Return HTML with campaign-level values filled in.
+         * $[UD:FNAME]$ and $[UD:SPECIFIC_SURVEY_LINK]$ stay
+         * for Zoho to resolve per recipient.
          * -----------------------------------------------------
-         *
-         * We intentionally use a fixed template key.
-         *
-         * This endpoint must NOT accept a template key
-         * from the public request.
          */
 
-        const template =
-            await EmailTemplate.getByKey(
-                'panelist-survey-campaign'
+        const html =
+            await EmailCampaignService.getRenderedCampaignHtml(
+                campaignId
             );
-
-
-        if (!template) {
-
-            return res
-                .status(404)
-                .send(
-                    'Panelist Survey Campaign template not found.'
-                );
-        }
-
-
-        /*
-         * -----------------------------------------------------
-         * Validate HTML
-         * -----------------------------------------------------
-         */
-
-        if (!template.body?.trim()) {
-
-            return res
-                .status(500)
-                .send(
-                    'Campaign email template body is empty.'
-                );
-        }
-
-
-        /*
-         * -----------------------------------------------------
-         * Make sure the Zoho merge field exists
-         * -----------------------------------------------------
-         */
-
-        if (
-            !template.body.includes(
-                '$[UD:SPECIFIC_SURVEY_LINK]$'
-            )
-        ) {
-
-            return res
-                .status(500)
-                .send(
-                    'Campaign template is missing SPECIFIC_SURVEY_LINK.'
-                );
-        }
-
-
-        /*
-         * -----------------------------------------------------
-         * Return HTML directly
-         * -----------------------------------------------------
-         */
 
         res.setHeader(
             'Content-Type',
@@ -154,7 +97,7 @@ export const getCampaignContent = async (
 
         return res
             .status(200)
-            .send(template.body);
+            .send(html);
 
     } catch (error) {
 
@@ -166,6 +109,7 @@ export const getCampaignContent = async (
         return res
             .status(500)
             .send(
+                error.message ||
                 'Unable to load campaign content.'
             );
     }

@@ -370,7 +370,7 @@ export const login = async (req, res) => {
                 organization_name: fraudData?.scamalytics_org ?? null
             });
 
-            console.log('Panelist login details saved successfully');
+            // console.log('Panelist login details saved successfully');
         } catch (loginDetailsError) {
             console.error(
                 'Panelist login details save failed:',
