@@ -246,6 +246,116 @@ export const changePassword = async (req, res) => {
     }
 };
 
+const SURVEY_TYPES = ['ongoing', 'terminated', 'incomplete', 'security_terminates', 'completed'];
+
+const SURVEY_TYPE_ALIASES = {
+    ongoing: 'ongoing',
+    terminated: 'terminated',
+    terminate: 'terminated',
+    incomplete: 'incomplete',
+    security_terminates: 'security_terminates',
+    'security-terminates': 'security_terminates',
+    securityterminates: 'security_terminates',
+    security_terminate: 'security_terminates',
+    security: 'security_terminates',
+    completed: 'completed',
+    complete: 'completed'
+};
+
+const compactStatus = (value) =>
+    String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+
+const classifyAssignedSurvey = (row) => {
+    const survey = compactStatus(row.survey_status);
+    const prescreen = compactStatus(row.prescreen_status);
+
+    if (survey === 'qualityterm') return 'security_terminates';
+    if (survey === 'completed') return 'completed';
+    if (survey === 'terminate' || survey === 'terminated' || prescreen === 'terminated') {
+        return 'terminated';
+    }
+    if (survey === 'quotafull' || survey === 'overquota' || survey === 'surveyclosed' || survey === 'surveyclose') {
+        return 'incomplete';
+    }
+    if (!row.survey_data_id) return 'ongoing';
+    if (survey === 'initiated' || survey === 'active' || survey === '') {
+        if (prescreen === 'inprogress' || prescreen === 'completed') return 'ongoing';
+        return 'incomplete';
+    }
+    return 'incomplete';
+};
+
+const mapAssignedSurvey = (row) => {
+    const category = classifyAssignedSurvey(row);
+    return {
+        recipient_id: row.recipient_id,
+        campaign_id: row.campaign_id,
+        project_id: row.project_id,
+        project_name: row.project_name,
+        project_url_code: row.project_url_code,
+        survey_title: row.survey_title,
+        survey_link: row.specific_survey_link,
+        loi: row.loi,
+        category,
+        survey_data_id: row.survey_data_id || null,
+        survey_status: row.survey_status || null,
+        prescreen_status: row.prescreen_status || null,
+        started_at: row.started_at || null,
+        ended_at: row.ended_at || null,
+        invite_status: row.invite_status,
+        reward_points: category === 'completed' ? Number(row.completion_points || 0) : null
+    };
+};
+
+export const getPanelistSurveys = async (req, res) => {
+    try {
+        const id = req.panelist.id;
+        const rawType = String(req.query.type || '').trim().toLowerCase();
+        const type = rawType ? SURVEY_TYPE_ALIASES[rawType] : null;
+
+        if (rawType && !type) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid type. Allowed: ${SURVEY_TYPES.join(', ')}`
+            });
+        }
+
+        const rows = await PanelistPortal.getAssignedSurveys(id);
+        const surveys = rows.map(mapAssignedSurvey);
+
+        const counts = SURVEY_TYPES.reduce((acc, key) => {
+            acc[key] = surveys.filter((item) => item.category === key).length;
+            return acc;
+        }, {});
+
+        if (!type) {
+            const grouped = SURVEY_TYPES.reduce((acc, key) => {
+                acc[key] = surveys.filter((item) => item.category === key);
+                return acc;
+            }, {});
+
+            return res.status(200).json({
+                success: true,
+                type: 'all',
+                counts,
+                total: surveys.length,
+                data: grouped
+            });
+        }
+
+        const data = surveys.filter((item) => item.category === type);
+        return res.status(200).json({
+            success: true,
+            type,
+            counts,
+            total: data.length,
+            data
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const getRewardHistory = async (req, res) => {
     try {
         const id = req.panelist.id;
