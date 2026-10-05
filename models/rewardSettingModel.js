@@ -3,11 +3,6 @@ import { db } from '../config/db.js';
 const DEFAULT_QUESTIONNAIRE_POINTS = 200;
 
 class RewardSetting {
-<<<<<<< Updated upstream
-    // Get reward settings
-    static async get() {
-        try {
-=======
     static columnsEnsured = false;
 
     static async addColumnIfMissing(sql) {
@@ -21,32 +16,28 @@ class RewardSetting {
         }
     }
 
-    static async ensureTremendousColumn() {
+    static async ensureColumns() {
+        if (RewardSetting.columnsEnsured) return;
+
         await RewardSetting.addColumnIfMissing(
             `ALTER TABLE reward_settings
              ADD COLUMN tremendous_enabled TINYINT(1) NOT NULL DEFAULT 0`
         );
-    }
-
-    static async ensureQuestionnaireColumn() {
         await RewardSetting.addColumnIfMissing(
             `ALTER TABLE reward_settings
              ADD COLUMN questionnaire_reward_points INT NOT NULL DEFAULT ${DEFAULT_QUESTIONNAIRE_POINTS}`
         );
-    }
+        await RewardSetting.addColumnIfMissing(
+            `ALTER TABLE reward_settings
+             ADD COLUMN max_redeem_points INT NOT NULL DEFAULT 0`
+        );
 
-    // Migrations sirf ek baar per server process chalenge
-    static async ensureColumns() {
-        if (RewardSetting.columnsEnsured) return;
-        await RewardSetting.ensureTremendousColumn();
-        await RewardSetting.ensureQuestionnaireColumn();
         RewardSetting.columnsEnsured = true;
     }
 
     static async get() {
         try {
             await RewardSetting.ensureColumns();
->>>>>>> Stashed changes
             const query = 'SELECT * FROM reward_settings WHERE id = 1 LIMIT 1';
             const [rows] = await db.execute(query);
             return rows?.[0] || null;
@@ -56,35 +47,30 @@ class RewardSetting {
         }
     }
 
-    // Update reward settings
     static async update(data) {
         try {
-<<<<<<< Updated upstream
-=======
             await RewardSetting.ensureColumns();
->>>>>>> Stashed changes
             const {
                 registration_reward_points,
                 questionnaire_reward_points,
                 minimum_payout,
+                max_redeem_points,
                 amazon_enabled,
                 flipkart_enabled,
-                paypal_enabled
+                paypal_enabled,
+                tremendous_enabled
             } = data;
 
             const query = `
-<<<<<<< Updated upstream
                 UPDATE reward_settings SET
                     registration_reward_points = ?,
-=======
-                UPDATE reward_settings SET 
-                    registration_reward_points = ?, 
                     questionnaire_reward_points = ?,
->>>>>>> Stashed changes
                     minimum_payout = ?,
+                    max_redeem_points = ?,
                     amazon_enabled = ?,
                     flipkart_enabled = ?,
                     paypal_enabled = ?,
+                    tremendous_enabled = ?,
                     updated_at = NOW()
                 WHERE id = 1
             `;
@@ -93,14 +79,14 @@ class RewardSetting {
                 registration_reward_points,
                 questionnaire_reward_points ?? DEFAULT_QUESTIONNAIRE_POINTS,
                 minimum_payout,
+                max_redeem_points ?? 0,
                 amazon_enabled ? 1 : 0,
                 flipkart_enabled ? 1 : 0,
-                paypal_enabled ? 1 : 0
+                paypal_enabled ? 1 : 0,
+                tremendous_enabled ? 1 : 0
             ];
 
             await db.execute(query, values);
-
-            // Return fresh data after update
             return await RewardSetting.get();
         } catch (error) {
             console.error('RewardSetting UPDATE error:', error);

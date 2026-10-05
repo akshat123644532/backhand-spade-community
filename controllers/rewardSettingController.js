@@ -30,20 +30,7 @@ export const getSettings = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "Reward settings fetched successfully",
-<<<<<<< Updated upstream
-            data: {
-                id: settings.id,
-                registration_reward_points: settings.registration_reward_points,
-                minimum_payout: settings.minimum_payout,
-                amazon_enabled: !!settings.amazon_enabled,
-                flipkart_enabled: !!settings.flipkart_enabled,
-                paypal_enabled: !!settings.paypal_enabled,
-                created_at: settings.created_at,
-                updated_at: settings.updated_at
-            }
-=======
             data: formatSettings(settings)
->>>>>>> Stashed changes
         });
     } catch (error) {
         console.error('GET Settings error:', error);
@@ -60,18 +47,6 @@ export const updateSettings = async (req, res) => {
     try {
         const {
             registration_reward_points,
-<<<<<<< Updated upstream
-            minimum_payout,
-            amazon_enabled,
-            flipkart_enabled,
-            paypal_enabled
-        } = req.body;
-
-        // Validate required fields
-        if (
-            registration_reward_points === undefined ||
-            minimum_payout === undefined ||
-=======
             questionnaire_reward_points,
             minimum_payout,
             max_redeem_points,
@@ -86,7 +61,6 @@ export const updateSettings = async (req, res) => {
             questionnaire_reward_points === undefined ||
             minimum_payout === undefined ||
             max_redeem_points === undefined ||
->>>>>>> Stashed changes
             amazon_enabled === undefined ||
             flipkart_enabled === undefined ||
             paypal_enabled === undefined
@@ -97,34 +71,24 @@ export const updateSettings = async (req, res) => {
             });
         }
 
-<<<<<<< Updated upstream
-        // Validate data types
-        if (isNaN(registration_reward_points) || isNaN(minimum_payout)) {
-=======
         if (
             isNaN(registration_reward_points) ||
             isNaN(questionnaire_reward_points) ||
             isNaN(minimum_payout) ||
             isNaN(max_redeem_points)
         ) {
->>>>>>> Stashed changes
             return res.status(400).json({
                 success: false,
                 message: "Points and payout must be numeric values!"
             });
         }
 
-<<<<<<< Updated upstream
-        // Validate values
-        if (registration_reward_points < 0 || minimum_payout < 0) {
-=======
         if (
             Number(registration_reward_points) < 0 ||
             Number(questionnaire_reward_points) < 0 ||
             Number(minimum_payout) < 0 ||
             Number(max_redeem_points) < 0
         ) {
->>>>>>> Stashed changes
             return res.status(400).json({
                 success: false,
                 message: "Values cannot be negative!"
@@ -135,14 +99,11 @@ export const updateSettings = async (req, res) => {
             registration_reward_points: parseInt(registration_reward_points),
             questionnaire_reward_points: parseInt(questionnaire_reward_points),
             minimum_payout: parseFloat(minimum_payout),
+            max_redeem_points: parseInt(max_redeem_points),
             amazon_enabled: amazon_enabled === true || amazon_enabled === 'true',
             flipkart_enabled: flipkart_enabled === true || flipkart_enabled === 'true',
-<<<<<<< Updated upstream
-            paypal_enabled: paypal_enabled === true || paypal_enabled === 'true'
-=======
             paypal_enabled: paypal_enabled === true || paypal_enabled === 'true',
             tremendous_enabled: tremendous_enabled === true || tremendous_enabled === 'true'
->>>>>>> Stashed changes
         });
 
         await logActivity({
@@ -156,20 +117,7 @@ export const updateSettings = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "Reward settings updated successfully!",
-<<<<<<< Updated upstream
-            data: {
-                id: updatedData.id,
-                registration_reward_points: updatedData.registration_reward_points,
-                minimum_payout: updatedData.minimum_payout,
-                amazon_enabled: !!updatedData.amazon_enabled,
-                flipkart_enabled: !!updatedData.flipkart_enabled,
-                paypal_enabled: !!updatedData.paypal_enabled,
-                created_at: updatedData.created_at,
-                updated_at: updatedData.updated_at
-            }
-=======
             data: formatSettings(updatedData)
->>>>>>> Stashed changes
         });
     } catch (error) {
         console.error('UPDATE Settings error:', error);

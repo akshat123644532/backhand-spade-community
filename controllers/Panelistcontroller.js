@@ -4,10 +4,6 @@ import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaireResponse from '../models/panelistSubmissionResponseModel.js';
 import EmailTemplate from '../models/Emailtemplatemodel.js';
-<<<<<<< Updated upstream
-import RewardSetting from '../models/rewardSettingModel.js'; // ✅ ADD THIS IMPORT
-=======
->>>>>>> Stashed changes
 import { sendEmail } from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
@@ -68,85 +64,10 @@ export const signup = async (req, res) => {
             questionnaire_url: null
         });
 
-<<<<<<< Updated upstream
-=======
-        const userAgent = req.headers['user-agent'] || '';
-
-        const forwarded = req.headers['x-forwarded-for'];
-
-        const ip = forwarded
-            ? forwarded.split(',')[0].trim()
-            : req.socket?.remoteAddress || req.ip || null;
-
-        let fraudData = null;
-
-        try {
-            fraudData = await checkIpFraud(ip);
-        } catch (error) {
-            console.error('Scamalytics signup error:', error.message);
-        }
-
-        const deviceInfo = getDeviceInfo(userAgent);
-
-        try {
-            await PanelistSignupDetails.create({
-                panelist_id: panelistId,
-                ip_address: fraudData?.ip || ip,
-                user_agent: userAgent,
-                browser: deviceInfo?.browser || null,
-                browser_version: deviceInfo?.browser_version || null,
-                os: deviceInfo?.os || null,
-                os_version: deviceInfo?.os_version || null,
-                device_type: deviceInfo?.device_type || null,
-                device_name: deviceInfo?.device_name || null,
-                fraud_score: fraudData?.scamalytics_score ?? null,
-                fraud_risk: fraudData?.scamalytics_risk ?? null,
-                vpn: fraudData?.is_vpn ?? 0,
-                tor: 0,
-                proxy: fraudData?.is_resproxy ?? 0,
-                datacenter: fraudData?.is_datacenter ?? 0,
-                country: fraudData?.ip_country_name ?? null,
-                country_code: fraudData?.ip_country_code ?? null,
-                state: fraudData?.ip_state_name ?? null,
-                city: fraudData?.ip_city ?? null,
-                postal_code: null,
-                latitude: null,
-                longitude: null,
-                asn: null,
-                isp_name: fraudData?.scamalytics_isp ?? null,
-                organization_name: fraudData?.scamalytics_org ?? null
-            });
-
-            console.log('Panelist signup details saved successfully');
-        } catch (signupDetailsError) {
-            console.error(
-                'Panelist signup details save failed:',
-                signupDetailsError
-            );
-        }
-
->>>>>>> Stashed changes
         const encryptedUserId = encryptId(panelistId);
         await Panelist.setQuestionnaireUrl(panelistId, encryptedUserId);
 
-<<<<<<< Updated upstream
-        const settings = await RewardSetting.get();
-        const rewardPoints = settings?.registration_reward_points || 200; 
-
-        await addRewardPoints({
-            user_id: panelistId,
-            points: rewardPoints, // 
-            transaction_type: 'credit',
-            transaction_by: 'Admin',
-            remark: 'Registration Reward',
-            reference_id: null,
-            comment: 'Welcome bonus on signup'
-        });
-=======
-        // NOTE: Registration reward yahan se hata diya gaya hai.
-        // Ab registration + questionnaire dono points questionnaire
-        // complete hone ke baad hi credit hote hain.
->>>>>>> Stashed changes
+        // Registration and questionnaire points are credited after questionnaire completion.
 
         const baseUrl = (process.env.CLIENT_BASE_URL || 'https://spadecommunity.com').replace(/\/$/, '');
         const questionnaireLink = `${baseUrl}/community-users?Userid=${encryptedUserId}`;
@@ -157,7 +78,6 @@ export const signup = async (req, res) => {
             if (!template) {
                 emailWarning = 'Panelist Questionnaire email template not found or inactive.';
             } else {
-<<<<<<< Updated upstream
                 const { subject, body } = EmailTemplate.render(template, {
                     name,
                     questionnaire_link: questionnaireLink
@@ -173,23 +93,6 @@ export const signup = async (req, res) => {
                 });
                 if (result?.skipped) {
                     emailWarning = 'SMTP is not configured. Signup email was skipped.';
-=======
-                const { subject, body } =
-                    EmailTemplate.render(template, {
-                        name,
-                        questionnaire_link: questionnaireLink
-                    });
-
-                const result = await sendTransactionalEmail({
-                    toEmail: email,
-                    toName: name,
-                    subject,
-                    htmlBody: body
-                });
-
-                if (!result) {
-                    emailWarning = 'Signup email could not be sent.';
->>>>>>> Stashed changes
                 } else {
                     console.log(`EMAIL SENT TO: ${email} ✅`);
                 }
@@ -269,67 +172,7 @@ export const login = async (req, res) => {
 
         const isMatch = await bcrypt.compare(password, panelist.password);
         if (!isMatch) {
-<<<<<<< Updated upstream
             return res.status(401).json({ success: false, message: "Invalid email or password!" });
-=======
-            return res.status(401).json({
-                success: false,
-                message: "Invalid email or password!"
-            });
-        }
-
-        const userAgent = req.headers['user-agent'] || '';
-
-        const forwarded = req.headers['x-forwarded-for'];
-
-        const ip = forwarded
-            ? forwarded.split(',')[0].trim()
-            : req.socket?.remoteAddress || req.ip || null;
-
-        let fraudData = null;
-
-        try {
-            fraudData = await checkIpFraud(ip);
-        } catch (error) {
-            console.error('Scamalytics error:', error.message);
-        }
-
-        const deviceInfo = getDeviceInfo(userAgent);
-
-        try {
-            await PanelistLoginDetails.create({
-                panelist_id: panelist.id,
-                ip_address: fraudData?.ip || ip,
-                user_agent: userAgent,
-                browser: deviceInfo?.browser || null,
-                browser_version: deviceInfo?.browser_version || null,
-                os: deviceInfo?.os || null,
-                os_version: deviceInfo?.os_version || null,
-                device_type: deviceInfo?.device_type || null,
-                device_name: deviceInfo?.device_name || null,
-                fraud_score: fraudData?.scamalytics_score ?? null,
-                fraud_risk: fraudData?.scamalytics_risk ?? null,
-                vpn: fraudData?.is_vpn ?? 0,
-                tor: 0,
-                proxy: fraudData?.is_resproxy ?? 0,
-                datacenter: fraudData?.is_datacenter ?? 0,
-                country: fraudData?.ip_country_name ?? null,
-                country_code: fraudData?.ip_country_code ?? null,
-                state: fraudData?.ip_state_name ?? null,
-                city: fraudData?.ip_city ?? null,
-                postal_code: null,
-                latitude: null,
-                longitude: null,
-                asn: null,
-                isp_name: fraudData?.scamalytics_isp ?? null,
-                organization_name: fraudData?.scamalytics_org ?? null
-            });
-        } catch (loginDetailsError) {
-            console.error(
-                'Panelist login details save failed:',
-                loginDetailsError
-            );
->>>>>>> Stashed changes
         }
 
         const token = jwt.sign(
@@ -377,13 +220,7 @@ export const getAllPanelists = async (req, res) => {
     }
 };
 
-<<<<<<< Updated upstream
-// ─────────────────────────────────────────────────────────
-// ✅ FIXED — now returns filled questionnaire (question + answer) too
-// ─────────────────────────────────────────────────────────
-=======
 // Returns filled questionnaire (question + answer) too
->>>>>>> Stashed changes
 export const getPanelistById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -520,11 +357,6 @@ export const resendInviteEmail = async (req, res) => {
 // =====================================================
 export const exportPanelistsCsv = async (req, res) => {
     try {
-<<<<<<< Updated upstream
-        console.log("🔥 EXPORT API HIT");
-
-=======
->>>>>>> Stashed changes
         const search = (req.query.search || '').trim();
         const status = req.query.status || '';
 
@@ -550,19 +382,7 @@ export const exportPanelistsCsv = async (req, res) => {
             { label: 'Status', key: 'status' }
         ]);
 
-<<<<<<< Updated upstream
-        console.log(
-            `Panelists CSV Export: ${rows.length} records exported`
-        );
-
-        return sendCsv(
-            res,
-            'panelists.csv',
-            csv
-        );
-=======
         return sendCsv(res, 'panelists.csv', csv);
->>>>>>> Stashed changes
 
     } catch (error) {
         console.error('exportPanelistsCsv error:', error);
@@ -634,56 +454,4 @@ export const sendBulkInviteEmails = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
-<<<<<<< Updated upstream
-=======
-};
-
-export const getSignupDetails = async (req, res) => {
-    try {
-        const { id } = req.params || req.query;
-        if (!id) return res.status(400).json({ success: false, message: "ID is required!" });
-        const panelistDetails = await Panelist.getSignupDetailsById(id);
-        if (!panelistDetails) return res.status(404).json({ success: false, message: "Panelist or Details not found!" });
-        return res.status(200).json({ success: true, data: panelistDetails });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
-    }
-};
-
-export const getLoginDetails = async (req, res) => {
-    try {
-        const { id } = req.params || req.query;
-
-        if (!id) {
-            return res.status(400).json({
-                success: false,
-                message: "ID is required!"
-            });
-        }
-
-        const page = Math.max(parseInt(req.query.page) || 1, 1);
-        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-
-        const loginDetails = await Panelist.getLoginDetailsById(id, page, limit);
-
-        if (!loginDetails) {
-            return res.status(404).json({
-                success: false,
-                message: "Panelist or Details not found!"
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            data: loginDetails
-        });
-
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Server error!",
-            error: error.message
-        });
-    }
->>>>>>> Stashed changes
 };
