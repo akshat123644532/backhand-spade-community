@@ -14,6 +14,7 @@ import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
 import PanelistSignupDetails from '../models/panelistSignupDetailsModel.js';
 import { checkIpFraud } from '../utils/scamalyticsHelper.js';
 import { getDeviceInfo } from '../utils/deviceInfoHelper.js';
+import { addRewardPoints } from '../utils/rewardHelper.js';
 
 const resolvePanelistImageUrl = (imageUrl, req) => {
     if (!imageUrl) return null;
