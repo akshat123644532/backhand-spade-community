@@ -7,7 +7,11 @@ export const getAllSurveySettings = async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || '';
 
-        const result = await SurveySetting.getAll({ page, limit, search });
+        const result = await SurveySetting.getAll({
+            page,
+            limit,
+            search
+        });
 
         return res.status(200).json({
             success: true,
@@ -16,6 +20,7 @@ export const getAllSurveySettings = async (req, res) => {
         });
     } catch (error) {
         console.error('GET ALL SURVEY SETTINGS error:', error.message);
+
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -51,6 +56,7 @@ export const getSurveySettingById = async (req, res) => {
         });
     } catch (error) {
         console.error('GET SURVEY SETTING BY ID error:', error.message);
+
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -86,6 +92,7 @@ export const getSurveySettingByLanguage = async (req, res) => {
         });
     } catch (error) {
         console.error('GET SURVEY SETTING BY LANGUAGE error:', error.message);
+
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -112,6 +119,7 @@ export const addSurveySetting = async (req, res) => {
         }
 
         const existing = await SurveySetting.getByLanguage(language);
+
         if (existing) {
             return res.status(409).json({
                 success: false,
@@ -138,10 +146,14 @@ export const addSurveySetting = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Survey setting added successfully!",
-            data: { id: settingId, language }
+            data: {
+                id: settingId,
+                language
+            }
         });
     } catch (error) {
         console.error('ADD SURVEY SETTING error:', error.message);
+
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -164,6 +176,7 @@ export const updateSurveySetting = async (req, res) => {
         const parsedId = parseInt(id);
 
         const setting = await SurveySetting.getById(parsedId);
+
         if (!setting) {
             return res.status(404).json({
                 success: false,
@@ -183,12 +196,15 @@ export const updateSurveySetting = async (req, res) => {
         if (complete_redirect_content !== undefined) {
             updateData.complete_redirect_content = complete_redirect_content;
         }
+
         if (terminate_redirect_content !== undefined) {
             updateData.terminate_redirect_content = terminate_redirect_content;
         }
+
         if (quality_term_redirect_content !== undefined) {
             updateData.quality_term_redirect_content = quality_term_redirect_content;
         }
+
         if (survey_close_redirect_content !== undefined) {
             updateData.survey_close_redirect_content = survey_close_redirect_content;
         }
@@ -219,6 +235,7 @@ export const updateSurveySetting = async (req, res) => {
         });
     } catch (error) {
         console.error('UPDATE SURVEY SETTING error:', error.message);
+
         return res.status(500).json({
             success: false,
             message: "Server error!",
@@ -241,6 +258,7 @@ export const deleteSurveySetting = async (req, res) => {
         const parsedId = parseInt(id);
 
         const setting = await SurveySetting.getById(parsedId);
+
         if (!setting) {
             return res.status(404).json({
                 success: false,
@@ -264,6 +282,7 @@ export const deleteSurveySetting = async (req, res) => {
         });
     } catch (error) {
         console.error('DELETE SURVEY SETTING error:', error.message);
+
         return res.status(500).json({
             success: false,
             message: "Server error!",

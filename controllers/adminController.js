@@ -211,6 +211,7 @@ export const updateAdmin = async (req, res) => {
 
 export const deleteAdmin = async (req, res) => {
     const { id } = req.params;
+    if(id === process.env.SUPER_ADMIN_ID) return res.status(400).json({ success: false, message: "Super admin cannot be deleted!" });
     try {
         await Admin.delete(id);
 

@@ -473,9 +473,9 @@ export const exportLibraryQuestionsCsv = async (req, res) => {
             }
         ]);
 
-        console.log(
-            `CSV Export: ${allRows.length} records exported`
-        );
+        // console.log(
+        //     `CSV Export: ${allRows.length} records exported`
+        // );
 
         return sendCsv(
             res,

@@ -3,45 +3,136 @@ import jwt from 'jsonwebtoken';
 import PanelistPortal from '../models/panelistPortalModel.js';
 import { submitRedeemRequest as submitRedeemRequestService } from '../services/panelistRedeemService.js';
 import { sendEmail } from '../config/mailer.js';
-
+import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
+import { checkIpFraud } from '../utils/scamalyticsHelper.js';
+import { getDeviceInfo } from '../utils/deviceInfoHelper.js';
 export const login = async (req, res) => {
+
+    console.log('🔥 PANELIST LOGIN CONTROLLER RUNNING');
+
     try {
         const { email, password } = req.body;
 
         if (!email || !password) {
-            return res.status(400).json({ success: false, message: "Email and password are required!" });
+            return res.status(400).json({
+                success: false,
+                message: 'Email and password are required.'
+            });
         }
 
         const panelist = await PanelistPortal.getByEmail(email);
+
         if (!panelist) {
-            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password.'
+            });
         }
 
         if (panelist.status !== 'active') {
-            return res.status(403).json({ success: false, message: "Your account is not active!" });
+            return res.status(403).json({
+                success: false,
+                message: 'Your account is inactive.'
+            });
         }
 
         if (panelist.questionnaire !== 'yes') {
             return res.status(403).json({
                 success: false,
-                message: "Please complete your questionnaire to activate login access!"
+                message: 'Questionnaire access is not enabled for this account.'
             });
         }
 
         const isMatch = await bcrypt.compare(password, panelist.password);
+
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: "Invalid email or password!" });
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password.'
+            });
         }
 
         const token = jwt.sign(
-            { id: panelist.id, email: panelist.email },
+            {
+                id: panelist.id,
+                email: panelist.email
+            },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            {
+                expiresIn: '7d'
+            }
         );
+
+        const userAgent = req.headers['user-agent'] || '';
+
+        const forwarded = req.headers['x-forwarded-for'];
+
+        const ip =
+            forwarded
+                ? forwarded.split(',')[0].trim()
+                : req.socket?.remoteAddress || req.ip || null;
+
+        let fraudData = null;
+
+        try {
+            fraudData = await checkIpFraud(ip);
+        } catch (error) {
+            fraudData = null;
+        }
+
+        const deviceInfo = getDeviceInfo(userAgent);
+
+
+
+        try {
+            await PanelistLoginDetails.create({
+                panelist_id: panelist.id,
+
+                ip_address: fraudData?.ip || ip,
+
+                user_agent: userAgent,
+
+                browser: deviceInfo.browser,
+                browser_version: deviceInfo.browser_version,
+
+                os: deviceInfo.os,
+                os_version: deviceInfo.os_version,
+
+                device_type: deviceInfo.device_type,
+                device_name: deviceInfo.device_name,
+
+                fraud_score: fraudData?.scamalytics_score,
+                fraud_risk: fraudData?.scamalytics_risk,
+
+                vpn: fraudData?.is_vpn,
+                tor: false,
+                proxy: fraudData?.is_resproxy,
+                datacenter: fraudData?.is_datacenter,
+
+                country: fraudData?.ip_country_name,
+                country_code: fraudData?.ip_country_code,
+                state: fraudData?.ip_state_name,
+                city: fraudData?.ip_city,
+
+                postal_code: null,
+                latitude: null,
+                longitude: null,
+
+                asn: null,
+
+                isp_name: fraudData?.scamalytics_isp,
+                organization_name: fraudData?.scamalytics_org
+            });
+        } catch (loginDetailsError) {
+            console.error(
+                'Panelist login details save failed:',
+                loginDetailsError.message
+            );
+        }
 
         return res.status(200).json({
             success: true,
-            message: "Login successful!",
+            message: 'Login successful!',
             data: {
                 token,
                 panelist: {
@@ -52,10 +143,14 @@ export const login = async (req, res) => {
             }
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error('Panelist login error:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error.'
+        });
     }
 };
-
 export const getDashboard = async (req, res) => {
     try {
         const id = req.panelist.id;
@@ -146,6 +241,116 @@ export const changePassword = async (req, res) => {
         await PanelistPortal.changePassword(id, hashedPassword);
 
         return res.status(200).json({ success: true, message: "Password changed successfully!" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+const SURVEY_TYPES = ['ongoing', 'terminated', 'incomplete', 'security_terminates', 'completed'];
+
+const SURVEY_TYPE_ALIASES = {
+    ongoing: 'ongoing',
+    terminated: 'terminated',
+    terminate: 'terminated',
+    incomplete: 'incomplete',
+    security_terminates: 'security_terminates',
+    'security-terminates': 'security_terminates',
+    securityterminates: 'security_terminates',
+    security_terminate: 'security_terminates',
+    security: 'security_terminates',
+    completed: 'completed',
+    complete: 'completed'
+};
+
+const compactStatus = (value) =>
+    String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+
+const classifyAssignedSurvey = (row) => {
+    const survey = compactStatus(row.survey_status);
+    const prescreen = compactStatus(row.prescreen_status);
+
+    if (survey === 'qualityterm') return 'security_terminates';
+    if (survey === 'completed') return 'completed';
+    if (survey === 'terminate' || survey === 'terminated' || prescreen === 'terminated') {
+        return 'terminated';
+    }
+    if (survey === 'quotafull' || survey === 'overquota' || survey === 'surveyclosed' || survey === 'surveyclose') {
+        return 'incomplete';
+    }
+    if (!row.survey_data_id) return 'ongoing';
+    if (survey === 'initiated' || survey === 'active' || survey === '') {
+        if (prescreen === 'inprogress' || prescreen === 'completed') return 'ongoing';
+        return 'incomplete';
+    }
+    return 'incomplete';
+};
+
+const mapAssignedSurvey = (row) => {
+    const category = classifyAssignedSurvey(row);
+    return {
+        recipient_id: row.recipient_id,
+        campaign_id: row.campaign_id,
+        project_id: row.project_id,
+        project_name: row.project_name,
+        project_url_code: row.project_url_code,
+        survey_title: row.survey_title,
+        survey_link: row.specific_survey_link,
+        loi: row.loi,
+        category,
+        survey_data_id: row.survey_data_id || null,
+        survey_status: row.survey_status || null,
+        prescreen_status: row.prescreen_status || null,
+        started_at: row.started_at || null,
+        ended_at: row.ended_at || null,
+        invite_status: row.invite_status,
+        reward_points: category === 'completed' ? Number(row.completion_points || 0) : null
+    };
+};
+
+export const getPanelistSurveys = async (req, res) => {
+    try {
+        const id = req.panelist.id;
+        const rawType = String(req.query.type || '').trim().toLowerCase();
+        const type = rawType ? SURVEY_TYPE_ALIASES[rawType] : null;
+
+        if (rawType && !type) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid type. Allowed: ${SURVEY_TYPES.join(', ')}`
+            });
+        }
+
+        const rows = await PanelistPortal.getAssignedSurveys(id);
+        const surveys = rows.map(mapAssignedSurvey);
+
+        const counts = SURVEY_TYPES.reduce((acc, key) => {
+            acc[key] = surveys.filter((item) => item.category === key).length;
+            return acc;
+        }, {});
+
+        if (!type) {
+            const grouped = SURVEY_TYPES.reduce((acc, key) => {
+                acc[key] = surveys.filter((item) => item.category === key);
+                return acc;
+            }, {});
+
+            return res.status(200).json({
+                success: true,
+                type: 'all',
+                counts,
+                total: surveys.length,
+                data: grouped
+            });
+        }
+
+        const data = surveys.filter((item) => item.category === type);
+        return res.status(200).json({
+            success: true,
+            type,
+            counts,
+            total: data.length,
+            data
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }

@@ -89,35 +89,94 @@ const QuestionnaireGroup = {
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
     },
 
-    getById: async (id) => {
+    getById: async (id, surveyPrescreenResponseId = null) => {
+
         const [rows] = await db.execute(
-            `SELECT id, group_title AS surveyTitle, language, website_url, status, created_at AS createdAt, updated_at AS updatedAt
-             FROM questionnaire_groups WHERE id = ? AND deleted_at IS NULL`,
+            `SELECT 
+                id,
+                group_title AS surveyTitle,
+                language,
+                website_url,
+                status,
+                created_at AS createdAt,
+                updated_at AS updatedAt
+             FROM questionnaire_groups
+             WHERE id = ?
+               AND deleted_at IS NULL`,
             [id]
         );
+    
         if (!rows[0]) return null;
-
+    
         const group = rows[0];
-
+    
+        // Get questions belonging to this questionnaire
         const [qLinkRows] = await db.execute(
-            `SELECT question_library_id FROM questionnaire_group_questions WHERE questionnaire_group_id = ?`,
+            `SELECT question_library_id, sort_order
+             FROM questionnaire_group_questions
+             WHERE questionnaire_group_id = ?
+             ORDER BY sort_order ASC`,
             [id]
         );
-        const questionIds = qLinkRows.map(r => r.question_library_id);
-
+    
+        const questionIds = qLinkRows.map(r => ({
+            questionId: r.question_library_id,
+            sortOrder: r.sort_order
+        }));
+    
         let questions = [];
+    
         if (questionIds.length > 0) {
+    
             const placeholders = questionIds.map(() => '?').join(',');
+    
             const [qRows] = await db.execute(
-                `SELECT id, question_title, question_type, options, right_answer
+                `SELECT 
+                    id,
+                    question_title,
+                    question_type,
+                    options,
+                    right_answer
                  FROM question_library
                  WHERE id IN (${placeholders})`,
-                questionIds
+                questionIds.map(q => q.questionId)
             );
-            questions = qRows;
+    
+            questions = qRows.map(q => ({
+                ...q,
+                sortOrder: questionIds.find(qId => qId.questionId === q.id)?.sortOrder
+            }))
+            .sort((a, b) => a.sortOrder - b.sortOrder);
         }
-
-        return { ...group, questionIds, questions };
+    
+        // Get questions already answered for this pre-screen response
+        let answeredQuestionIds = new Set();
+    
+        if (surveyPrescreenResponseId) {
+    
+            const [answerRows] = await db.execute(
+                `SELECT DISTINCT question_id
+                 FROM survey_prescreen_answer
+                 WHERE survey_prescreen_response_id = ?`,
+                [surveyPrescreenResponseId]
+            );
+    
+            answeredQuestionIds = new Set(
+                answerRows.map(row => Number(row.question_id))
+            );
+        }
+    
+        // Add completed flag to every question
+        questions = questions.map(question => ({
+            ...question,
+            completed: answeredQuestionIds.has(Number(question.id))
+        }));
+    
+        return {
+            ...group,
+            questionIds: questionIds.map(q => q.questionId),
+            questions
+        };
     },
 
     update: async (id, data) => {
@@ -136,15 +195,32 @@ const QuestionnaireGroup = {
             );
         }
 
-        if (data.questionIds !== undefined) {
+        if (data.questions !== undefined) {
             await db.execute(
-                `DELETE FROM questionnaire_group_questions WHERE questionnaire_group_id = ?`, [id]
+                `DELETE FROM questionnaire_group_questions
+                 WHERE questionnaire_group_id = ?`,
+                [id]
             );
-            if (Array.isArray(data.questionIds) && data.questionIds.length > 0) {
-                const values2 = data.questionIds.map(qId => [id, qId]);
+        
+            if (Array.isArray(data.questions) && data.questions.length > 0) {
+        
+                const values = data.questions.map((question, index) => [
+                    id,
+                    question.questionId,
+                    question.sortOrder ?? index + 1
+                ]);
+        
                 await db.query(
-                    `INSERT INTO questionnaire_group_questions (questionnaire_group_id, question_library_id) VALUES ?`,
-                    [values2]
+                    `
+                    INSERT INTO questionnaire_group_questions
+                    (
+                        questionnaire_group_id,
+                        question_library_id,
+                        sort_order
+                    )
+                    VALUES ?
+                    `,
+                    [values]
                 );
             }
         }

@@ -53,11 +53,11 @@ const Project = {
         return { id: result.insertId, Project_code };
     },
 
-    getAll: async ({ page = 1, limit = 10, search = '', status = '' } = {}) => {
+    getAll: async ({ page = 1, limit = 10, search = '', status = '', hasUrl = false } = {}) => {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        let where = `WHERE p.isdeleted = 0 OR p.isdeleted IS NULL`;
+        let where = `WHERE (p.isdeleted = 0 OR p.isdeleted IS NULL)`;
         const params = [];
 
         if (search) {
@@ -67,6 +67,12 @@ const Project = {
         if (status) {
             where += ` AND p.Status = ?`;
             params.push(status);
+        }
+        if (hasUrl) {
+            where += ` AND EXISTS (
+                SELECT 1 FROM project_url_Info u2
+                WHERE u2.project_id = p.id AND u2.deleted_at IS NULL
+            )`;
         }
 
         const [rows] = await db.query(

@@ -8,13 +8,13 @@ import ProjectUrl from '../models/projectUrlModel.js';
 import SupplierMapping from '../models/supplierMappingModel.js';
 import ProjectMultipleUrl from '../models/projectMultipleUrlModel.js';
 import { encryptUid } from '../utils/linkSecurityHelper.js';
-
-const isMultiLink = (type) =>
+import EmailCampaignService from '../services/emailCampaign.service.js';
+export const isMultiLink = (type) =>
     String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '') === 'multilink';
 
-const buildUidForPanelist = (panelist) => String(panelist.id);
+export const buildUidForPanelist = (panelist) => String(panelist.id);
 
-const applyEncryptedUidToLink = (link, uid) => {
+export const applyEncryptedUidToLink = (link, uid) => {
     const encrypted = encryptUid(uid);
     try {
         const url = new URL(link);
@@ -107,26 +107,87 @@ export const searchUsers = async (req, res) => {
 export const inviteUsers = async (req, res) => {
     try {
         const { id } = req.params;
-        let { panelist_ids, email_template_id, project_url_id } = req.body;
+        const {
+            panelist_ids,
+            email_template_id,
+            project_url_id
+        } = req.body;
 
-        if (!panelist_ids || !Array.isArray(panelist_ids) || panelist_ids.length === 0) {
-            return res.status(400).json({ success: false, message: "panelist_ids array is required!" });
+        /*
+         * ---------------------------------------------------------
+         * 1. Validate request
+         * ---------------------------------------------------------
+         */
+
+        if (
+            !panelist_ids ||
+            !Array.isArray(panelist_ids) ||
+            panelist_ids.length === 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "panelist_ids array is required!"
+            });
         }
+
         if (!email_template_id) {
-            return res.status(400).json({ success: false, message: "email_template_id is required!" });
+            return res.status(400).json({
+                success: false,
+                message: "email_template_id is required!"
+            });
         }
 
-        const [project, template, urls, panelistRows] = await Promise.all([
-            Project.getById(id),
-            EmailTemplate.getById(email_template_id),
-            ProjectUrl.getByProjectId(id),
-            Panelist.findByIds(panelist_ids)
-        ]);
+        /*
+         * ---------------------------------------------------------
+         * 2. Validate project
+         * ---------------------------------------------------------
+         */
 
-        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
-        if (!template) return res.status(404).json({ success: false, message: "Email template not found!" });
+        const project = await Project.getById(id);
 
-        if (!urls || !urls.length) {
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: "Project not found!"
+            });
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * 3. Validate email template
+         *
+         * This keeps the existing API contract because
+         * inviteUsers still receives email_template_id.
+         *
+         * The actual Zoho campaign template is currently loaded
+         * inside EmailCampaignService using:
+         *
+         * panelist-survey-campaign
+         * ---------------------------------------------------------
+         */
+
+        const template = await EmailTemplate.getById(email_template_id);
+
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: "Email template not found!"
+            });
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * 4. Validate project URL selection
+         *
+         * EmailCampaignService also validates this, but we keep
+         * the request-level validation here so the API returns
+         * the same useful error to the frontend.
+         * ---------------------------------------------------------
+         */
+
+        const urls = await ProjectUrl.getByProjectId(id);
+
+        if (!urls || urls.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: "Add Project URL Info first before inviting users!"
@@ -136,7 +197,8 @@ export const inviteUsers = async (req, res) => {
         if (!project_url_id && urls.length > 1) {
             return res.status(400).json({
                 success: false,
-                message: "Multiple Project URLs found for this project. Please pass project_url_id in the request body.",
+                message:
+                    "Multiple Project URLs found for this project. Please pass project_url_id in the request body.",
                 availableUrls: urls.map(u => ({
                     project_url_id: u.id,
                     project_url_code: u.project_url_code,
@@ -145,9 +207,13 @@ export const inviteUsers = async (req, res) => {
             });
         }
 
-        let selectedUrl = null;
-        if (project_url_id) {
-            selectedUrl = urls.find(u => Number(u.id) === Number(project_url_id)) || null;
+        let selectedProjectUrlId = project_url_id;
+
+        if (selectedProjectUrlId) {
+            const selectedUrl = urls.find(
+                u => Number(u.id) === Number(selectedProjectUrlId)
+            );
+
             if (!selectedUrl) {
                 return res.status(400).json({
                     success: false,
@@ -155,74 +221,85 @@ export const inviteUsers = async (req, res) => {
                 });
             }
         } else {
-            selectedUrl = urls[0];
-            project_url_id = selectedUrl.id;
+            selectedProjectUrlId = urls[0].id;
         }
 
-        const multiLink = isMultiLink(selectedUrl?.Project_Link_Type);
-
-        let singleVenderUrl = null;
-        let multiVenderUrls = [];
-
-        if (multiLink) {
-            const rows = await ProjectMultipleUrl.getActiveVenderUrlsByProjectId(id);
-            multiVenderUrls = rows.map(r => r.VenderURL);
-            if (!multiVenderUrls.length) {
-                return res.status(400).json({
-                    success: false,
-                    message: "No active Vendor URL found in project_mutiple_Url for this project!"
-                });
-            }
-        } else {
-            singleVenderUrl = await SupplierMapping.getVenderUrlByProjectId(id);
-            if (!singleVenderUrl) {
-                return res.status(400).json({
-                    success: false,
-                    message: "No active Vendor URL found in supplier_mapping for this project!"
-                });
-            }
-        }
-
-        const panelistById = new Map(panelistRows.map(p => [Number(p.id), p]));
-        const skipped = [];
-        const inviteRows = [];
-
-        for (let i = 0; i < panelist_ids.length; i++) {
-            const panelistId = panelist_ids[i];
-            const panelist = panelistById.get(Number(panelistId));
-            if (!panelist) {
-                skipped.push({ panelist_id: panelistId, reason: "Panelist not found" });
-                continue;
-            }
-
-            const rawLink = multiLink
-                ? multiVenderUrls[i % multiVenderUrls.length]
-                : singleVenderUrl;
-
-            const panelistUid = buildUidForPanelist(panelist);
-            console.log('DEBUG rawLink:', rawLink);
-            console.log('DEBUG panelistUid:', panelistUid);
-
-            const survey_link = applyEncryptedUidToLink(rawLink, panelistUid);
-            console.log('DEBUG survey_link:', survey_link);
-
-            const rendered = EmailTemplate.render(template, {
-                user_name: panelist.name,
-                survey_name: project.Project_Name,
-                survey_url: survey_link
+        /*
+         * ---------------------------------------------------------
+         * 5. CREATE + SEND ZOHO CAMPAIGN
+         * ---------------------------------------------------------
+         *
+         * All actual email logic is handled by
+         * EmailCampaignService:
+         *
+         * - vendor URL selection
+         * - panelist-specific UID
+         * - personalized survey URL
+         * - local campaign creation
+         * - recipient creation
+         * - Zoho contact sync
+         * - Marketing topic association
+         * - Zoho campaign creation
+         * - Zoho campaign sending
+         *
+         * DO NOT call transporter.sendMail() here.
+        //  */
+        // console.log('panelist_ids', panelist_ids);
+        // console.log('selectedProjectUrlId', selectedProjectUrlId);
+        // console.log('id', id);
+        const campaignResult =
+            await EmailCampaignService.createCampaign({
+                projectId: Number(id),
+                panelistIds: panelist_ids,
+                projectUrlId: selectedProjectUrlId
             });
 
-            transporter.sendMail({
-                to: panelist.email,
-                subject: rendered.subject,
-                html: rendered.body
-            }).catch(err => console.error('Invite email failed:', err.message));
+        // console.log('campaignResult', campaignResult);
+
+        /*
+         * ---------------------------------------------------------
+         * 6. Save existing ProjectInvitedUser records
+         * ---------------------------------------------------------
+         *
+         * This preserves the existing application's invitation
+         * tracking.
+         *
+         * It does NOT send another email.
+         */
+
+        const panelistRows =
+            await Panelist.findByIds(panelist_ids);
+
+        const panelistById = new Map(
+            panelistRows.map(panelist => [
+                Number(panelist.id),
+                panelist
+            ])
+        );
+
+        const inviteRows = [];
+        const skipped = [];
+
+        for (const panelistId of panelist_ids) {
+            const panelist =
+                panelistById.get(Number(panelistId));
+
+            if (!panelist) {
+                skipped.push({
+                    panelist_id: panelistId,
+                    reason: "Panelist not found"
+                });
+
+                continue;
+            }
 
             inviteRows.push({
                 project_id: id,
                 panelist_id: panelistId,
                 email_template_id,
-                message: rendered.subject
+                message:
+                    campaignResult.subject ||
+                    "Survey invitation"
             });
         }
 
@@ -230,14 +307,41 @@ export const inviteUsers = async (req, res) => {
             await ProjectInvitedUser.createMany(inviteRows);
         }
 
+        /*
+         * ---------------------------------------------------------
+         * 7. Return response
+         * ---------------------------------------------------------
+         */
+
         return res.status(200).json({
             success: true,
-            message: `${inviteRows.length} user(s) invited successfully!`,
-            skipped_count: skipped.length,
-            skipped
+
+            message:
+                `${campaignResult.invitedCount} user(s) invited successfully!`,
+
+            campaign: {
+                campaignId: campaignResult.campaignId,
+                campaignName: campaignResult.campaignName,
+                zohoCampaignId: campaignResult.zohoCampaignId,
+                zohoCampaignKey: campaignResult.zohoCampaignKey,
+                subject: campaignResult.subject,
+                invitedCount: campaignResult.invitedCount
+            },
+
+            skipped_count: campaignResult.skippedCount,
+            skipped: campaignResult.skipped,
+
+            zohoContactFailures:
+                campaignResult.zohoContactFailures || []
         });
+
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+        console.error("Invite users error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Server error!"
+        });
     }
 };
 

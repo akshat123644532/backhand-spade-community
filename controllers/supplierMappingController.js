@@ -3,6 +3,7 @@ import Partner from '../models/partnerModel.js';
 import Project from '../models/projectModel.js';
 import ProjectUrl from '../models/projectUrlModel.js';
 import { getCountryFromIp } from '../utils/linkSecurityHelper.js';
+import { resolveSurveyUid, appendUidToLink } from '../utils/surveyHelper.js';
 export const addSupplierMapping = async (req, res) => {
     try {
         const {
@@ -110,6 +111,58 @@ export const getSupplierMappingById = async (req, res) => {
         const mapping = await SupplierMapping.getById(id);
         if (!mapping) return res.status(404).json({ success: false, message: "Supplier mapping not found!" });
         return res.status(200).json({ success: true, data: mapping });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
+/**
+ * GET /api/supplier-mapping/my-mappings
+ * Partner JWT: all supplier_mapping rows for this partner + project details.
+ */
+export const getMySupplierMappings = async (req, res) => {
+    try {
+        const { id, email, role } = req.user || {};
+        if (role !== 'partner' || !id) {
+            return res.status(403).json({ success: false, message: "Access denied for this role!" });
+        }
+
+        const partner = await Partner.getById(id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: "Partner not found!" });
+        }
+
+        if (email && String(partner.email).toLowerCase() !== String(email).toLowerCase()) {
+            return res.status(403).json({
+                success: false,
+                message: "Token email does not match partner account!"
+            });
+        }
+
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 10;
+        const search = req.query.search || '';
+        const status = req.query.status || '';
+
+        const result = await SupplierMapping.getAllByPartnerIdWithProject({
+            partnerid: partner.id,
+            page,
+            limit,
+            search,
+            status
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Partner project mappings fetched successfully!",
+            partner: {
+                id: partner.id,
+                code: partner.code,
+                name: partner.name,
+                email: partner.email
+            },
+            ...result
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
@@ -259,6 +312,12 @@ export const handleSupplierRedirect = async (req, res) => {
             return res.redirect(mapping.TerminateURL || '/inactive');
         }
 
+        // uid=X / uid=XXXXXX → reject; missing uid → generate; real uid → use
+        const resolvedUid = resolveSurveyUid(uid, { allowGenerate: true });
+        if (resolvedUid.error) {
+            return res.status(400).send(resolvedUid.error);
+        }
+
         // 🔒 Geo-location security check
         if (Number(mapping.GeoLocation) === 1 && mapping.country) {
             const respondentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
@@ -291,10 +350,7 @@ export const handleSupplierRedirect = async (req, res) => {
             return res.status(400).send('No survey link configured!');
         }
 
-        const finalUrl = targetLink.includes('?')
-            ? `${targetLink}&uid=${encodeURIComponent(uid || '')}`
-            : `${targetLink}?uid=${encodeURIComponent(uid || '')}`;
-
+        const finalUrl = appendUidToLink(targetLink, resolvedUid.uid);
         return res.redirect(finalUrl);
     } catch (error) {
         return res.status(500).send('Server error!');

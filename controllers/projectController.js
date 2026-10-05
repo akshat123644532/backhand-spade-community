@@ -189,8 +189,11 @@ export const getAllProjects = async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || '';
         const status = req.query.status || '';
+        // ReContact dropdown ke liye: ?hasUrl=true bhejo to sirf un projects ki list milegi
+        // jinke paas kam se kam ek (non-deleted) Project URL Info row hai
+        const hasUrl = req.query.hasUrl === 'true' || req.query.hasUrl === '1';
 
-        const result = await Project.getAll({ page, limit, search, status });
+        const result = await Project.getAll({ page, limit, search, status, hasUrl });
         return res.status(200).json({ success: true, ...result });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -893,12 +896,12 @@ export const getActiveSurveyLink = async (req, res) => {
             const respondentCountry = getCountryFromIp(respondentIp);
 
             // 🔍 TEMP DEBUG — issue confirm hone ke baad ye console.log hata dena
-            console.log('[GeoLocation Check]', {
-                respondentIp,
-                respondentCountry,
-                expectedCountry: urlInfo.country,
-                normalizedMatch: normalizeStr(respondentCountry) === normalizeStr(urlInfo.country)
-            });
+            // console.log('[GeoLocation Check]', {
+            //     respondentIp,
+            //     respondentCountry,
+            //     expectedCountry: urlInfo.country,
+            //     normalizedMatch: normalizeStr(respondentCountry) === normalizeStr(urlInfo.country)
+            // });
 
             // ✅ FIX: normalizeStr use kiya — case/whitespace mismatch se bachne ke liye
             if (!respondentCountry || normalizeStr(respondentCountry) !== normalizeStr(urlInfo.country)) {

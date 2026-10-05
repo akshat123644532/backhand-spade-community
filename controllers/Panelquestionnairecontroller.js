@@ -85,7 +85,9 @@ export const updatePanelQuestion = async (req, res) => {
         if (question_type) updateData.question_type = question_type;
         if (options) updateData.options = options;
         if (is_required !== undefined) updateData.is_required = is_required;
-        if (sort_order !== undefined) updateData.sort_order = sort_order;
+        if (sort_order !== undefined && sort_order !== null && sort_order !== '') {
+            updateData.sort_order = sort_order;
+        }
         if (status) updateData.status = status;
 
         if (Object.keys(updateData).length > 0) await PanelQuestionnaire.update(id, updateData);

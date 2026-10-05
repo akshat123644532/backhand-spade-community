@@ -341,3 +341,4 @@ generateUrlCode: async (project_id, conn = db) => {
 };
 
 export default ProjectUrl;
+

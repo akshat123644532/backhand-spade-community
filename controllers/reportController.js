@@ -5,6 +5,8 @@ import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import surveyPreScreenResponse from '../models/pre-screenResponseModel.js';
 import { sendError } from './surveyDataController.js';
 
+
+
 const buildReportRows = async (
     project_id,
     partner_id,
@@ -43,7 +45,16 @@ const buildReportRows = async (
 
             city,
 
-            is_test_link: !!row.is_test_link
+            is_test_link: !!row.is_test_link,
+
+           
+            ip_country_code: row.ip_country_code || null,
+            ip_country_name: row.ip_country_name || null,
+            ip_state_name: row.ip_state_name || null,
+            ip_time_zone: row.ip_time_zone || null,
+            is_vpn: row.is_vpn === null || row.is_vpn === undefined ? null : !!row.is_vpn,
+            fraud_score: row.fraud_score ?? null,
+            fraud_risk: row.fraud_risk || null
         };
     });
 };
@@ -245,6 +256,7 @@ export const downloadSupplierReportCsv = async (req, res) => {
 export const getPreScreenReport = async (req, res) => {
     try {
         const projectid = req.query.projectid;
+        const is_test = req.query.is_test;
 
         if (!projectid) {
             return res.status(400).json({
@@ -254,7 +266,8 @@ export const getPreScreenReport = async (req, res) => {
         }
 
         const data = await surveyPreScreenResponse.getPreScreenReport({
-            projectid
+            projectid,
+            is_test: is_test !== undefined ? is_test : null
         });
 
         return res.status(200).json({
@@ -267,9 +280,12 @@ export const getPreScreenReport = async (req, res) => {
     }
 };
 
+
+
 export const exportPreScreenReport = async (req, res) => {
     try {
         const projectid = req.query.projectid;
+        const is_test = req.query.is_test;
 
         if (!projectid) {
             return res.status(400).json({
@@ -279,18 +295,31 @@ export const exportPreScreenReport = async (req, res) => {
         }
 
         const data = await surveyPreScreenResponse.getPreScreenReport({
-            projectid
+            projectid,
+            is_test: is_test !== undefined ? is_test : null
         });
 
         const headers = [
             'S. No.',
+            'UID',
+            'Project Name',
+            'Survey Date',
+            'Answered At',
             'Partner ID',
             'Partner Name',
             'Client Name',
             'IP Address',
             'Question',
             'Answer',
-            'Status'
+            'Status',
+            // 👇 NEW
+            'IP Country Code',
+            'IP Country Name',
+            'IP State Name',
+            'IP Time Zone',
+            'Is VPN',
+            'Fraud Score',
+            'Fraud Risk'
         ];
 
         const escapeCsvValue = (value) => {
@@ -319,13 +348,25 @@ export const exportPreScreenReport = async (req, res) => {
         for (const row of data) {
             csvRows.push([
                 row.serial_no,
+                row.uid,
+                row.project_name,
+                row.survey_date,
+                row.answered_at,
                 row.partner_id,
                 row.partner_name,
                 row.client_name,
                 row.ip_address,
                 row.question,
                 row.answer,
-                row.status
+                row.status,
+                // 👇 NEW
+                row.ip_country_code,
+                row.ip_country_name,
+                row.ip_state_name,
+                row.ip_time_zone,
+                row.is_vpn === null || row.is_vpn === undefined ? '' : (row.is_vpn ? 'Yes' : 'No'),
+                row.fraud_score,
+                row.fraud_risk
             ].map(escapeCsvValue).join(','));
         }
 

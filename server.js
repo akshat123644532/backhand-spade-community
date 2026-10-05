@@ -1,3 +1,6 @@
+if (process.env.NODE_ENV !== 'production') {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -34,6 +37,7 @@ import projectRoutes from './routes/projectRoutes.js';
 // import {encrypt} from './utils/cryptoHelper.js';
 import findUserRoutes from './routes/findUserRoutes.js';
 import systemSettingRoutes from './routes/systemSettingRoutes.js';
+import apiIntegrationRoutes from './routes/apiIntegrationRoutes.js';
 import supplierMappingRoutes from './routes/supplierMappingRoutes.js';
 import supplierRedirectRoutes from './routes/supplierRedirectRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
@@ -43,8 +47,13 @@ import reportRoutes from './routes/reportRoutes.js';
 import surveyDataRoutes from './routes/surveyDataRoutes.js';
 import { resumePendingMultiLinkCsvJobs } from './services/multiLinkCsvImportService.js';
 import { startProjectUrlCloseScheduler } from './services/projectUrlCloseScheduler.js';
-
-
+import contactUsRoutes from './routes/contactUsRoutes.js';
+import apiKeyRoutes from './routes/apiKeyRoutes.js';
+import emailCampaignRoutes from './routes/emailCampaign.routes.js';
+import {
+    generateCampaignContentToken
+} from './utils/zohoCampaignContent.util.js';
+import languageRoutes from './routes/languageRoutes.js';
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
 }
@@ -55,6 +64,7 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 app.use(cors());
+app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 app.set("trust proxy", 2);
 // console.log(encrypt("123456"));
@@ -96,15 +106,21 @@ app.use('/api/questionnaire', panelistSubmissionRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/panelist-portal', panelistPortalRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/contact-us', contactUsRoutes);
 app.use('/api/find-user', findUserRoutes);
 app.use('/api/system-settings', systemSettingRoutes);
+app.use('/api/api-integrations', apiIntegrationRoutes);
 app.use('/api/supplier-mapping', supplierMappingRoutes);
 app.use('/api/survey', surveyDataRoutes);
 app.use('/dosurvey', supplierRedirectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/project-reports', reportRoutes);
+app.use('/api/email-campaign', emailCampaignRoutes);
 
+
+app.use('/api/languages', languageRoutes);
+app.use('/api/api-keys', apiKeyRoutes);
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

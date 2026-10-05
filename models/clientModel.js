@@ -1,6 +1,6 @@
 import { db } from '../config/db.js';
 
-const DB_NAME = process.env.DB_NAME || 'PaperWardb';
+const DB_NAME = process.env.DB_NAME || process.env.DB_PROD;
 
 const buildUpdateQuery = (table, updateData, whereClause, whereParams = []) => {
     const fields = [];

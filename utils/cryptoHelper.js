@@ -8,7 +8,6 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.join(__dirname, '../.env');
 
-console.log('📁 Loading .env from:', envPath);
 const envConfig = dotenv.config({ path: envPath });
 
 if (envConfig.error) {
@@ -23,9 +22,6 @@ if (!process.env.ENCRYPTION_KEY1 || !process.env.ENCRYPTION_KEY2) {
     console.error('Keys found:', Object.keys(process.env).filter(k => k.includes('ENCRYPTION')));
     process.exit(1);
 }
-
-console.log('✅ ENCRYPTION_KEY1 loaded');
-console.log('✅ ENCRYPTION_KEY2 loaded');
 
 // ✅ NOW parse after checking
 const ENCRYPTION_KEY1 = CryptoJS.enc.Hex.parse(process.env.ENCRYPTION_KEY1);

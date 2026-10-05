@@ -11,7 +11,7 @@ export const validate = (req, res, next) => {
 
 export const validateAddSalesLog = [
     param('id').isInt({ min: 1 }).withMessage('Invalid project ID'),
-    body('comment').notEmpty().withMessage('Comment is required').isLength({ max: 1000 }).withMessage('Comment too long'),
+    body('comment').notEmpty().withMessage('Comment is required').isLength({ max: 50000 }).withMessage('Comment too long'),
     body('email_subject').optional().isLength({ max: 255 }).withMessage('Email subject too long'),
     body('comment_by').optional().isIn(['Sales', 'Client', 'Manager', 'Other']).withMessage('comment_by must be Sales, Client, Manager or Other'),
     validate
@@ -19,7 +19,7 @@ export const validateAddSalesLog = [
 
 export const validateUpdateSalesLog = [
     param('logId').isInt({ min: 1 }).withMessage('Invalid log ID'),
-    body('comment').optional().isLength({ max: 1000 }).withMessage('Comment too long'),
+    body('comment').optional().isLength({ max: 50000 }).withMessage('Comment too long'),
     body('email_subject').optional().isLength({ max: 255 }).withMessage('Email subject too long'),
     body('comment_by').optional().isIn(['Sales', 'Client', 'Manager', 'Other']).withMessage('comment_by must be Sales, Client, Manager or Other'),
     validate

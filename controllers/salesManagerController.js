@@ -5,12 +5,12 @@ import { logActivity } from '../utils/activityLogger.js';
 import { sendEmail } from '../config/mailer.js';
 import { decrypt, encryptPasswordForStorage, verifyPassword } from '../utils/cryptoHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
+import { sendTransactionalEmail } from '../services/emailServices.js';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not set in .env file! Application cannot start without it.');
 }
 
-const SALES_MANAGER_LOGIN_URL = 'https://spade-community-ui.vercel.app/sales/sales-manager';
 const SALES_MANAGER_WELCOME_TEMPLATE_KEY = 'sales_manager_welcome';
 
 export const loginSalesManager = async (req, res) => {
@@ -82,25 +82,29 @@ export const addSalesManager = async (req, res) => {
 
         let emailWarning = null;
         try {
-            // Template DB se fetch karo instead of static HTML
             const template = await EmailTemplate.getByKey(SALES_MANAGER_WELCOME_TEMPLATE_KEY);
 
             if (!template) {
-                // Template missing -> email skip karo but manager creation fail mat karo
                 emailWarning = `Email template "${SALES_MANAGER_WELCOME_TEMPLATE_KEY}" not found. Welcome email was skipped.`;
                 console.error('SALES MANAGER WELCOME EMAIL SKIPPED:', emailWarning);
             } else {
+                const login_url = `${process.env.BASE_URL}/auth`;
                 const { subject, body } = EmailTemplate.render(template, {
                     name,
                     email,
                     password: plainPassword,
-                    login_url: SALES_MANAGER_LOGIN_URL
+                    login_url
                 });
 
-                const result = await sendEmail({ to: email, subject, html: body });
+                const result = await sendTransactionalEmail({
+                    toEmail: email,
+                    toName: name,
+                    subject,
+                    htmlBody: body,
+                });
 
-                if (result?.skipped) {
-                    emailWarning = 'SMTP is not configured. Welcome email was skipped.';
+                if (!result) {
+                    emailWarning = result.error || 'Welcome email could not be sent.';
                 } else {
                     console.log(`SALES MANAGER WELCOME EMAIL SENT TO: ${email} ✅`);
                 }
@@ -167,7 +171,6 @@ export const updateSalesManager = async (req, res) => {
         const manager = await SalesManager.getById(id);
         if (!manager) return res.status(404).json({ success: false, message: "Sales Manager not found!" });
 
-        // Agar code change kar rahe hain to check karo koi aur manager same code use to nahi kar raha
         if (code && code !== manager.code) {
             const codeExists = await SalesManager.findByCode(code);
             if (codeExists) return res.status(400).json({ success: false, message: "This code is already in use!" });
@@ -187,7 +190,6 @@ export const updateSalesManager = async (req, res) => {
 
         await logActivity({ admin_id: req.user?.id, action: 'UPDATE', module: 'SalesManager', description: `Sales Manager ID ${id} updated`, ip_address: req.ip });
 
-        // fresh data return kar rahe hain taaki frontend turant naya image/name/email dikha sake bina reload ke
         const updatedManager = await SalesManager.getById(id);
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         const { profile_image, ...data } = updatedManager;

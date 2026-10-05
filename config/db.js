@@ -22,6 +22,4 @@ pool.getConnection((err, connection) => {
         connection.release();
     }
 });
-
-
 export const db = pool.promise();

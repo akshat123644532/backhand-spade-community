@@ -87,6 +87,7 @@ class RewardSetting {
             ];
 
             await db.execute(query, values);
+
             return await RewardSetting.get();
         } catch (error) {
             console.error('RewardSetting UPDATE error:', error);

@@ -1,4 +1,6 @@
 import { db } from '../config/db.js';
+import { checkIpFraud } from '../services/Scamalyticsservice.js';
+import IpDetection from './Ipdetectionmodel.js';
 import { resolveGeoLocationLabel } from '../utils/linkSecurityHelper.js';
 const TABLE = 'survery_data';
 const STATUS_INITIATED = 'Initiated';
@@ -37,25 +39,25 @@ const SurveyData = {
      * Serialize initiations for a partner/project/url scope (UserId + conditional UniqueIP races).
      * Uses MySQL named locks — no schema change required.
      */
-    withInitLock: async (lockKey, fn) => {
-        const name = String(lockKey || 'survey_init').slice(0, 64);
-        const [rows] = await db.query('SELECT GET_LOCK(?, 10) AS acquired', [name]);
-        if (!Number(rows?.[0]?.acquired)) {
-            const err = new Error('Survey initiation is busy. Please retry.');
-            err.statusCode = 503;
-            err.code = 'INIT_LOCK_TIMEOUT';
-            throw err;
-        }
-        try {
-            return await fn();
-        } finally {
-            try {
-                await db.query('SELECT RELEASE_LOCK(?)', [name]);
-            } catch {
-                // ignore release errors
-            }
-        }
-    },
+    // withInitLock: async (lockKey, fn) => {
+    //     const name = String(lockKey || 'survey_init').slice(0, 64);
+    //     const [rows] = await db.query('SELECT GET_LOCK(?, 10) AS acquired', [name]);
+    //     if (!Number(rows?.[0]?.acquired)) {
+    //         const err = new Error('Survey initiation is busy. Please retry.');
+    //         err.statusCode = 503;
+    //         err.code = 'INIT_LOCK_TIMEOUT';
+    //         throw err;
+    //     }
+    //     try {
+    //         return await fn();
+    //     } finally {
+    //         try {
+    //             await db.query('SELECT RELEASE_LOCK(?)', [name]);
+    //         } catch {
+    //             // ignore release errors
+    //         }
+    //     }
+    // },
 
     /**
      * Find a completed/in-progress (non-Initiated) row for the same access combo.
@@ -97,7 +99,13 @@ const SurveyData = {
     },
 
     /** Any row for this partner/project/url + UserId (any IP). */
-    findByUserId: async ({ partnerid, projectid, project_url_id, UserId }) => {
+    findByUserId: async ({
+        partnerid,
+        projectid,
+        project_url_id,
+        UserId
+    }) => {
+    
         const [rows] = await db.execute(
             `SELECT *
              FROM \`${TABLE}\`
@@ -107,8 +115,14 @@ const SurveyData = {
                AND LOWER(UserId) = LOWER(?)
              ORDER BY id DESC
              LIMIT 1`,
-            [partnerid, projectid, project_url_id, UserId]
+            [
+                partnerid,
+                projectid,
+                project_url_id,
+                UserId
+            ]
         );
+    
         return rows[0] || null;
     },
 
@@ -128,30 +142,110 @@ const SurveyData = {
         return rows[0] || null;
     },
 
-    createInitiated: async ({ partnerid, projectid, project_url_id, UserId, InitalIP }) => {
-        await SurveyData.ensureIndex();
-
-        // Resolve geo from IP — never fail initiation if lookup is unavailable
-        let geoLabel = null;
-        try {
-            geoLabel = await resolveGeoLocationLabel(InitalIP);
-        } catch {
-            geoLabel = null;
+    /**
+     * Resolve UserId from an existing Initiated survey_data row when client omits uid.
+     * Prefer same IP match; otherwise latest Initiated for the project URL scope.
+     */
+    findLatestInitiatedUserId: async ({ partnerid, projectid, project_url_id, InitalIP = null }) => {
+        if (InitalIP) {
+            const [byIp] = await db.execute(
+                `SELECT id, UserId, InitalIP, Status
+                 FROM \`${TABLE}\`
+                 WHERE partnerid <=> ?
+                   AND projectid = ?
+                   AND project_url_id = ?
+                   AND InitalIP = ?
+                   AND Status = ?
+                 ORDER BY id DESC
+                 LIMIT 1`,
+                [partnerid, projectid, project_url_id, InitalIP, STATUS_INITIATED]
+            );
+            if (byIp[0]?.UserId) return byIp[0];
         }
 
-        const [result] = await db.execute(
-            `INSERT INTO \`${TABLE}\`
-             (partnerid, projectid, project_url_id, UserId, InitalIP, GeoLocation, StartDate, Status)
-             VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
-            [partnerid, projectid, project_url_id, UserId, InitalIP, geoLabel, STATUS_INITIATED]
+        const [rows] = await db.execute(
+            `SELECT id, UserId, InitalIP, Status
+             FROM \`${TABLE}\`
+             WHERE partnerid <=> ?
+               AND projectid = ?
+               AND project_url_id = ?
+               AND Status = ?
+             ORDER BY id DESC
+             LIMIT 1`,
+            [partnerid, projectid, project_url_id, STATUS_INITIATED]
         );
-        return result.insertId;
+        return rows[0] || null;
     },
 
-    /**
-     * If GeoLocation is missing on an existing row, resolve from IP and save.
-     * Returns the (possibly updated) row.
-     */
+  createInitiated: async ({
+    partnerid,
+    projectid,
+    project_url_id,
+    UserId,
+    InitalIP
+}) => {
+
+    // Resolve GeoLocation from IP.
+    // Geo lookup failure should NOT stop survey initiation.
+    let geoLabel = null;
+
+    try {
+        geoLabel =
+            await resolveGeoLocationLabel(
+                InitalIP
+            );
+    } catch (error) {
+        console.warn(
+            '[SurveyData] GeoLocation lookup failed:',
+            error.message
+        );
+
+        geoLabel = null;
+    }
+
+    const [result] = await db.execute(
+        `INSERT INTO \`${TABLE}\`
+        (
+            partnerid,
+            projectid,
+            project_url_id,
+            UserId,
+            InitalIP,
+            GeoLocation,
+            StartDate,
+            Status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+        [
+            partnerid,
+            projectid,
+            project_url_id,
+            UserId,
+            InitalIP,
+            geoLabel,
+            STATUS_INITIATED
+        ]
+    );
+
+    const insertId = result.insertId;
+
+    // 👇 NEW: run fraud/IP detection and store it against this survey_data row.
+    // Failure here should NOT stop survey initiation, so it's wrapped in try/catch.
+    try {
+        const fraudResult = await checkIpFraud(InitalIP);
+        await IpDetection.insert(insertId, fraudResult);
+    } catch (error) {
+        console.warn(
+            '[SurveyData] Scamalytics/IP detection failed:',
+            error.message
+        );
+    }
+
+    return insertId;
+},
+   
+
+   
     backfillGeoLocationIfEmpty: async ({ id, ip }) => {
         const row = await SurveyData.getById(id);
         if (!row) return null;
@@ -176,10 +270,7 @@ const SurveyData = {
         return (await SurveyData.getById(id)) || { ...row, GeoLocation: geoLabel };
     },
 
-    /**
-     * Finalize survey activity: set Status, FinalIP, EndDate.
-     * Only updates when current Status is Initiated or active.
-     */
+    
     finalizeStatus: async ({ partnerid, projectid, project_url_id, UserId, Status, FinalIP }) => {
         const [existing] = await db.execute(
             `SELECT id, Status
@@ -386,15 +477,15 @@ getProjectReport: async (
     { partner_id = null, status = 'all' } = {}
 ) => {
     const params = [project_id];
-
+ 
     let partnerSql = '';
     let statusSql = '';
-
+ 
     if (partner_id != null && partner_id !== '') {
         partnerSql = ' AND sd.partnerid = ?';
         params.push(partner_id);
     }
-
+ 
     if (
         status &&
         String(status).trim() !== '' &&
@@ -403,7 +494,7 @@ getProjectReport: async (
         statusSql = ' AND LOWER(TRIM(sd.Status)) = LOWER(TRIM(?))';
         params.push(status);
     }
-
+ 
     const [rows] = await db.execute(
         `SELECT
             sm.id AS supplier_row_id,
@@ -415,7 +506,7 @@ getProjectReport: async (
             sd.Status AS status,
             sd.StartDate AS survey_start_date,
             sd.EndDate AS survey_end_date,
-
+ 
             CASE
                 WHEN sd.StartDate IS NOT NULL
                      AND sd.EndDate IS NOT NULL
@@ -426,31 +517,51 @@ getProjectReport: async (
                 )
                 ELSE NULL
             END AS loi_minutes,
-
+ 
             sd.InitalIP AS ip_address,
             sd.GeoLocation AS country,
-            sm.IsTest AS is_test_link
-
+            sm.IsTest AS is_test_link,
+ 
+            -- 👇 NEW: fraud-detection columns, pulled from the latest ip_detection row for this survey
+            idt.ip_country_code AS ip_country_code,
+            idt.ip_country_name AS ip_country_name,
+            idt.ip_state_name AS ip_state_name,
+            idt.ip_time_zone AS ip_time_zone,
+            idt.is_vpn AS is_vpn,
+            idt.scamalytics_score AS fraud_score,
+            idt.scamalytics_risk AS fraud_risk
+ 
         FROM \`${TABLE}\` sd
-
+ 
         LEFT JOIN supplier_mapping sm
             ON sm.partnerid <=> sd.partnerid
             AND sm.projectid = sd.projectid
-
+ 
         LEFT JOIN partners p
             ON p.id = sd.partnerid
-
+ 
         LEFT JOIN project_Info proj
             ON proj.id = sd.projectid
-
+ 
+        -- 👇 NEW: latest ip_detection row per survey_data row (in case of retries/multiple calls)
+        LEFT JOIN (
+            SELECT t1.*
+            FROM ip_detection t1
+            INNER JOIN (
+                SELECT survey_data_id, MAX(id) AS max_id
+                FROM ip_detection
+                GROUP BY survey_data_id
+            ) t2 ON t1.survey_data_id = t2.survey_data_id AND t1.id = t2.max_id
+        ) idt ON idt.survey_data_id = sd.id
+ 
         WHERE sd.projectid = ?
         ${partnerSql}
         ${statusSql}
-
+ 
         ORDER BY sd.id DESC`,
         params
     );
-
+ 
     return rows;
 },
     

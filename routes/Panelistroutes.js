@@ -15,7 +15,9 @@ import {
     toggleStatus,
     resendInviteEmail,
     sendBulkInviteEmails,
-    exportPanelistsCsv
+    exportPanelistsCsv,
+    getSignupDetails,
+    getLoginDetails
 } from '../controllers/Panelistcontroller.js';
 
 import { logout } from '../controllers/authController.js';
@@ -47,5 +49,8 @@ router.post('/bulk-invite', verifyToken, sendBulkInviteEmails);
 router.post('/logout', verifyToken, logout);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
+router.get('/:id/signup-details', getSignupDetails);
+router.get('/:id/login-details', getLoginDetails);
+
 
 export default router;

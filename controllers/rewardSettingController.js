@@ -104,6 +104,7 @@ export const updateSettings = async (req, res) => {
             flipkart_enabled: flipkart_enabled === true || flipkart_enabled === 'true',
             paypal_enabled: paypal_enabled === true || paypal_enabled === 'true',
             tremendous_enabled: tremendous_enabled === true || tremendous_enabled === 'true'
+            
         });
 
         await logActivity({
