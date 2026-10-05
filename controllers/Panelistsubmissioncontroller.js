@@ -1,10 +1,14 @@
 import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaire from '../models/Panelquestionnairemodel.js';
 import PanelistSubmissionResponse from '../models/panelistSubmissionResponseModel.js';
+import RewardSetting from '../models/rewardSettingModel.js';
 import { decryptId } from '../utils/Encryptionhelper.js';
 import { addRewardPoints } from '../utils/rewardHelper.js';
 
-const QUESTIONNAIRE_COMPLETION_POINTS = 200;
+
+
+const DEFAULT_REGISTRATION_POINTS = 200;
+const DEFAULT_QUESTIONNAIRE_POINTS = 200;
 
 export const getQuestionnaireByUrl = async (req, res) => {
     try {
@@ -79,21 +83,50 @@ export const submitQuestionnaire = async (req, res) => {
             return res.status(409).json({ success: false, message: "Questionnaire already submitted!" });
         }
 
+        // 1) Pehle answers save. Yahan error aaya to neeche points credit nahi honge.
         await PanelistSubmissionResponse.submitQuestionnaire(panelist.id, answers);
 
-        await addRewardPoints({
-            user_id: panelist.id,
-            points: QUESTIONNAIRE_COMPLETION_POINTS,
-            transaction_type: 'credit',
-            transaction_by: 'Admin',
-            remark: 'Questionnaire Completion Reward',
-            reference_id: null,
-            comment: 'Reward for completing panel questionnaire'
-        });
+        const settings = await RewardSetting.get();
+
+        const registrationPoints = Number(
+            settings?.registration_reward_points ?? DEFAULT_REGISTRATION_POINTS
+        ) || 0;
+
+        const questionnairePoints = Number(
+            settings?.questionnaire_reward_points ?? DEFAULT_QUESTIONNAIRE_POINTS
+        ) || 0;
+
+        if (registrationPoints > 0) {
+            await addRewardPoints({
+                user_id: panelist.id,
+                points: registrationPoints,
+                transaction_type: 'credit',
+                transaction_by: 'Admin',
+                remark: 'Registration Reward',
+                reference_id: null,
+                comment: 'Welcome bonus, credited after questionnaire completion'
+            });
+        }
+
+        if (questionnairePoints > 0) {
+            await addRewardPoints({
+                user_id: panelist.id,
+                points: questionnairePoints,
+                transaction_type: 'credit',
+                transaction_by: 'Admin',
+                remark: 'Questionnaire Completion Reward',
+                reference_id: null,
+                comment: 'Reward for completing panel questionnaire'
+            });
+        }
+
+        const totalPoints = registrationPoints + questionnairePoints;
 
         return res.status(200).json({
             success: true,
-            message: `Questionnaire submitted successfully! You earned ${QUESTIONNAIRE_COMPLETION_POINTS} points.`
+            message: totalPoints > 0
+                ? `Questionnaire submitted successfully! You earned ${totalPoints} points.`
+                : 'Questionnaire submitted successfully!'
         });
 
     } catch (error) {

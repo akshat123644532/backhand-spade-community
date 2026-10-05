@@ -8,7 +8,6 @@ import RewardSetting from '../models/rewardSettingModel.js';
 import { sendEmail } from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
-import { addRewardPoints } from '../utils/rewardHelper.js';
 import { buildCsv, sendCsv } from '../utils/csvExport.js';
 import { sendTransactionalEmail } from '../services/emailServices.js';
 import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
@@ -147,6 +146,7 @@ export const signup = async (req, res) => {
             encryptedUserId
         );
 
+        // Registration and questionnaire points are credited after questionnaire completion.
         const settings = await RewardSetting.get();
 
         const rewardPoints =
@@ -433,6 +433,8 @@ export const getAllPanelists = async (req, res) => {
         });
     }
 };
+
+// Returns filled questionnaire (question + answer) too
 // ─────────────────────────────────────────────────────────
 // ✅ FIXED — now returns filled questionnaire (question + answer) too
 // ─────────────────────────────────────────────────────────
@@ -443,7 +445,6 @@ export const getPanelistById = async (req, res) => {
         const panelist = await Panelist.findById(id);
         if (!panelist) return res.status(404).json({ success: false, message: "Panelist not found!" });
 
-        // fetch filled questionnaire answers (question + answer joined)
         const questionnaire_answers = await PanelQuestionnaireResponse.getByPanelist(id);
 
         return res.status(200).json({
@@ -525,7 +526,7 @@ const buildQuestionnaireEmailHtml = (panelist, questionnaireLink) => `
     <p>Thank You,<br/>Spade Community</p>
 `;
 
-// ✅ Single panelist — resend the questionnaire/invite email
+// Single panelist: resend the questionnaire/invite email
 export const resendInviteEmail = async (req, res) => {
     try {
         const { id } = req.params;
@@ -567,6 +568,7 @@ export const resendInviteEmail = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
+
 // =====================================================
 // EXPORT PANELISTS CSV
 // =====================================================
@@ -582,8 +584,7 @@ export const exportPanelistsCsv = async (req, res) => {
                 ? req.query.is_verified
                 : '';
 
-        const questionnaire =
-            req.query.questionnaire || '';
+        const questionnaire = req.query.questionnaire || '';
 
         const rows = await Panelist.getAllForExport({
             search,
@@ -591,27 +592,13 @@ export const exportPanelistsCsv = async (req, res) => {
             is_verified,
             questionnaire
         });
+
         const csv = buildCsv(rows, [
-            {
-                label: 'ID',
-                key: 'id'
-            },
-            {
-                label: 'Name',
-                key: 'name'
-            },
-            {
-                label: 'Email address',
-                key: 'email'
-            },
-            {
-                label: 'Created at',
-                key: 'created_at'
-            },
-            {
-                label: 'Status',
-                key: 'status'
-            }
+            { label: 'ID', key: 'id' },
+            { label: 'Name', key: 'name' },
+            { label: 'Email address', key: 'email' },
+            { label: 'Created at', key: 'created_at' },
+            { label: 'Status', key: 'status' }
         ]);
 
         return sendCsv(
@@ -621,10 +608,7 @@ export const exportPanelistsCsv = async (req, res) => {
         );
 
     } catch (error) {
-        console.error(
-            'exportPanelistsCsv error:',
-            error
-        );
+        console.error('exportPanelistsCsv error:', error);
 
         return res.status(500).json({
             success: false,
@@ -634,11 +618,10 @@ export const exportPanelistsCsv = async (req, res) => {
     }
 };
 
-
-// ✅ Multiple panelists — bulk invite/resend, per-panelist error isolation
+// Multiple panelists: bulk invite/resend, per-panelist error isolation
 export const sendBulkInviteEmails = async (req, res) => {
     try {
-        const { ids } = req.body; // array of panelist ids, e.g. [80, 82, 85]
+        const { ids } = req.body; // e.g. [80, 82, 85]
 
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ success: false, message: "ids array is required!" });
