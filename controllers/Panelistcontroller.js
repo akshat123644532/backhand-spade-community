@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken';
 import Panelist from '../models/Panelistmodel.js';
 import PanelQuestionnaireResponse from '../models/panelistSubmissionResponseModel.js';
 import EmailTemplate from '../models/Emailtemplatemodel.js';
-import RewardSetting from '../models/rewardSettingModel.js'; 
 import { sendEmail } from '../config/mailer.js';
 import { encryptId } from '../utils/Encryptionhelper.js';
 import { verifyRecaptcha } from '../utils/Recaptchahelper.js';
@@ -14,7 +13,6 @@ import PanelistLoginDetails from '../models/panelistLoginDetailsModel.js';
 import PanelistSignupDetails from '../models/panelistSignupDetailsModel.js';
 import { checkIpFraud } from '../utils/scamalyticsHelper.js';
 import { getDeviceInfo } from '../utils/deviceInfoHelper.js';
-import { addRewardPoints } from '../utils/rewardHelper.js';
 
 const resolvePanelistImageUrl = (imageUrl, req) => {
     if (!imageUrl) return null;
@@ -102,7 +100,6 @@ export const signup = async (req, res) => {
 
         const deviceInfo = getDeviceInfo(userAgent);
 
-
         try {
             await PanelistSignupDetails.create({
                 panelist_id: panelistId,
@@ -147,21 +144,9 @@ export const signup = async (req, res) => {
             encryptedUserId
         );
 
-        // Registration and questionnaire points are credited after questionnaire completion.
-        const settings = await RewardSetting.get();
-
-        const rewardPoints =
-            settings?.registration_reward_points || 200;
-
-        await addRewardPoints({
-            user_id: panelistId,
-            points: rewardPoints,
-            transaction_type: 'credit',
-            transaction_by: 'Admin',
-            remark: 'Registration Reward',
-            reference_id: null,
-            comment: 'Welcome bonus on signup'
-        });
+        // NOTE: Signup pe koi reward credit nahi hota.
+        // Registration + questionnaire points questionnaire complete hone ke baad
+        // questionnaire controller (submitQuestionnaire) me credit hote hain.
 
         const baseUrl = (
             process.env.CLIENT_BASE_URL ||
@@ -187,17 +172,15 @@ export const signup = async (req, res) => {
                         questionnaire_link: questionnaireLink
                     });
 
-                // const htmlBody =
-                //     linkifyPlainTextUrls(body);
-
                 const result = await sendTransactionalEmail({
                     toEmail: email,
                     toName: name,
                     subject,
                     htmlBody: body
                 });
+
                 if (!result) {
-                    emailWarning = result.error || 'Signup email could not be sent.';
+                    emailWarning = 'Signup email could not be sent.';
                 } else {
                     console.log(`EMAIL SENT TO: ${email} ✅`);
                 }
@@ -330,48 +313,34 @@ export const login = async (req, res) => {
 
         const deviceInfo = getDeviceInfo(userAgent);
 
-        
-
         try {
             await PanelistLoginDetails.create({
                 panelist_id: panelist.id,
-
                 ip_address: fraudData?.ip || ip,
-
                 user_agent: userAgent,
-
                 browser: deviceInfo?.browser || null,
                 browser_version: deviceInfo?.browser_version || null,
-
                 os: deviceInfo?.os || null,
                 os_version: deviceInfo?.os_version || null,
-
                 device_type: deviceInfo?.device_type || null,
                 device_name: deviceInfo?.device_name || null,
-
                 fraud_score: fraudData?.scamalytics_score ?? null,
                 fraud_risk: fraudData?.scamalytics_risk ?? null,
-
                 vpn: fraudData?.is_vpn ?? 0,
                 tor: 0,
                 proxy: fraudData?.is_resproxy ?? 0,
                 datacenter: fraudData?.is_datacenter ?? 0,
-
                 country: fraudData?.ip_country_name ?? null,
                 country_code: fraudData?.ip_country_code ?? null,
                 state: fraudData?.ip_state_name ?? null,
                 city: fraudData?.ip_city ?? null,
-
                 postal_code: null,
                 latitude: null,
                 longitude: null,
                 asn: null,
-
                 isp_name: fraudData?.scamalytics_isp ?? null,
                 organization_name: fraudData?.scamalytics_org ?? null
             });
-
-            // console.log('Panelist login details saved successfully');
         } catch (loginDetailsError) {
             console.error(
                 'Panelist login details save failed:',
@@ -416,6 +385,7 @@ export const login = async (req, res) => {
         });
     }
 };
+
 export const getAllPanelists = async (req, res) => {
     try {
         const panelists = await Panelist.getAll();
@@ -436,9 +406,6 @@ export const getAllPanelists = async (req, res) => {
 };
 
 // Returns filled questionnaire (question + answer) too
-// ─────────────────────────────────────────────────────────
-// ✅ FIXED — now returns filled questionnaire (question + answer) too
-// ─────────────────────────────────────────────────────────
 export const getPanelistById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -575,8 +542,6 @@ export const resendInviteEmail = async (req, res) => {
 // =====================================================
 export const exportPanelistsCsv = async (req, res) => {
     try {
-        // console.log("🔥 EXPORT API HIT");
-
         const search = (req.query.search || '').trim();
         const status = req.query.status || '';
 
@@ -602,11 +567,7 @@ export const exportPanelistsCsv = async (req, res) => {
             { label: 'Status', key: 'status' }
         ]);
 
-        return sendCsv(
-            res,
-            'panelists.csv',
-            csv
-        );
+        return sendCsv(res, 'panelists.csv', csv);
 
     } catch (error) {
         console.error('exportPanelistsCsv error:', error);
@@ -685,7 +646,7 @@ export const getSignupDetails = async (req, res) => {
         const { id } = req.params || req.query;
         if (!id) return res.status(400).json({ success: false, message: "ID is required!" });
         const panelistDetails = await Panelist.getSignupDetailsById(id);
-        if (!panelistDetails) return res.status(404).json({ success: false, message: "Panelist or Detailsnot found!" });
+        if (!panelistDetails) return res.status(404).json({ success: false, message: "Panelist or Details not found!" });
         return res.status(200).json({ success: true, data: panelistDetails });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
@@ -706,11 +667,7 @@ export const getLoginDetails = async (req, res) => {
         const page = Math.max(parseInt(req.query.page) || 1, 1);
         const limit = Math.min(parseInt(req.query.limit) || 20, 100);
 
-        const loginDetails = await Panelist.getLoginDetailsById(
-            id,
-            page,
-            limit
-        );
+        const loginDetails = await Panelist.getLoginDetailsById(id, page, limit);
 
         if (!loginDetails) {
             return res.status(404).json({
