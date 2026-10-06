@@ -388,11 +388,20 @@ export const login = async (req, res) => {
 
 export const getAllPanelists = async (req, res) => {
     try {
-        const panelists = await Panelist.getAll();
+        const { page, limit, search, status, is_verified, questionnaire } = req.query;
+        const panelists = await Panelist.getAll({
+            page,
+            limit,
+            search,
+            status,
+            is_verified,
+            questionnaire
+        });
 
         return res.status(200).json({
             success: true,
-            data: panelists.data.map((panelist) => serializePanelistImage(panelist, req))
+            data: panelists.data.map((panelist) => serializePanelistImage(panelist, req)),
+            pagination: panelists.pagination
         });
     } catch (error) {
         console.error('GET ALL PANELISTS ERROR:', error);

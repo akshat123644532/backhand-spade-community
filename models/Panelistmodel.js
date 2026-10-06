@@ -165,8 +165,10 @@ const Panelist = {
         questionnaire = ''
     } = {}) => {
 
-        const p = parseInt(page) || 1;
-        const l = parseInt(limit) || 10;
+        const ALLOWED_LIMITS = [10, 25, 50, 100];
+        const p = Math.max(parseInt(page, 10) || 1, 1);
+        const requestedLimit = parseInt(limit, 10);
+        const l = ALLOWED_LIMITS.includes(requestedLimit) ? requestedLimit : 10;
         const offset = (p - 1) * l;
 
         let where = `WHERE deleted_at IS NULL`;
@@ -216,12 +218,8 @@ const Panelist = {
              FROM panelists
              ${where}
              ORDER BY created_at DESC
-             LIMIT ? OFFSET ?`,
-            [
-                ...params,
-                Number(l),
-                Number(offset)
-            ]
+             LIMIT ${l} OFFSET ${offset}`,
+            params
         );
 
         const [countResult] = await db.query(
@@ -231,14 +229,21 @@ const Panelist = {
             params
         );
 
+        const total = Number(countResult[0].total) || 0;
+        const totalPages = total === 0 ? 0 : Math.ceil(total / l);
+
         return {
             data: rows,
-            total: countResult[0].total || 0,
+            total,
             page: p,
             limit: l,
-            totalPages: Math.ceil(
-                (countResult[0].total || 0) / l
-            )
+            totalPages,
+            pagination: {
+                page: p,
+                limit: l,
+                total,
+                totalPages
+            }
         };
     },
 
@@ -357,15 +362,32 @@ const Panelist = {
     // DELETE PANELIST
     // =====================================================
     delete: async (id) => {
+        const connection = await db.getConnection();
 
-        const [result] = await db.execute(
-            `UPDATE panelists
-             SET deleted_at = NOW()
-             WHERE id = ?`,
-            [id]
-        );
+        try {
+            await connection.beginTransaction();
 
-        return result;
+            await connection.execute(
+                `DELETE FROM panel_questionnaire_responses
+                 WHERE panelist_id = ?`,
+                [id]
+            );
+
+            const [result] = await connection.execute(
+                `UPDATE panelists
+                 SET deleted_at = NOW()
+                 WHERE id = ?`,
+                [id]
+            );
+
+            await connection.commit();
+            return result;
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
     },
 
     // =====================================================
