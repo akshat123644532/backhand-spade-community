@@ -83,7 +83,7 @@ export const submitQuestionnaire = async (req, res) => {
             return res.status(409).json({ success: false, message: "Questionnaire already submitted!" });
         }
 
-        // 1) Pehle answers save. Yahan error aaya to neeche points credit nahi honge.
+        // Answers are saved and the questionnaire is marked complete before any points are credited.
         await PanelistSubmissionResponse.submitQuestionnaire(panelist.id, answers);
 
         const settings = await RewardSetting.get();
@@ -130,6 +130,9 @@ export const submitQuestionnaire = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.code === 'QUESTIONNAIRE_ALREADY_SUBMITTED' || error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ success: false, message: "Questionnaire already submitted!" });
+        }
         return res.status(500).json({ success: false, message: "Server error!", error: error.message });
     }
 };
