@@ -7,17 +7,31 @@ import { sendError } from './surveyDataController.js';
 
 
 
-const buildReportRows = async (
-    project_id,
-    partner_id,
-    status = 'all'
-) => {
-    const rows = await SurveyData.getProjectReport(project_id, {
-        partner_id: partner_id || null,
-        status: status || 'all'
-    });
+const PROJECT_REPORT_CSV_COLUMNS = [
+    { label: 'Supplier ID', key: 'supplier_id' },
+    { label: 'Supplier Name', key: 'supplier_name' },
+    { label: 'Client ID', key: 'client_id' },
+    { label: 'Supplier Identifier', key: 'supplier_identifier' },
+    { label: 'Project URL Code', key: 'project_url_code' },
+    { label: 'Status', key: 'status' },
+    { label: 'Survey Start Date', key: 'survey_start_date' },
+    { label: 'Survey End Date', key: 'survey_end_date' },
+    { label: 'LOI Minutes', key: 'loi_minutes' },
+    { label: 'IP Address', key: 'ip_address' },
+    { label: 'Country', key: 'country' },
+    { label: 'City', key: 'city' },
+    { label: 'Is Test Link', key: 'is_test_link' },
+    { label: 'IP Country Code', key: 'ip_country_code' },
+    { label: 'IP Country Name', key: 'ip_country_name' },
+    { label: 'IP State Name', key: 'ip_state_name' },
+    { label: 'IP Time Zone', key: 'ip_time_zone' },
+    { label: 'Is VPN', key: 'is_vpn' },
+    { label: 'Fraud Score', key: 'fraud_score' },
+    { label: 'Fraud Risk', key: 'fraud_risk' }
+];
 
-    return rows.map(row => {
+const mapProjectReportRows = (rows) =>
+    rows.map(row => {
         const { country, city } = getLocationFromIp(row.ip_address);
 
         return {
@@ -30,6 +44,8 @@ const buildReportRows = async (
             client_id: row.client_id,
 
             supplier_identifier: row.supplier_identifier,
+
+            project_url_code: row.project_url_code || null,
 
             status: row.status,
 
@@ -47,7 +63,6 @@ const buildReportRows = async (
 
             is_test_link: !!row.is_test_link,
 
-           
             ip_country_code: row.ip_country_code || null,
             ip_country_name: row.ip_country_name || null,
             ip_state_name: row.ip_state_name || null,
@@ -57,15 +72,21 @@ const buildReportRows = async (
             fraud_risk: row.fraud_risk || null
         };
     });
-};
 
-// GET /project/:id/report?partner_id=optional
+const projectReportFilters = (query) => ({
+    partner_id: query.partner_id || null,
+    status: query.status || 'all',
+    project_url_code: query.project_url_code || query.projectUrlCode || null,
+    country: query.country || null,
+    is_test: query.is_test !== undefined ? query.is_test : null
+});
+
+// GET /api/project-reports/:id/report?page=&limit=&project_url_code=&country=&is_test=&partner_id=&status=
 export const getProjectReport = async (req, res) => {
     try {
         const { id } = req.params;
-
-        // Query params
-        const { partner_id, status = 'all' } = req.query;
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
 
         const project = await Project.getById(id);
 
@@ -76,17 +97,21 @@ export const getProjectReport = async (req, res) => {
             });
         }
 
-        // Project ID + Partner ID + Status filter
-        const data = await buildReportRows(
-            id,
-            partner_id,
-            status
-        );
+        const result = await SurveyData.getProjectReport(id, {
+            ...projectReportFilters(req.query),
+            page,
+            limit,
+            paginate: true
+        });
 
         return res.status(200).json({
             success: true,
             project_name: project.Project_Name,
-            data
+            data: mapProjectReportRows(result.rows || []),
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages
         });
 
     } catch (error) {
@@ -98,15 +123,10 @@ export const getProjectReport = async (req, res) => {
     }
 };
 
-// GET /project/:id/report/export/csv?partner_id=optional
+// GET /api/project-reports/:id/report/export/csv — full filtered set, no pagination
 export const downloadProjectReportCsv = async (req, res) => {
     try {
         const { id } = req.params;
-
-        const {
-            partner_id,
-            status = 'all'
-        } = req.query;
 
         const project = await Project.getById(id);
 
@@ -117,18 +137,18 @@ export const downloadProjectReportCsv = async (req, res) => {
             });
         }
 
-        const data = await buildReportRows(
-            id,
-            partner_id,
-            status
-        );
+        const result = await SurveyData.getProjectReport(id, {
+            ...projectReportFilters(req.query),
+            paginate: false
+        });
 
-        const csvData = buildCsv(data);
+        const data = mapProjectReportRows(result.rows || []);
+        const csvData = buildCsv(data, PROJECT_REPORT_CSV_COLUMNS);
 
         return sendCsv(
             res,
-            csvData,
-            `project-report-${id}.csv`
+            `project-report-${id}.csv`,
+            csvData
         );
 
     } catch (error) {

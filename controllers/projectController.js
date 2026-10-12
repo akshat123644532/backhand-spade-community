@@ -423,6 +423,19 @@ export const addProjectUrl = async (req, res) => {
     }
 };
 
+export const getProjectUrlCodes = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const project = await Project.getById(id);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found!" });
+
+        const data = await ProjectUrl.getCodesByProjectId(id);
+        return res.status(200).json({ success: true, data });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error!", error: error.message });
+    }
+};
+
 export const getProjectUrlList = async (req, res) => {
     try {
         const { id } = req.params;

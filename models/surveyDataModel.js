@@ -474,18 +474,30 @@ getSupplierSummaryByProjectId: async (project_id) => {
    
 getProjectReport: async (
     project_id,
-    { partner_id = null, status = 'all' } = {}
+    {
+        partner_id = null,
+        status = 'all',
+        project_url_code = null,
+        country = null,
+        is_test = null,
+        page = 1,
+        limit = 10,
+        paginate = true
+    } = {}
 ) => {
     const params = [project_id];
- 
+
     let partnerSql = '';
     let statusSql = '';
- 
+    let urlCodeSql = '';
+    let countrySql = '';
+    let isTestSql = '';
+
     if (partner_id != null && partner_id !== '') {
         partnerSql = ' AND sd.partnerid = ?';
         params.push(partner_id);
     }
- 
+
     if (
         status &&
         String(status).trim() !== '' &&
@@ -494,19 +506,82 @@ getProjectReport: async (
         statusSql = ' AND LOWER(TRIM(sd.Status)) = LOWER(TRIM(?))';
         params.push(status);
     }
- 
-    const [rows] = await db.execute(
-        `SELECT
+
+    if (project_url_code != null && String(project_url_code).trim() !== '') {
+        urlCodeSql = ' AND LOWER(TRIM(pui.project_url_code)) = LOWER(TRIM(?))';
+        params.push(String(project_url_code).trim());
+    }
+
+    if (country != null && String(country).trim() !== '') {
+        countrySql = ` AND (
+            LOWER(TRIM(SUBSTRING_INDEX(COALESCE(sd.GeoLocation, ''), ',', -1))) = LOWER(TRIM(?))
+            OR LOWER(TRIM(COALESCE(idt.ip_country_name, ''))) = LOWER(TRIM(?))
+            OR LOWER(TRIM(COALESCE(idt.ip_country_code, ''))) = LOWER(TRIM(?))
+        )`;
+        const countryValue = String(country).trim();
+        params.push(countryValue, countryValue, countryValue);
+    }
+
+    if (is_test !== null && is_test !== undefined && String(is_test).trim() !== '') {
+        isTestSql = ' AND sm.IsTest = ?';
+        params.push(Number(is_test) ? 1 : 0);
+    }
+
+    const fromSql = `
+        FROM \`${TABLE}\` sd
+
+        LEFT JOIN supplier_mapping sm
+            ON sm.partnerid <=> sd.partnerid
+            AND sm.projectid = sd.projectid
+            AND sm.projectUrlId <=> sd.project_url_id
+            AND sm.deleted_at IS NULL
+
+        LEFT JOIN partners p
+            ON p.id = sd.partnerid
+
+        LEFT JOIN project_Info proj
+            ON proj.id = sd.projectid
+
+        LEFT JOIN project_url_Info pui
+            ON pui.id = sd.project_url_id
+
+        LEFT JOIN (
+            SELECT t1.*
+            FROM ip_detection t1
+            INNER JOIN (
+                SELECT survey_data_id, MAX(id) AS max_id
+                FROM ip_detection
+                GROUP BY survey_data_id
+            ) t2 ON t1.survey_data_id = t2.survey_data_id AND t1.id = t2.max_id
+        ) idt ON idt.survey_data_id = sd.id
+
+        WHERE sd.projectid = ?
+        ${partnerSql}
+        ${statusSql}
+        ${urlCodeSql}
+        ${countrySql}
+        ${isTestSql}
+    `;
+
+    const [countRows] = await db.execute(
+        `SELECT COUNT(DISTINCT sd.id) AS total ${fromSql}`,
+        params
+    );
+    const total = Number(countRows?.[0]?.total || 0);
+
+    const selectSql = `
+        SELECT
             sm.id AS supplier_row_id,
             sd.partnerid AS supplier_id,
             p.name AS supplier_name,
             sm.partner_code AS supplier_code,
             proj.Clients AS client_id,
             sd.UserId AS supplier_identifier,
+            pui.project_url_code AS project_url_code,
             sd.Status AS status,
             sd.StartDate AS survey_start_date,
             sd.EndDate AS survey_end_date,
- 
+
             CASE
                 WHEN sd.StartDate IS NOT NULL
                      AND sd.EndDate IS NOT NULL
@@ -517,12 +592,11 @@ getProjectReport: async (
                 )
                 ELSE NULL
             END AS loi_minutes,
- 
+
             sd.InitalIP AS ip_address,
             sd.GeoLocation AS country,
             sm.IsTest AS is_test_link,
- 
-            -- 👇 NEW: fraud-detection columns, pulled from the latest ip_detection row for this survey
+
             idt.ip_country_code AS ip_country_code,
             idt.ip_country_name AS ip_country_name,
             idt.ip_state_name AS ip_state_name,
@@ -530,39 +604,31 @@ getProjectReport: async (
             idt.is_vpn AS is_vpn,
             idt.scamalytics_score AS fraud_score,
             idt.scamalytics_risk AS fraud_risk
- 
-        FROM \`${TABLE}\` sd
- 
-        LEFT JOIN supplier_mapping sm
-            ON sm.partnerid <=> sd.partnerid
-            AND sm.projectid = sd.projectid
- 
-        LEFT JOIN partners p
-            ON p.id = sd.partnerid
- 
-        LEFT JOIN project_Info proj
-            ON proj.id = sd.projectid
- 
-        -- 👇 NEW: latest ip_detection row per survey_data row (in case of retries/multiple calls)
-        LEFT JOIN (
-            SELECT t1.*
-            FROM ip_detection t1
-            INNER JOIN (
-                SELECT survey_data_id, MAX(id) AS max_id
-                FROM ip_detection
-                GROUP BY survey_data_id
-            ) t2 ON t1.survey_data_id = t2.survey_data_id AND t1.id = t2.max_id
-        ) idt ON idt.survey_data_id = sd.id
- 
-        WHERE sd.projectid = ?
-        ${partnerSql}
-        ${statusSql}
- 
-        ORDER BY sd.id DESC`,
-        params
+        ${fromSql}
+        ORDER BY sd.id DESC
+    `;
+
+    if (!paginate) {
+        const [rows] = await db.execute(selectSql, params);
+        return { rows, total };
+    }
+
+    const p = Math.max(parseInt(page, 10) || 1, 1);
+    const l = Math.max(parseInt(limit, 10) || 10, 1);
+    const offset = (p - 1) * l;
+
+    const [rows] = await db.query(
+        `${selectSql} LIMIT ? OFFSET ?`,
+        [...params, Number(l), Number(offset)]
     );
- 
-    return rows;
+
+    return {
+        rows,
+        total,
+        page: p,
+        limit: l,
+        totalPages: Math.ceil(total / l) || 0
+    };
 },
     
 

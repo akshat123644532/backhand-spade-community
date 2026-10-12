@@ -7,6 +7,7 @@ import {
     addProject, getAllProjects, getProjectById,
     updateProject, deleteProject, toggleProjectStatus,
     addProjectUrl, updateProjectUrl, deleteProjectUrl, getProjectUrlList,
+    getProjectUrlCodes,
     generateProjectUrlCode,
     addMultipleUrl, updateMultipleUrl, deleteMultipleUrl,
     uploadMultipleUrlCsv, getMultipleUrlList, getMultiLinkStats, downloadCsvTemplate,
@@ -49,6 +50,7 @@ router.patch('/:id/status',         verifyToken, toggleProjectStatus);
 
 // Project URL Info (+ CSV for Multi Link in same request)
 router.get('/:id/url/list',         verifyToken, getProjectUrlList);
+router.get('/:id/url-codes',        verifyToken, getProjectUrlCodes);
 router.post('/:id/url',             verifyToken, csvUploadFlexible, addProjectUrl);
 router.get('/:id/url/generate-code', verifyToken, generateProjectUrlCode);
 // csvUploadFlexible also parses multipart fields (metadata) — required because

@@ -202,6 +202,17 @@ generateUrlCode: async (project_id, conn = db) => {
         return rows;
     },
 
+    getCodesByProjectId: async (project_id) => {
+        const [rows] = await db.execute(
+            `SELECT id AS project_url_id, project_url_code
+             FROM project_url_Info
+             WHERE project_id = ? AND deleted_at IS NULL
+             ORDER BY id ASC`,
+            [project_id]
+        );
+        return rows;
+    },
+
     getSampleSizeByProjectId: async (project_id) => {
         const [rows] = await db.execute(
             `SELECT COALESCE(SUM(SampleSize), 0) AS sampleSize
