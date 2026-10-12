@@ -204,7 +204,7 @@ generateUrlCode: async (project_id, conn = db) => {
 
     getCodesByProjectId: async (project_id) => {
         const [rows] = await db.execute(
-            `SELECT id AS project_url_id, project_url_code
+            `SELECT id AS project_url_id, project_url_code, country
              FROM project_url_Info
              WHERE project_id = ? AND deleted_at IS NULL
              ORDER BY id ASC`,

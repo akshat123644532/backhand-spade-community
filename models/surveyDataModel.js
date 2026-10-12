@@ -478,7 +478,6 @@ getProjectReport: async (
         partner_id = null,
         status = 'all',
         project_url_code = null,
-        country = null,
         is_test = null,
         page = 1,
         limit = 10,
@@ -490,7 +489,6 @@ getProjectReport: async (
     let partnerSql = '';
     let statusSql = '';
     let urlCodeSql = '';
-    let countrySql = '';
     let isTestSql = '';
 
     if (partner_id != null && partner_id !== '') {
@@ -510,16 +508,6 @@ getProjectReport: async (
     if (project_url_code != null && String(project_url_code).trim() !== '') {
         urlCodeSql = ' AND LOWER(TRIM(pui.project_url_code)) = LOWER(TRIM(?))';
         params.push(String(project_url_code).trim());
-    }
-
-    if (country != null && String(country).trim() !== '') {
-        countrySql = ` AND (
-            LOWER(TRIM(SUBSTRING_INDEX(COALESCE(sd.GeoLocation, ''), ',', -1))) = LOWER(TRIM(?))
-            OR LOWER(TRIM(COALESCE(idt.ip_country_name, ''))) = LOWER(TRIM(?))
-            OR LOWER(TRIM(COALESCE(idt.ip_country_code, ''))) = LOWER(TRIM(?))
-        )`;
-        const countryValue = String(country).trim();
-        params.push(countryValue, countryValue, countryValue);
     }
 
     if (is_test !== null && is_test !== undefined && String(is_test).trim() !== '') {
@@ -559,7 +547,6 @@ getProjectReport: async (
         ${partnerSql}
         ${statusSql}
         ${urlCodeSql}
-        ${countrySql}
         ${isTestSql}
     `;
 

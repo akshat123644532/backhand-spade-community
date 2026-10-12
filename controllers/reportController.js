@@ -77,11 +77,10 @@ const projectReportFilters = (query) => ({
     partner_id: query.partner_id || null,
     status: query.status || 'all',
     project_url_code: query.project_url_code || query.projectUrlCode || null,
-    country: query.country || null,
     is_test: query.is_test !== undefined ? query.is_test : null
 });
 
-// GET /api/project-reports/:id/report?page=&limit=&project_url_code=&country=&is_test=&partner_id=&status=
+// GET /api/project-reports/:id/report?page=&limit=&project_url_code=&is_test=&partner_id=&status=
 export const getProjectReport = async (req, res) => {
     try {
         const { id } = req.params;
