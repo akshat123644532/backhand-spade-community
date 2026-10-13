@@ -74,13 +74,13 @@ const mapProjectReportRows = (rows) =>
     });
 
 const projectReportFilters = (query) => ({
-    partner_id: query.partner_id || null,
+    partner_id: query.partner_id || query.supplier_id || query.supplierId || null,
     status: query.status || 'all',
     project_url_code: query.project_url_code || query.projectUrlCode || null,
     is_test: query.is_test !== undefined ? query.is_test : null
 });
 
-// GET /api/project-reports/:id/report?page=&limit=&project_url_code=&is_test=&partner_id=&status=
+// GET /api/project-reports/:id/report?page=&limit=&project_url_code=&is_test=&supplierId=&partner_id=&status=
 export const getProjectReport = async (req, res) => {
     try {
         const { id } = req.params;
@@ -286,7 +286,8 @@ export const getPreScreenReport = async (req, res) => {
 
         const data = await surveyPreScreenResponse.getPreScreenReport({
             projectid,
-            is_test: is_test !== undefined ? is_test : null
+            is_test: is_test !== undefined ? is_test : null,
+            partner_id: req.query.supplier_id || req.query.supplierId || req.query.partner_id || null
         });
 
         return res.status(200).json({
@@ -315,7 +316,8 @@ export const exportPreScreenReport = async (req, res) => {
 
         const data = await surveyPreScreenResponse.getPreScreenReport({
             projectid,
-            is_test: is_test !== undefined ? is_test : null
+            is_test: is_test !== undefined ? is_test : null,
+            partner_id: req.query.supplier_id || req.query.supplierId || req.query.partner_id || null
         });
 
         const headers = [

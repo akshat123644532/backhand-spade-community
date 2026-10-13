@@ -160,31 +160,36 @@ const SupplierMapping = {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
         const offset = (p - 1) * l;
-        let where = `WHERE deleted_at IS NULL`;
+        let where = `WHERE sm.deleted_at IS NULL`;
         const params = [];
 
         if (search) {
-            where += ` AND (mapping_code LIKE ? OR partner_code LIKE ?)`;
+            where += ` AND (sm.mapping_code LIKE ? OR sm.partner_code LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`);
         }
         if (status) {
-            where += ` AND status = ?`;
+            where += ` AND sm.status = ?`;
             params.push(status);
         }
         if (projectid) {
-            where += ` AND projectid = ?`;
+            where += ` AND sm.projectid = ?`;
             params.push(projectid);
         }
         if (partnerid) {
-            where += ` AND partnerid = ?`;
+            where += ` AND sm.partnerid = ?`;
             params.push(partnerid);
         }
 
         const [rows] = await db.query(
-            `SELECT * FROM supplier_mapping ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT sm.*, p.name AS supplier_name
+             FROM supplier_mapping sm
+             LEFT JOIN partners p ON p.id = sm.partnerid
+             ${where}
+             ORDER BY sm.created_at DESC
+             LIMIT ? OFFSET ?`,
             [...params, Number(l), Number(offset)]
         );
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM supplier_mapping ${where}`, params);
+        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM supplier_mapping sm ${where}`, params);
         const total = countResult[0].total || 0;
 
         return { data: rows, total, page: p, limit: l, totalPages: Math.ceil(total / l) };

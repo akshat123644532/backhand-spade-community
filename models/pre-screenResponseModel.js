@@ -70,13 +70,19 @@ const surveyPreScreenResponse = {
 
 
 
-getPreScreenReport: async ({ projectid, is_test = null }) => {
+getPreScreenReport: async ({ projectid, is_test = null, partner_id = null }) => {
     const params = [projectid];
     let isTestSql = '';
+    let partnerSql = '';
 
     if (is_test !== null && is_test !== undefined && String(is_test).trim() !== '') {
         isTestSql = ` AND sm.IsTest = ?`;
         params.push(Number(is_test) ? 1 : 0);
+    }
+
+    if (partner_id != null && partner_id !== '') {
+        partnerSql = ` AND sd.partnerid = ?`;
+        params.push(partner_id);
     }
 
     const [rows] = await db.execute(
@@ -138,6 +144,7 @@ getPreScreenReport: async ({ projectid, is_test = null }) => {
 
         WHERE sd.projectid = ?
         ${isTestSql}
+        ${partnerSql}
 
         ORDER BY sd.id DESC, spa.id ASC
         `,
